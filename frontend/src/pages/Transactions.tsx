@@ -1,0 +1,304 @@
+import { useState, useEffect } from 'react';
+import { Plus, Search, Filter, Edit2, Trash2 } from 'lucide-react';
+import { transactionApi } from '../services/api';
+
+interface Transaction {
+  id: string;
+  date: string;
+  type: 'REVENUE' | 'EXPENSE';
+  category: string;
+  amount: number;
+  description: string;
+  source: string;
+}
+
+export default function Transactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [filter, setFilter] = useState({ type: '', category: '' });
+  const [formData, setFormData] = useState({
+    date: '',
+    type: 'EXPENSE',
+    category: '',
+    amount: '',
+    description: '',
+  });
+
+  useEffect(() => {
+    loadTransactions();
+  }, [filter]);
+
+  const loadTransactions = async () => {
+    try {
+      const params: any = {};
+      if (filter.type) params.type = filter.type;
+      const response = await transactionApi.getAll(params);
+      setTransactions(response.data.data.transactions);
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingTransaction) {
+        await transactionApi.update(editingTransaction.id, {
+          amount: parseFloat(formData.amount),
+          description: formData.description,
+        });
+      } else {
+        await transactionApi.create({
+          date: formData.date,
+          type: formData.type as 'REVENUE' | 'EXPENSE',
+          category: formData.category,
+          amount: parseFloat(formData.amount),
+          description: formData.description,
+        });
+      }
+      setShowModal(false);
+      setEditingTransaction(null);
+      setFormData({ date: '', type: 'EXPENSE', category: '', amount: '', description: '' });
+      loadTransactions();
+    } catch (error) {
+      console.error('Failed to save transaction:', error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    try {
+      await transactionApi.delete(id);
+      loadTransactions();
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+    }
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setFormData({
+      date: transaction.date,
+      type: transaction.type,
+      category: transaction.category,
+      amount: transaction.amount.toString(),
+      description: transaction.description || '',
+    });
+    setShowModal(true);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
+          <p className="text-gray-600">Manage your financial transactions</p>
+        </div>
+        <button
+          onClick={() => {
+            setEditingTransaction(null);
+            setFormData({ date: '', type: 'EXPENSE', category: '', amount: '', description: '' });
+            setShowModal(true);
+          }}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Add Transaction
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-4">
+        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
+          <Filter className="w-5 h-5 text-gray-400" />
+          <select
+            value={filter.type}
+            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+            className="border-none bg-transparent focus:ring-0"
+          >
+            <option value="">All Types</option>
+            <option value="REVENUE">Revenue</option>
+            <option value="EXPENSE">Expense</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Transactions Table */}
+      <div className="card overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
+              <th className="text-left py-3 px-4 font-medium text-gray-600">Type</th>
+              <th className="text-left py-3 px-4 font-medium text-gray-600">Category</th>
+              <th className="text-left py-3 px-4 font-medium text-gray-600">Description</th>
+              <th className="text-right py-3 px-4 font-medium text-gray-600">Amount</th>
+              <th className="text-center py-3 px-4 font-medium text-gray-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center py-8 text-gray-500">
+                  No transactions found. Add your first transaction to get started.
+                </td>
+              </tr>
+            ) : (
+              transactions.map((transaction) => (
+                <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4">{new Date(transaction.date).toLocaleDateString('en-IN')}</td>
+                  <td className="py-3 px-4">
+                    <span
+                      className={`px-2 py-1 rounded text-sm font-medium ${
+                        transaction.type === 'REVENUE'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {transaction.type}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">{transaction.category}</td>
+                  <td className="py-3 px-4">{transaction.description || '-'}</td>
+                  <td
+                    className={`py-3 px-4 text-right font-medium ${
+                      transaction.type === 'REVENUE' ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {transaction.type === 'REVENUE' ? '+' : '-'}
+                    {formatCurrency(transaction.amount)}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      {transaction.source === 'MANUAL' && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(transaction)}
+                            className="p-1 text-gray-400 hover:text-blue-600"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(transaction.id)}
+                            className="p-1 text-gray-400 hover:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {!editingTransaction && (
+                <>
+                  <div>
+                    <label className="label">Date</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="input"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Type</label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      className="input"
+                      required
+                    >
+                      <option value="EXPENSE">Expense</option>
+                      <option value="REVENUE">Revenue</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Category</label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="input"
+                      placeholder="e.g., Salaries, Sales"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="label">Amount</label>
+                <input
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  className="input"
+                  placeholder="Enter amount"
+                  min="0"
+                  step="0.01"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="input"
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary">
+                  {editingTransaction ? 'Update' : 'Add'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

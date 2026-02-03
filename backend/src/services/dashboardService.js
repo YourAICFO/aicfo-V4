@@ -1,0 +1,378 @@
+const { Sequelize } = require('sequelize');
+const { FinancialTransaction, CashBalance, AIInsight } = require('../models');
+
+const getCFOOverview = async (companyId) => {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Get current cash balance
+  const latestCash = await CashBalance.findOne({
+    where: { companyId },
+    order: [['date', 'DESC']]
+  });
+
+  const currentCash = latestCash ? parseFloat(latestCash.amount) : 0;
+
+  // Get monthly inflows and outflows for last 6 months
+  const monthlyData = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      date: { [Sequelize.Op.gte]: sixMonthsAgo }
+    },
+    attributes: [
+      [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
+      'type',
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'type'],
+    raw: true
+  });
+
+  // Calculate averages
+  const monthlyInflows = [];
+  const monthlyOutflows = [];
+
+  for (let i = 0; i < 6; i++) {
+    const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthStr = month.toISOString().slice(0, 7);
+
+    const inflow = monthlyData.find(
+      d => d.month && d.month.startsWith(monthStr) && d.type === 'REVENUE'
+    );
+    const outflow = monthlyData.find(
+      d => d.month && d.month.startsWith(monthStr) && d.type === 'EXPENSE'
+    );
+
+    monthlyInflows.push(inflow ? parseFloat(inflow.total) : 0);
+    monthlyOutflows.push(outflow ? parseFloat(outflow.total) : 0);
+  }
+
+  const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / 6;
+  const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / 6;
+  const netCashFlow = avgMonthlyInflow - avgMonthlyOutflow;
+
+  // Calculate runway
+  let runwayMonths = 0;
+  let runwayStatus = 'RED';
+
+  if (netCashFlow <= 0) {
+    runwayMonths = 0;
+    runwayStatus = 'RED';
+  } else {
+    runwayMonths = currentCash / netCashFlow;
+    if (runwayMonths >= 6) {
+      runwayStatus = 'GREEN';
+    } else if (runwayMonths >= 3) {
+      runwayStatus = 'AMBER';
+    } else {
+      runwayStatus = 'RED';
+    }
+  }
+
+  // Get recent insights
+  const recentInsights = await AIInsight.findAll({
+    where: { companyId, isDismissed: false },
+    order: [['created_at', 'DESC']],
+    limit: 5
+  });
+
+  // Count unread insights
+  const unreadCount = await AIInsight.count({
+    where: { companyId, isRead: false, isDismissed: false }
+  });
+
+  return {
+    cashPosition: {
+      currentBalance: currentCash,
+      currency: 'INR'
+    },
+    runway: {
+      months: Math.round(runwayMonths * 10) / 10,
+      status: runwayStatus,
+      avgMonthlyInflow: Math.round(avgMonthlyInflow),
+      avgMonthlyOutflow: Math.round(avgMonthlyOutflow),
+      netCashFlow: Math.round(netCashFlow)
+    },
+    insights: {
+      recent: recentInsights,
+      unreadCount
+    }
+  };
+};
+
+const getRevenueDashboard = async (companyId, period = '6m') => {
+  const now = new Date();
+  let startDate;
+
+  switch (period) {
+    case '1m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      break;
+    case '3m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      break;
+    case '12m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+      break;
+    case '6m':
+    default:
+      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  }
+
+  // Monthly revenue trend
+  const monthlyRevenue = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      type: 'REVENUE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [
+      [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date'))],
+    order: [[Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'ASC']],
+    raw: true
+  });
+
+  // Revenue by category
+  const revenueByCategory = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      type: 'REVENUE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [
+      'category',
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: ['category'],
+    order: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'DESC']],
+    raw: true
+  });
+
+  // Total revenue
+  const totalRevenue = await FinancialTransaction.findOne({
+    where: {
+      companyId,
+      type: 'REVENUE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
+    raw: true
+  });
+
+  // Previous period for growth calculation
+  const prevPeriodStart = new Date(startDate);
+  prevPeriodStart.setMonth(prevPeriodStart.getMonth() - (period === '1m' ? 1 : period === '3m' ? 3 : period === '12m' ? 12 : 6));
+
+  const prevRevenue = await FinancialTransaction.findOne({
+    where: {
+      companyId,
+      type: 'REVENUE',
+      date: {
+        [Sequelize.Op.gte]: prevPeriodStart,
+        [Sequelize.Op.lt]: startDate
+      }
+    },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
+    raw: true
+  });
+
+  const currentTotal = parseFloat(totalRevenue?.total || 0);
+  const previousTotal = parseFloat(prevRevenue?.total || 0);
+  const growthRate = previousTotal > 0
+    ? ((currentTotal - previousTotal) / previousTotal) * 100
+    : 0;
+
+  return {
+    summary: {
+      totalRevenue: currentTotal,
+      growthRate: Math.round(growthRate * 100) / 100,
+      period
+    },
+    monthlyTrend: monthlyRevenue.map(r => ({
+      month: r.month,
+      amount: parseFloat(r.total)
+    })),
+    byCategory: revenueByCategory.map(c => ({
+      category: c.category,
+      amount: parseFloat(c.total)
+    }))
+  };
+};
+
+const getExpenseDashboard = async (companyId, period = '6m') => {
+  const now = new Date();
+  let startDate;
+
+  switch (period) {
+    case '1m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      break;
+    case '3m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      break;
+    case '12m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+      break;
+    case '6m':
+    default:
+      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  }
+
+  // Monthly expense trend
+  const monthlyExpenses = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      type: 'EXPENSE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [
+      [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date'))],
+    order: [[Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'ASC']],
+    raw: true
+  });
+
+  // Expenses by category
+  const expensesByCategory = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      type: 'EXPENSE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [
+      'category',
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: ['category'],
+    order: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'DESC']],
+    raw: true
+  });
+
+  // Total expenses
+  const totalExpenses = await FinancialTransaction.findOne({
+    where: {
+      companyId,
+      type: 'EXPENSE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
+    raw: true
+  });
+
+  // Top expenses
+  const topExpenses = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      type: 'EXPENSE',
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: ['category', 'description', 'amount', 'date'],
+    order: [['amount', 'DESC']],
+    limit: 10,
+    raw: true
+  });
+
+  return {
+    summary: {
+      totalExpenses: parseFloat(totalExpenses?.total || 0),
+      period
+    },
+    monthlyTrend: monthlyExpenses.map(e => ({
+      month: e.month,
+      amount: parseFloat(e.total)
+    })),
+    byCategory: expensesByCategory.map(c => ({
+      category: c.category,
+      amount: parseFloat(c.total)
+    })),
+    topExpenses: topExpenses.map(e => ({
+      category: e.category,
+      description: e.description,
+      amount: parseFloat(e.amount),
+      date: e.date
+    }))
+  };
+};
+
+const getCashflowDashboard = async (companyId, period = '6m') => {
+  const now = new Date();
+  let startDate;
+
+  switch (period) {
+    case '1m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      break;
+    case '3m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      break;
+    case '12m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+      break;
+    case '6m':
+    default:
+      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  }
+
+  // Get monthly cashflow data
+  const cashflowData = await FinancialTransaction.findAll({
+    where: {
+      companyId,
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    attributes: [
+      [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
+      'type',
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'type'],
+    order: [[Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'ASC']],
+    raw: true
+  });
+
+  // Format monthly data
+  const monthlyCashflow = [];
+  const months = new Set(cashflowData.map(d => d.month));
+
+  months.forEach(month => {
+    const inflow = cashflowData.find(d => d.month === month && d.type === 'REVENUE');
+    const outflow = cashflowData.find(d => d.month === month && d.type === 'EXPENSE');
+
+    monthlyCashflow.push({
+      month,
+      inflow: parseFloat(inflow?.total || 0),
+      outflow: parseFloat(outflow?.total || 0),
+      net: parseFloat(inflow?.total || 0) - parseFloat(outflow?.total || 0)
+    });
+  });
+
+  // Get cash balance history
+  const cashHistory = await CashBalance.findAll({
+    where: {
+      companyId,
+      date: { [Sequelize.Op.gte]: startDate }
+    },
+    order: [['date', 'ASC']],
+    raw: true
+  });
+
+  return {
+    monthlyCashflow,
+    cashHistory: cashHistory.map(c => ({
+      date: c.date,
+      amount: parseFloat(c.amount)
+    }))
+  };
+};
+
+module.exports = {
+  getCFOOverview,
+  getRevenueDashboard,
+  getExpenseDashboard,
+  getCashflowDashboard
+};
