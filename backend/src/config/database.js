@@ -1,6 +1,9 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
+// 🔍 TEMP DEBUG — REMOVE AFTER CONFIRMATION
+console.log('DATABASE_URL =', process.env.DATABASE_URL);
+
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialect: 'postgres',
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
@@ -8,14 +11,17 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     max: 5,
     min: 0,
     acquire: 30000,
-    idle: 10000
+    idle: 10000,
   },
-  dialectOptions: process.env.NODE_ENV === 'production' ? {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
-    }
-  } : {}
+  dialectOptions:
+    process.env.NODE_ENV === 'production'
+      ? {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false,
+          },
+        }
+      : {},
 });
 
 module.exports = { sequelize };
