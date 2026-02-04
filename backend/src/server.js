@@ -7,13 +7,14 @@ require('dotenv').config();
 const { sequelize } = require('./models');
 
 // Import routes
-const authRoutes = require('./routes/auth');
-const companyRoutes = require('./routes/companies');
-const dashboardRoutes = require('./routes/dashboard');
-const aiRoutes = require('./routes/ai');
-const transactionRoutes = require('./routes/transactions');
-const cashBalanceRoutes = require('./routes/cashBalance');
-const integrationRoutes = require('./routes/integrations');
+const authRoutes = require('../routes/auth');
+const companyRoutes = require('../routes/companies');
+const dashboardRoutes = require('../routes/dashboard');
+const aiRoutes = require('../routes/ai');
+const transactionRoutes = require('../routes/transactions');
+const cashBalanceRoutes = require('../routes/cashBalance');
+const integrationRoutes = require('../routes/integrations');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
