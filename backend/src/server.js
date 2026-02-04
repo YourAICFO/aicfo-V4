@@ -18,43 +18,63 @@ const integrationRoutes = require('./routes/integrations');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+/* ===============================
+   Security middleware
+================================ */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
     },
-  },
-}));
+  })
+);
 
-// CORS
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? [process.env.FRONTEND_URL]
-    : ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true,
-}));
+/* ===============================
+   CORS — FIXED (IMPORTANT)
+================================ */
+app.use(
+  cors({
+    origin: [
+      'https://web-production-7440b.up.railway.app', // FRONTEND (Railway)
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ],
+    credentials: true,
+  })
+);
 
-// Logging
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+/* ===============================
+   Logging
+================================ */
+app.use(
+  morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev')
+);
 
-// Body parsing
+/* ===============================
+   Body parsing
+================================ */
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint (for Railway)
+/* ===============================
+   Health check (Railway)
+================================ */
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
-// API routes
+/* ===============================
+   API routes
+================================ */
 app.use('/api/auth', authRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -63,62 +83,60 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
 
-// Root endpoint
+/* ===============================
+   Root
+================================ */
 app.get('/', (req, res) => {
   res.json({
     name: 'AI CFO Platform API',
     version: '1.0.0',
     status: 'running',
-    health: '/health'
+    health: '/health',
   });
 });
 
-// 404 handler
+/* ===============================
+   404 handler
+================================ */
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error: 'Endpoint not found'
+    error: 'Endpoint not found',
   });
 });
 
-// Global error handler
+/* ===============================
+   Global error handler
+================================ */
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
 
-  if (process.env.NODE_ENV === 'production') {
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
-  } else {
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error',
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    ...(process.env.NODE_ENV !== 'production' && {
       message: err.message,
-      stack: err.stack
-    });
-  }
+      stack: err.stack,
+    }),
+  });
 });
 
-// Database connection and server start
+/* ===============================
+   Start server
+================================ */
 const startServer = async () => {
   try {
-    // Test database connection
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
-    // Sync models (create tables if they don't exist)
-    // In production, use migrations instead
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync({ alter: true });
       console.log('Database models synchronized.');
     }
 
-    // Start server
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`Health check: http://localhost:${PORT}/health`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -126,7 +144,9 @@ const startServer = async () => {
   }
 };
 
-// Handle graceful shutdown
+/* ===============================
+   Graceful shutdown
+================================ */
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
   await sequelize.close();
@@ -139,7 +159,6 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Start the server
 startServer();
 
 module.exports = app;
