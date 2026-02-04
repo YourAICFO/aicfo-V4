@@ -131,3 +131,10 @@ router.post('/reset-password', async (req, res) => {
 });
 
 module.exports = router;
+router.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Auth routes are mounted correctly',
+  });
+});
+
