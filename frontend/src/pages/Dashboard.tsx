@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react';
-import { dashboardApi, aiApi } from '../services/api';
+import { dashboardApi } from '../services/api';
+import { Link } from 'react-router-dom';
 
 interface OverviewData {
   cashPosition: {
@@ -89,9 +90,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">CFO Overview</h1>
-        <p className="text-gray-600">Your financial health at a glance</p>
+
+      {/* Header + Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">CFO Overview</h1>
+          <p className="text-gray-600">Your financial health at a glance</p>
+        </div>
+
+        <Link
+          to="/create-company"
+          className="btn-primary px-4 py-2"
+        >
+          + Create Company
+        </Link>
       </div>
 
       {/* Key Metrics */}
@@ -103,7 +115,9 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Current Cash</p>
-              <p className="text-2xl font-bold">{formatCurrency(data?.cashPosition.currentBalance || 0)}</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(data?.cashPosition.currentBalance || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -127,7 +141,9 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Avg Monthly Inflow</p>
-              <p className="text-2xl font-bold">{formatCurrency(data?.runway.avgMonthlyInflow || 0)}</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(data?.runway.avgMonthlyInflow || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -139,7 +155,9 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Avg Monthly Outflow</p>
-              <p className="text-2xl font-bold">{formatCurrency(data?.runway.avgMonthlyOutflow || 0)}</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(data?.runway.avgMonthlyOutflow || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -157,7 +175,9 @@ export default function Dashboard() {
         </div>
 
         {data?.insights.recent.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No insights available. Add more financial data to get AI-powered insights.</p>
+          <p className="text-gray-500 text-center py-8">
+            No insights available. Add more financial data to get AI-powered insights.
+          </p>
         ) : (
           <div className="space-y-4">
             {data?.insights.recent.map((insight) => (
@@ -183,6 +203,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
     </div>
   );
 }

@@ -20,10 +20,30 @@ export default function Login() {
 
     try {
       const response = await authApi.login(email, password);
+
+      // DEBUG LOGS
+      console.log("FULL RESPONSE:", response.data);
+
       const { user, token } = response.data.data;
+
+      console.log("TOKEN RECEIVED:", token);
+
+      // Save in Zustand store
       setAuth(user, token);
+
+      console.log("SET AUTH CALLED");
+
+      // Check localStorage after setting auth
+      setTimeout(() => {
+        console.log(
+          "LOCAL STORAGE auth-storage:",
+          localStorage.getItem("auth-storage")
+        );
+      }, 500);
+
       navigate('/dashboard');
     } catch (err: any) {
+      console.log("LOGIN ERROR:", err);
       setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
@@ -48,6 +68,7 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+
             <div>
               <label className="label">Email</label>
               <div className="relative">
@@ -102,6 +123,7 @@ export default function Login() {
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+
           </form>
 
           <p className="mt-6 text-center text-gray-600">

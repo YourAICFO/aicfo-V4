@@ -13,6 +13,7 @@ import Transactions from './pages/Transactions';
 import Integrations from './pages/Integrations';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import CreateCompany from './pages/CreateCompany';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -33,6 +34,7 @@ function App() {
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/create-company" element={<CreateCompany />} />
         </Route>
       </Route>
     </Routes>
