@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { companiesApi } from '../services/api';
+import { companyApi } from '../services/api';
 
 export default function CreateCompany() {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ export default function CreateCompany() {
     setLoading(true);
 
     try {
-      await companiesApi.create({
+      await companyApi.create({
         name,
         industry,
         currency,
