@@ -21,13 +21,12 @@ const FinancialTransaction = sequelize.define('FinancialTransaction', {
     allowNull: false
   },
   type: {
-    type: DataTypes.ENUM('REVENUE', 'EXPENSE', 'OPENING_BALANCE'),
+    type: DataTypes.ENUM('OPENING_BALANCE', 'REVENUE', 'EXPENSE'),
     allowNull: false
   },
   category: {
     type: DataTypes.STRING(100),
-    // Opening balances don't always have a category; keep it optional to avoid insert errors
-    allowNull: true
+    allowNull: false
   },
   subcategory: {
     type: DataTypes.STRING(100),
