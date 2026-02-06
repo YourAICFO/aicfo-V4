@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
+const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
 const { cashBalanceValidation } = require('../middleware/validation');
 const { cashBalanceService } = require('../services');
 
 // GET /api/cash-balance
-router.get('/', authenticate, requireCompany, async (req, res) => {
+router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const options = {
       limit: req.query.limit || 50,
@@ -27,7 +28,7 @@ router.get('/', authenticate, requireCompany, async (req, res) => {
 });
 
 // GET /api/cash-balance/latest
-router.get('/latest', authenticate, requireCompany, async (req, res) => {
+router.get('/latest', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const balance = await cashBalanceService.getLatestBalance(req.companyId);
     res.json({
@@ -44,7 +45,7 @@ router.get('/latest', authenticate, requireCompany, async (req, res) => {
 });
 
 // POST /api/cash-balance
-router.post('/', authenticate, requireCompany, cashBalanceValidation, async (req, res) => {
+router.post('/', authenticate, requireCompany, checkSubscriptionAccess, cashBalanceValidation, async (req, res) => {
   try {
     const balance = await cashBalanceService.createCashBalance(req.companyId, req.body);
     res.status(201).json({
@@ -62,7 +63,7 @@ router.post('/', authenticate, requireCompany, cashBalanceValidation, async (req
 });
 
 // PUT /api/cash-balance/:id
-router.put('/:id', authenticate, requireCompany, async (req, res) => {
+router.put('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const balance = await cashBalanceService.updateCashBalance(
       req.params.id,
@@ -84,7 +85,7 @@ router.put('/:id', authenticate, requireCompany, async (req, res) => {
 });
 
 // DELETE /api/cash-balance/:id
-router.delete('/:id', authenticate, requireCompany, async (req, res) => {
+router.delete('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await cashBalanceService.deleteCashBalance(req.params.id, req.companyId);
     res.json({

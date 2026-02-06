@@ -25,6 +25,26 @@ const Subscription = sequelize.define('Subscription', {
     type: DataTypes.ENUM('ACTIVE', 'CANCELLED', 'EXPIRED', 'PENDING'),
     defaultValue: 'ACTIVE'
   },
+  subscriptionStatus: {
+    type: DataTypes.ENUM('trial', 'active', 'expired'),
+    defaultValue: 'trial',
+    field: 'subscription_status'
+  },
+  trialStartDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'trial_start_date'
+  },
+  trialEndDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'trial_end_date'
+  },
+  accountLocked: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    field: 'account_locked'
+  },
   startDate: {
     type: DataTypes.DATE,
     allowNull: false,
@@ -74,7 +94,11 @@ const Subscription = sequelize.define('Subscription', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  underscored: true
+  underscored: true,
+  indexes: [
+    { fields: ['company_id'] },
+    { fields: ['trial_end_date'] }
+  ]
 });
 
 module.exports = { Subscription };

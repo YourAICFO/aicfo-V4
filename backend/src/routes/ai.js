@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, requireCompany, requirePaidPlan } = require('../middleware/auth');
+const { authenticate, requireCompany } = require('../middleware/auth');
+const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
 const { aiService } = require('../services');
 
 // GET /api/ai/insights
-router.get('/insights', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.get('/insights', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const insights = await aiService.getInsights(req.companyId);
     res.json({
@@ -21,7 +22,7 @@ router.get('/insights', authenticate, requireCompany, requirePaidPlan, async (re
 });
 
 // POST /api/ai/insights/:id/read
-router.post('/insights/:id/read', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/insights/:id/read', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await aiService.markInsightRead(req.params.id, req.companyId);
     res.json({
@@ -38,7 +39,7 @@ router.post('/insights/:id/read', authenticate, requireCompany, requirePaidPlan,
 });
 
 // POST /api/ai/insights/:id/dismiss
-router.post('/insights/:id/dismiss', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/insights/:id/dismiss', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await aiService.dismissInsight(req.params.id, req.companyId);
     res.json({
@@ -55,7 +56,7 @@ router.post('/insights/:id/dismiss', authenticate, requireCompany, requirePaidPl
 });
 
 // POST /api/ai/chat
-router.post('/chat', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const { message } = req.body;
     if (!message) {

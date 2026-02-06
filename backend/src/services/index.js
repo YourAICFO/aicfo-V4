@@ -5,6 +5,7 @@ const aiService = require('./aiService');
 const transactionService = require('./transactionService');
 const cashBalanceService = require('./cashBalanceService');
 const integrationService = require('./integrationService');
+const subscriptionService = require('./subscriptionService');
 
 module.exports = {
   authService,
@@ -13,5 +14,6 @@ module.exports = {
   aiService,
   transactionService,
   cashBalanceService,
-  integrationService
+  integrationService,
+  subscriptionService
 };

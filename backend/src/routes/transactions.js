@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
+const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
 const { transactionValidation } = require('../middleware/validation');
 const { transactionService } = require('../services');
 
 // GET /api/transactions
-router.get('/', authenticate, requireCompany, async (req, res) => {
+router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const options = {
       type: req.query.type,
@@ -31,7 +32,7 @@ router.get('/', authenticate, requireCompany, async (req, res) => {
 });
 
 // POST /api/transactions
-router.post('/', authenticate, requireCompany, transactionValidation, async (req, res) => {
+router.post('/', authenticate, requireCompany, checkSubscriptionAccess, transactionValidation, async (req, res) => {
   try {
     const transaction = await transactionService.createTransaction(req.companyId, req.body);
     res.status(201).json({
@@ -49,7 +50,7 @@ router.post('/', authenticate, requireCompany, transactionValidation, async (req
 });
 
 // GET /api/transactions/:id
-router.get('/:id', authenticate, requireCompany, async (req, res) => {
+router.get('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const transaction = await transactionService.getTransactionById(req.params.id, req.companyId);
     res.json({
@@ -66,7 +67,7 @@ router.get('/:id', authenticate, requireCompany, async (req, res) => {
 });
 
 // PUT /api/transactions/:id
-router.put('/:id', authenticate, requireCompany, async (req, res) => {
+router.put('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const transaction = await transactionService.updateTransaction(
       req.params.id,
@@ -88,7 +89,7 @@ router.put('/:id', authenticate, requireCompany, async (req, res) => {
 });
 
 // DELETE /api/transactions/:id
-router.delete('/:id', authenticate, requireCompany, async (req, res) => {
+router.delete('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await transactionService.deleteTransaction(req.params.id, req.companyId);
     res.json({
@@ -105,7 +106,7 @@ router.delete('/:id', authenticate, requireCompany, async (req, res) => {
 });
 
 // GET /api/transactions/categories/list
-router.get('/categories/list', authenticate, requireCompany, async (req, res) => {
+router.get('/categories/list', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const categories = await transactionService.getCategories(req.companyId);
     res.json({

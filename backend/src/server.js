@@ -15,6 +15,7 @@ const transactionRoutes = require('./routes/transactions');
 const cashBalanceRoutes = require('./routes/cashBalance');
 const integrationRoutes = require('./routes/integrations');
 const jobRoutes = require('./routes/jobs');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 
 const app = express();
@@ -85,6 +86,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 /* ===============================
    Root

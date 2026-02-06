@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, requireCompany, requirePaidPlan } = require('../middleware/auth');
+const { authenticate, requireCompany } = require('../middleware/auth');
+const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
 const { integrationService } = require('../services');
 
 // GET /api/integrations
-router.get('/', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const integrations = await integrationService.getIntegrations(req.companyId);
     res.json({
@@ -21,7 +22,7 @@ router.get('/', authenticate, requireCompany, requirePaidPlan, async (req, res) 
 });
 
 // POST /api/integrations/tally
-router.post('/tally', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/tally', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const integration = await integrationService.connectTally(req.companyId, req.body);
     res.status(201).json({
@@ -39,7 +40,7 @@ router.post('/tally', authenticate, requireCompany, requirePaidPlan, async (req,
 });
 
 // POST /api/integrations/zoho
-router.post('/zoho', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/zoho', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const integration = await integrationService.connectZoho(req.companyId, req.body);
     res.status(201).json({
@@ -57,7 +58,7 @@ router.post('/zoho', authenticate, requireCompany, requirePaidPlan, async (req, 
 });
 
 // POST /api/integrations/quickbooks
-router.post('/quickbooks', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/quickbooks', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const integration = await integrationService.connectQuickBooks(req.companyId, req.body);
     res.status(201).json({
@@ -75,7 +76,7 @@ router.post('/quickbooks', authenticate, requireCompany, requirePaidPlan, async 
 });
 
 // POST /api/integrations/:id/disconnect
-router.post('/:id/disconnect', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/:id/disconnect', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await integrationService.disconnectIntegration(req.params.id, req.companyId);
     res.json({
@@ -92,7 +93,7 @@ router.post('/:id/disconnect', authenticate, requireCompany, requirePaidPlan, as
 });
 
 // POST /api/integrations/:id/sync
-router.post('/:id/sync', authenticate, requireCompany, requirePaidPlan, async (req, res) => {
+router.post('/:id/sync', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await integrationService.syncIntegration(req.params.id, req.companyId);
     res.json({

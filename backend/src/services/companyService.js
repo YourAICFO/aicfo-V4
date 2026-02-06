@@ -1,4 +1,5 @@
 const { Company, Subscription, FinancialTransaction, CashBalance, Integration, AIInsight } = require('../models');
+const { createTrialSubscription } = require('./subscriptionService');
 
 const createCompany = async (userId, companyData) => {
   const company = await Company.create({
@@ -6,24 +7,8 @@ const createCompany = async (userId, companyData) => {
     ownerId: userId
   });
 
-  // Create default FREE subscription
-  await Subscription.create({
-    companyId: company.id,
-    planType: 'FREE',
-    status: 'ACTIVE',
-    maxTransactions: 100,
-    maxIntegrations: 0,
-    features: {
-      manualEntry: true,
-      aiInsights: false,
-      aiChat: false,
-      tally: false,
-      zoho: false,
-      quickbooks: false,
-      alerts: false,
-      exports: false
-    }
-  });
+  // Create trial subscription
+  await createTrialSubscription(company.id);
 
   return company;
 };
