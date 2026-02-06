@@ -68,8 +68,8 @@ const transactionValidation = [
     .isISO8601()
     .withMessage('Valid date is required (YYYY-MM-DD)'),
   body('type')
-    .isIn(['REVENUE', 'EXPENSE'])
-    .withMessage('Type must be REVENUE or EXPENSE'),
+    .isIn(['REVENUE', 'EXPENSE', 'OPENING_BALANCE'])
+    .withMessage('Type must be REVENUE, EXPENSE, or OPENING_BALANCE'),
   body('category')
     .trim()
     .notEmpty()

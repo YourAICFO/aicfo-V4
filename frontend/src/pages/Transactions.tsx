@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Filter, Edit2, Trash2 } from 'lucide-react';
 import { transactionApi } from '../services/api';
 
 interface Transaction {
   id: string;
   date: string;
-  type: 'REVENUE' | 'EXPENSE';
+  type: 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE';
   category: string;
   amount: number;
   description: string;
@@ -17,7 +17,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [filter, setFilter] = useState({ type: '', category: '' });
+  const [filter, setFilter] = useState({ type: '' });
+
   const [formData, setFormData] = useState({
     date: '',
     type: 'EXPENSE',
@@ -34,6 +35,7 @@ export default function Transactions() {
     try {
       const params: any = {};
       if (filter.type) params.type = filter.type;
+
       const response = await transactionApi.getAll(params);
       setTransactions(response.data.data.transactions);
     } catch (error) {
@@ -45,6 +47,7 @@ export default function Transactions() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     try {
       if (editingTransaction) {
         await transactionApi.update(editingTransaction.id, {
@@ -54,15 +57,23 @@ export default function Transactions() {
       } else {
         await transactionApi.create({
           date: formData.date,
-          type: formData.type as 'REVENUE' | 'EXPENSE',
+          type: formData.type as 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE',
           category: formData.category,
           amount: parseFloat(formData.amount),
           description: formData.description,
         });
       }
+
       setShowModal(false);
       setEditingTransaction(null);
-      setFormData({ date: '', type: 'EXPENSE', category: '', amount: '', description: '' });
+      setFormData({
+        date: '',
+        type: 'EXPENSE',
+        category: '',
+        amount: '',
+        description: '',
+      });
+
       loadTransactions();
     } catch (error) {
       console.error('Failed to save transaction:', error);
@@ -71,6 +82,7 @@ export default function Transactions() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this transaction?')) return;
+
     try {
       await transactionApi.delete(id);
       loadTransactions();
@@ -99,6 +111,20 @@ export default function Transactions() {
     }).format(amount);
   };
 
+  const getAmountColor = (type: string) => {
+    if (type === 'REVENUE' || type === 'OPENING_BALANCE') {
+      return 'text-green-600';
+    }
+    return 'text-red-600';
+  };
+
+  const getAmountPrefix = (type: string) => {
+    if (type === 'REVENUE' || type === 'OPENING_BALANCE') {
+      return '+';
+    }
+    return '-';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -109,15 +135,24 @@ export default function Transactions() {
 
   return (
     <div className="space-y-6">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
           <p className="text-gray-600">Manage your financial transactions</p>
         </div>
+
         <button
           onClick={() => {
             setEditingTransaction(null);
-            setFormData({ date: '', type: 'EXPENSE', category: '', amount: '', description: '' });
+            setFormData({
+              date: '',
+              type: 'EXPENSE',
+              category: '',
+              amount: '',
+              description: '',
+            });
             setShowModal(true);
           }}
           className="btn-primary flex items-center gap-2"
@@ -137,13 +172,14 @@ export default function Transactions() {
             className="border-none bg-transparent focus:ring-0"
           >
             <option value="">All Types</option>
+            <option value="OPENING_BALANCE">Opening Balance</option>
             <option value="REVENUE">Revenue</option>
             <option value="EXPENSE">Expense</option>
           </select>
         </div>
       </div>
 
-      {/* Transactions Table */}
+      {/* Table */}
       <div className="card overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -156,57 +192,46 @@ export default function Transactions() {
               <th className="text-center py-3 px-4 font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {transactions.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-8 text-gray-500">
-                  No transactions found. Add your first transaction to get started.
+                  No transactions found.
                 </td>
               </tr>
             ) : (
               transactions.map((transaction) => (
                 <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">{new Date(transaction.date).toLocaleDateString('en-IN')}</td>
                   <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-1 rounded text-sm font-medium ${
-                        transaction.type === 'REVENUE'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {transaction.type}
+                    {new Date(transaction.date).toLocaleDateString('en-IN')}
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-700">
+                      {transaction.type.replace('_', ' ')}
                     </span>
                   </td>
+
                   <td className="py-3 px-4">{transaction.category}</td>
                   <td className="py-3 px-4">{transaction.description || '-'}</td>
-                  <td
-                    className={`py-3 px-4 text-right font-medium ${
-                      transaction.type === 'REVENUE' ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {transaction.type === 'REVENUE' ? '+' : '-'}
+
+                  <td className={`py-3 px-4 text-right font-medium ${getAmountColor(transaction.type)}`}>
+                    {getAmountPrefix(transaction.type)}
                     {formatCurrency(transaction.amount)}
                   </td>
+
                   <td className="py-3 px-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      {transaction.source === 'MANUAL' && (
-                        <>
-                          <button
-                            onClick={() => handleEdit(transaction)}
-                            className="p-1 text-gray-400 hover:text-blue-600"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(transaction.id)}
-                            className="p-1 text-gray-400 hover:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    {transaction.source === 'MANUAL' && (
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => handleEdit(transaction)}>
+                          <Edit2 className="w-4 h-4 text-gray-400 hover:text-blue-600" />
+                        </button>
+                        <button onClick={() => handleDelete(transaction.id)}>
+                          <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -222,7 +247,9 @@ export default function Transactions() {
             <h2 className="text-xl font-semibold mb-4">
               {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
             </h2>
+
             <form onSubmit={handleSubmit} className="space-y-4">
+
               {!editingTransaction && (
                 <>
                   <div>
@@ -235,6 +262,7 @@ export default function Transactions() {
                       required
                     />
                   </div>
+
                   <div>
                     <label className="label">Type</label>
                     <select
@@ -243,10 +271,12 @@ export default function Transactions() {
                       className="input"
                       required
                     >
-                      <option value="EXPENSE">Expense</option>
+                      <option value="OPENING_BALANCE">Opening Balance</option>
                       <option value="REVENUE">Revenue</option>
+                      <option value="EXPENSE">Expense</option>
                     </select>
                   </div>
+
                   <div>
                     <label className="label">Category</label>
                     <input
@@ -254,12 +284,12 @@ export default function Transactions() {
                       value={formData.category}
                       onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                       className="input"
-                      placeholder="e.g., Salaries, Sales"
                       required
                     />
                   </div>
                 </>
               )}
+
               <div>
                 <label className="label">Amount</label>
                 <input
@@ -267,12 +297,10 @@ export default function Transactions() {
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   className="input"
-                  placeholder="Enter amount"
-                  min="0"
-                  step="0.01"
                   required
                 />
               </div>
+
               <div>
                 <label className="label">Description</label>
                 <input
@@ -280,25 +308,23 @@ export default function Transactions() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input"
-                  placeholder="Optional description"
                 />
               </div>
+
               <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 btn-secondary"
-                >
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 btn-secondary">
                   Cancel
                 </button>
                 <button type="submit" className="flex-1 btn-primary">
                   {editingTransaction ? 'Update' : 'Add'}
                 </button>
               </div>
+
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

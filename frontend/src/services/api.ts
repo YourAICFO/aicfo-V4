@@ -76,7 +76,7 @@ export const transactionApi = {
     api.get('/transactions', { params }),
   create: (data: {
     date: string;
-    type: 'REVENUE' | 'EXPENSE';
+    type: 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE';
     category: string;
     amount: number;
     description?: string;

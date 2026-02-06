@@ -21,7 +21,7 @@ const FinancialTransaction = sequelize.define('FinancialTransaction', {
     allowNull: false
   },
   type: {
-    type: DataTypes.ENUM('REVENUE', 'EXPENSE'),
+    type: DataTypes.ENUM('REVENUE', 'EXPENSE', 'OPENING_BALANCE'),
     allowNull: false
   },
   category: {
