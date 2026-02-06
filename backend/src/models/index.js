@@ -6,6 +6,8 @@ const { FinancialTransaction } = require('./FinancialTransaction');
 const { CashBalance } = require('./CashBalance');
 const { Integration } = require('./Integration');
 const { AIInsight } = require('./AIInsight');
+const { FinancialReport } = require('./FinancialReport');
+const { Notification } = require('./Notification');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -31,6 +33,14 @@ Integration.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 Company.hasMany(AIInsight, { foreignKey: 'company_id', as: 'insights' });
 AIInsight.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+// Company - FinancialReport (One-to-Many)
+Company.hasMany(FinancialReport, { foreignKey: 'company_id', as: 'reports' });
+FinancialReport.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - Notification (One-to-Many)
+Company.hasMany(Notification, { foreignKey: 'company_id', as: 'notifications' });
+Notification.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
   sequelize,
   User,
@@ -39,5 +49,7 @@ module.exports = {
   FinancialTransaction,
   CashBalance,
   Integration,
-  AIInsight
+  AIInsight,
+  FinancialReport,
+  Notification
 };

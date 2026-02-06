@@ -14,6 +14,7 @@ const aiRoutes = require('./routes/ai');
 const transactionRoutes = require('./routes/transactions');
 const cashBalanceRoutes = require('./routes/cashBalance');
 const integrationRoutes = require('./routes/integrations');
+const jobRoutes = require('./routes/jobs');
 
 
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
+app.use('/api/jobs', jobRoutes);
 
 /* ===============================
    Root
