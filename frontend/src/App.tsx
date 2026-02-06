@@ -14,17 +14,18 @@ import Integrations from './pages/Integrations';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
 import CreateCompany from './pages/CreateCompany';
+import Home from './pages/Home';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   return (
     <Routes>
+      <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/revenue" element={<Revenue />} />
           <Route path="/expenses" element={<Expenses />} />
