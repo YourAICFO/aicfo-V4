@@ -6,7 +6,7 @@ import { authApi } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const { setAuth, isAuthenticated } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -63,9 +63,13 @@ export default function Login() {
             <p className="text-sm text-emerald-200/80">AI CFO</p>
             <p className="text-lg font-semibold">Finance OS</p>
           </div>
-          <Link to="/dashboard" className="text-sm text-slate-200 hover:text-white">
-            Return to dashboard
-          </Link>
+          <button
+            type="button"
+            onClick={() => navigate(isAuthenticated ? '/dashboard' : '/')}
+            className="text-sm text-slate-200 hover:text-white"
+          >
+            {isAuthenticated ? 'Return to dashboard' : 'Return to home'}
+          </button>
         </div>
 
         <div className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 pb-16 pt-6 lg:grid-cols-[1.1fr_0.9fr]">

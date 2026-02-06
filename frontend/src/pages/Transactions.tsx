@@ -19,6 +19,7 @@ export default function Transactions() {
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [filter, setFilter] = useState({ type: '' });
+  const [error, setError] = useState('');
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   const [formData, setFormData] = useState({
@@ -51,6 +52,7 @@ export default function Transactions() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
 
     try {
       if (editingTransaction) {
@@ -62,7 +64,7 @@ export default function Transactions() {
         await transactionApi.create({
           date: formData.date,
           type: formData.type as 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE',
-          category: formData.category,
+          category: formData.type === 'OPENING_BALANCE' ? 'Opening Balance' : formData.category,
           amount: parseFloat(formData.amount),
           description: formData.description,
         });
@@ -79,8 +81,9 @@ export default function Transactions() {
       });
 
       loadTransactions();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save transaction:', error);
+      setError(error.response?.data?.error || 'Failed to save transaction. Please try again.');
     }
   };
 
@@ -299,6 +302,12 @@ export default function Transactions() {
               {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
             </h2>
 
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
 
               {!editingTransaction && (
@@ -318,7 +327,14 @@ export default function Transactions() {
                     <label className="label">Type</label>
                     <select
                       value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      onChange={(e) => {
+                        const nextType = e.target.value;
+                        setFormData({
+                          ...formData,
+                          type: nextType,
+                          category: nextType === 'OPENING_BALANCE' ? 'Opening Balance' : formData.category,
+                        });
+                      }}
                       className="input"
                       required
                     >
@@ -328,16 +344,18 @@ export default function Transactions() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="label">Category</label>
-                    <input
-                      type="text"
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="input"
-                      required
-                    />
-                  </div>
+                  {formData.type !== 'OPENING_BALANCE' && (
+                    <div>
+                      <label className="label">Category</label>
+                      <input
+                        type="text"
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        className="input"
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
