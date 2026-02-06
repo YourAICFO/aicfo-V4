@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, AlertTriangle, AlertCircle, X, Check } from 'lucide-react';
 import { aiApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface Insight {
   id: string;
@@ -18,10 +19,12 @@ export default function AIInsights() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   useEffect(() => {
+    if (!selectedCompanyId) return;
     loadInsights();
-  }, []);
+  }, [selectedCompanyId]);
 
   const loadInsights = async () => {
     try {

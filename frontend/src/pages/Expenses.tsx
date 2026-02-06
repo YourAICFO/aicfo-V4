@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface ExpenseData {
   summary: {
@@ -23,13 +24,16 @@ export default function Expenses() {
   const [data, setData] = useState<ExpenseData | null>(null);
   const [period, setPeriod] = useState('6m');
   const [loading, setLoading] = useState(true);
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   useEffect(() => {
+    if (!selectedCompanyId) return;
     loadData();
-  }, [period]);
+  }, [period, selectedCompanyId]);
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const response = await dashboardApi.getExpenses(period);
       setData(response.data.data);
     } catch (error) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { dashboardApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface CashflowData {
   monthlyCashflow: Array<{
@@ -19,13 +20,16 @@ export default function Cashflow() {
   const [data, setData] = useState<CashflowData | null>(null);
   const [period, setPeriod] = useState('6m');
   const [loading, setLoading] = useState(true);
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   useEffect(() => {
+    if (!selectedCompanyId) return;
     loadData();
-  }, [period]);
+  }, [period, selectedCompanyId]);
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const response = await dashboardApi.getCashflow(period);
       setData(response.data.data);
     } catch (error) {

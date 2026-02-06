@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Filter, Edit2, Trash2 } from 'lucide-react';
 import { transactionApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface Transaction {
   id: string;
@@ -18,6 +19,7 @@ export default function Transactions() {
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [filter, setFilter] = useState({ type: '' });
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   const [formData, setFormData] = useState({
     date: '',
@@ -28,11 +30,13 @@ export default function Transactions() {
   });
 
   useEffect(() => {
+    if (!selectedCompanyId) return;
     loadTransactions();
-  }, [filter]);
+  }, [filter, selectedCompanyId]);
 
   const loadTransactions = async () => {
     try {
+      setLoading(true);
       const params: any = {};
       if (filter.type) params.type = filter.type;
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { dashboardApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 
 interface OverviewData {
@@ -30,24 +31,12 @@ interface OverviewData {
 export default function Dashboard() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState(localStorage.getItem("companyId"));
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
-  // reload only when company changes
   useEffect(() => {
+    if (!selectedCompanyId) return;
     loadData();
-  }, [companyId]);
-
-  // detect company switch from dropdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const currentCompany = localStorage.getItem("companyId");
-      if (currentCompany !== companyId) {
-        setCompanyId(currentCompany);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [companyId]);
+  }, [selectedCompanyId]);
 
   const loadData = async () => {
     try {

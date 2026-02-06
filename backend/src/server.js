@@ -130,6 +130,26 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
+    if (sequelize.getDialect() === 'postgres') {
+      try {
+        await sequelize.query(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_type t
+              JOIN pg_enum e ON t.oid = e.enumtypid
+              WHERE t.typname = 'enum_financial_transactions_type'
+                AND e.enumlabel = 'OPENING_BALANCE'
+            ) THEN
+              ALTER TYPE "enum_financial_transactions_type" ADD VALUE 'OPENING_BALANCE';
+            END IF;
+          END $$;
+        `);
+      } catch (error) {
+        console.warn('Failed to ensure OPENING_BALANCE enum value:', error.message);
+      }
+    }
+
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync({ alter: true });
       console.log('Database models synchronized.');
