@@ -26,7 +26,8 @@ const FinancialTransaction = sequelize.define('FinancialTransaction', {
   },
   category: {
     type: DataTypes.STRING(100),
-    allowNull: false
+    // Opening balances don't always have a category; keep it optional to avoid insert errors
+    allowNull: true
   },
   subcategory: {
     type: DataTypes.STRING(100),
