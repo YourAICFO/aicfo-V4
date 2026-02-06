@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
@@ -121,11 +122,19 @@ export default function Dashboard() {
     );
   }
 
+  const inflow = data?.runway.avgMonthlyInflow || 0;
+  const outflow = data?.runway.avgMonthlyOutflow || 0;
+  const mixData = [
+    { name: 'Inflow', value: inflow },
+    { name: 'Outflow', value: outflow },
+  ];
+  const runwayStatusLabel = data?.runway.status || '—';
+
   return (
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">CFO Overview</h1>
           <p className="text-gray-600">Your financial health at a glance</p>
@@ -140,8 +149,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         {/* Cash */}
-        <div className="card">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
+          <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-100 rounded-lg">
               <Wallet className="w-6 h-6 text-blue-600" />
             </div>
@@ -155,8 +164,8 @@ export default function Dashboard() {
         </div>
 
         {/* Runway */}
-        <div className="card">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+          <div className="flex items-center gap-3">
             <div className={`p-3 rounded-lg ${getRiskColor(data?.runway.status || '')}`}>
               {getRiskIcon(data?.runway.status || '')}
             </div>
@@ -167,11 +176,20 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
+          <div className="mt-3 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            {runwayStatusLabel} status
+          </div>
+          <div className="mt-4 h-2 w-full rounded-full bg-gray-100">
+            <div
+              className="h-2 rounded-full bg-emerald-500"
+              style={{ width: `${Math.min(((data?.runway.months || 0) / 12) * 100, 100)}%` }}
+            />
+          </div>
         </div>
 
         {/* Inflow */}
-        <div className="card">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+          <div className="flex items-center gap-3">
             <div className="p-3 bg-green-100 rounded-lg">
               <TrendingUp className="w-6 h-6 text-green-600" />
             </div>
@@ -185,8 +203,8 @@ export default function Dashboard() {
         </div>
 
         {/* Outflow */}
-        <div className="card">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
+          <div className="flex items-center gap-3">
             <div className="p-3 bg-red-100 rounded-lg">
               <TrendingDown className="w-6 h-6 text-red-600" />
             </div>
@@ -200,6 +218,66 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Inflow vs Outflow Mix</h2>
+              <p className="text-sm text-gray-600">Based on trailing six months</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs uppercase text-gray-400">Net Cash Flow</p>
+              <p className={`text-lg font-semibold ${(data?.runway.netCashFlow || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCurrency(data?.runway.netCashFlow || 0)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-6 md:flex-row md:items-center">
+            <div className="h-56 w-full md:w-1/2">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={mixData}
+                    dataKey="value"
+                    innerRadius={55}
+                    outerRadius={90}
+                    paddingAngle={3}
+                  >
+                    <Cell fill="#10b981" />
+                    <Cell fill="#ef4444" />
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{
+                      background: '#0f172a',
+                      border: '1px solid rgba(148, 163, 184, 0.2)',
+                      borderRadius: '12px',
+                      color: '#f8fafc',
+                    }}
+                    labelStyle={{ color: '#cbd5f5' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-3 md:w-1/2">
+              <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-emerald-700">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Inflow
+                </div>
+                <p className="font-semibold text-emerald-700">{formatCurrency(inflow)}</p>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-rose-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-rose-700">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  Outflow
+                </div>
+                <p className="font-semibold text-rose-700">{formatCurrency(outflow)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
       {/* AI Insights */}
       <div className="card">
@@ -240,6 +318,7 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+      </div>
       </div>
 
     </div>

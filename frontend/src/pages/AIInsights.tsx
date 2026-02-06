@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, AlertCircle, X, Check } from 'lucide-react';
+import { CheckCircle, AlertTriangle, AlertCircle, X, Check, Sparkles } from 'lucide-react';
 import { aiApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -20,6 +20,9 @@ export default function AIInsights() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+
+  const unreadCount = insights.filter(i => !i.isRead).length;
+  const highRiskCount = insights.filter(i => i.riskLevel === 'RED').length;
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -114,9 +117,21 @@ export default function AIInsights() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">AI Insights</h1>
-        <p className="text-gray-600">AI-powered financial intelligence for your business</p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">AI Insights</h1>
+          <p className="text-gray-600">AI-powered financial intelligence for your business</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+            <Sparkles className="h-4 w-4" />
+            {unreadCount} unread
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+            <AlertTriangle className="h-4 w-4" />
+            {highRiskCount} high risk
+          </span>
+        </div>
       </div>
 
       {insights.length === 0 ? (

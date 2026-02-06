@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { TrendingUp, BadgeDollarSign, Target } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -59,9 +60,13 @@ export default function Revenue() {
     );
   }
 
+  const topCategory = (data?.byCategory || [])[0];
+  const growthRate = data?.summary.growthRate || 0;
+  const growthLabel = growthRate >= 0 ? `Up ${growthRate.toFixed(1)}%` : `Down ${Math.abs(growthRate).toFixed(1)}%`;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Revenue Dashboard</h1>
           <p className="text-gray-600">Track your revenue trends and sources</p>
@@ -79,16 +84,45 @@ export default function Revenue() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card">
-          <p className="text-sm text-gray-600">Total Revenue</p>
-          <p className="text-3xl font-bold mt-2">{formatCurrency(data?.summary.totalRevenue || 0)}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-blue-100">
+              <BadgeDollarSign className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Total Revenue</p>
+              <p className="text-2xl font-bold">{formatCurrency(data?.summary.totalRevenue || 0)}</p>
+            </div>
+          </div>
         </div>
-        <div className="card">
-          <p className="text-sm text-gray-600">Growth Rate</p>
-          <p className={`text-3xl font-bold mt-2 ${(data?.summary.growthRate || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {(data?.summary.growthRate || 0) >= 0 ? '+' : ''}{data?.summary.growthRate.toFixed(1)}%
-          </p>
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-emerald-100">
+              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Growth Rate</p>
+              <p className={`text-2xl font-bold ${(data?.summary.growthRate || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {(data?.summary.growthRate || 0) >= 0 ? '+' : ''}{data?.summary.growthRate.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${growthRate >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {growthLabel}
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-slate-100">
+              <Target className="w-6 h-6 text-slate-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Top Category</p>
+              <p className="text-lg font-semibold">{topCategory?.category || '—'}</p>
+              <p className="text-sm text-gray-500">{formatCurrency(topCategory?.amount || 0)}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -112,6 +146,13 @@ export default function Revenue() {
                 <Tooltip
                   formatter={(value: number) => formatCurrency(value)}
                   labelFormatter={(label) => formatMonth(label)}
+                  contentStyle={{
+                    background: '#0f172a',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: '12px',
+                    color: '#f8fafc',
+                  }}
+                  labelStyle={{ color: '#cbd5f5' }}
                 />
                 <Bar dataKey="amount" fill="#3b82f6" />
               </BarChart>
@@ -139,7 +180,16 @@ export default function Revenue() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip
+                  formatter={(value: number) => formatCurrency(value)}
+                  contentStyle={{
+                    background: '#0f172a',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: '12px',
+                    color: '#f8fafc',
+                  }}
+                  labelStyle={{ color: '#cbd5f5' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>

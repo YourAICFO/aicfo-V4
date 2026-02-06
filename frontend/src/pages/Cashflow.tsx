@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -60,9 +61,22 @@ export default function Cashflow() {
     );
   }
 
+  const lastMonth = data?.monthlyCashflow?.length
+    ? data.monthlyCashflow[data.monthlyCashflow.length - 1]
+    : null;
+  const prevMonth = data?.monthlyCashflow?.length && data.monthlyCashflow.length > 1
+    ? data.monthlyCashflow[data.monthlyCashflow.length - 2]
+    : null;
+  const netDelta = lastMonth && prevMonth ? lastMonth.net - prevMonth.net : 0;
+  const netTrend = prevMonth
+    ? netDelta >= 0
+      ? `Up ${((netDelta / Math.abs(prevMonth.net || 1)) * 100).toFixed(1)}%`
+      : `Down ${Math.abs((netDelta / Math.abs(prevMonth.net || 1)) * 100).toFixed(1)}%`
+    : 'No trend';
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cashflow Dashboard</h1>
           <p className="text-gray-600">Track your cash inflows and outflows</p>
@@ -79,12 +93,57 @@ export default function Cashflow() {
         </select>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Wallet className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Latest Net Cashflow</p>
+              <p className={`text-2xl font-bold ${(lastMonth?.net || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCurrency(lastMonth?.net || 0)}
+              </p>
+            </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${netDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {netTrend}
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-100 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Latest Inflow</p>
+              <p className="text-2xl font-bold text-emerald-700">
+                {formatCurrency(lastMonth?.inflow || 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-rose-100 rounded-lg">
+              <TrendingDown className="w-6 h-6 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Latest Outflow</p>
+              <p className="text-2xl font-bold text-rose-700">
+                {formatCurrency(lastMonth?.outflow || 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Monthly Cashflow */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Monthly Cashflow</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data?.monthlyCashflow || []}>
+              <BarChart data={data?.monthlyCashflow || []}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="month"
@@ -98,6 +157,13 @@ export default function Cashflow() {
               <Tooltip
                 formatter={(value: number) => formatCurrency(value)}
                 labelFormatter={(label) => formatMonth(label)}
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '12px',
+                  color: '#f8fafc',
+                }}
+                labelStyle={{ color: '#cbd5f5' }}
               />
               <Legend />
               <Bar dataKey="inflow" name="Inflow" fill="#10b981" />
@@ -126,6 +192,13 @@ export default function Cashflow() {
               <Tooltip
                 formatter={(value: number) => formatCurrency(value)}
                 labelFormatter={(label) => formatMonth(label)}
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '12px',
+                  color: '#f8fafc',
+                }}
+                labelStyle={{ color: '#cbd5f5' }}
               />
               <Area
                 type="monotone"
@@ -158,6 +231,13 @@ export default function Cashflow() {
               <Tooltip
                 formatter={(value: number) => formatCurrency(value)}
                 labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN')}
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '12px',
+                  color: '#f8fafc',
+                }}
+                labelStyle={{ color: '#cbd5f5' }}
               />
               <Area
                 type="monotone"

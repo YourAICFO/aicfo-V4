@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Filter, Edit2, Trash2, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { transactionApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -129,6 +129,16 @@ export default function Transactions() {
     return '-';
   };
 
+  const revenueTotal = transactions
+    .filter(t => t.type === 'REVENUE')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const expenseTotal = transactions
+    .filter(t => t.type === 'EXPENSE')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const openingTotal = transactions
+    .filter(t => t.type === 'OPENING_BALANCE')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -141,7 +151,7 @@ export default function Transactions() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
           <p className="text-gray-600">Manage your financial transactions</p>
@@ -164,6 +174,43 @@ export default function Transactions() {
           <Plus className="w-5 h-5" />
           Add Transaction
         </button>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Wallet className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Opening Balance</p>
+              <p className="text-2xl font-bold">{formatCurrency(openingTotal)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-100 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Revenue</p>
+              <p className="text-2xl font-bold">{formatCurrency(revenueTotal)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-rose-100 rounded-lg">
+              <TrendingDown className="w-6 h-6 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Expenses</p>
+              <p className="text-2xl font-bold">{formatCurrency(expenseTotal)}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
