@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { FinancialTransaction, Subscription } = require('../models');
+const { FinancialTransaction, Subscription, CashBalance } = require('../models');
 
 const createTransaction = async (companyId, transactionData) => {
   // Check subscription limits
@@ -12,11 +12,27 @@ const createTransaction = async (companyId, transactionData) => {
     }
   }
 
-  const transaction = await FinancialTransaction.create({
+  const payload = {
     companyId,
     ...transactionData,
     source: 'MANUAL'
-  });
+  };
+
+  if (payload.type === 'OPENING_BALANCE' && !payload.category) {
+    payload.category = 'Opening Balance';
+  }
+
+  const transaction = await FinancialTransaction.create(payload);
+
+  if (transaction.type === 'OPENING_BALANCE') {
+    await CashBalance.create({
+      companyId,
+      date: transaction.date,
+      amount: transaction.amount,
+      source: 'CALCULATED',
+      notes: 'Opening balance from manual transaction'
+    });
+  }
 
   return transaction;
 };

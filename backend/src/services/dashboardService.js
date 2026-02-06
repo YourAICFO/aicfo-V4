@@ -12,7 +12,14 @@ const getCFOOverview = async (companyId) => {
     order: [['date', 'DESC']]
   });
 
-  const currentCash = latestCash ? parseFloat(latestCash.amount) : 0;
+  let currentCash = latestCash ? parseFloat(latestCash.amount) : 0;
+  if (!latestCash) {
+    const latestOpening = await FinancialTransaction.findOne({
+      where: { companyId, type: 'OPENING_BALANCE' },
+      order: [['date', 'DESC']]
+    });
+    currentCash = latestOpening ? parseFloat(latestOpening.amount) : 0;
+  }
 
   // Get monthly inflows and outflows for last 6 months
   const monthlyData = await FinancialTransaction.findAll({
@@ -337,7 +344,11 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
 
   // Format monthly data
   const monthlyCashflow = [];
-  const months = new Set(cashflowData.map(d => d.month));
+  const months = Array.from(new Set(cashflowData.map(d => d.month))).sort((a, b) => {
+    const da = new Date(a).getTime();
+    const db = new Date(b).getTime();
+    return da - db;
+  });
 
   months.forEach(month => {
     const inflow = cashflowData.find(d => d.month === month && d.type === 'REVENUE');
@@ -360,10 +371,24 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
     order: [['date', 'ASC']],
     raw: true
   });
+  let cashHistoryRows = cashHistory;
+  if (cashHistoryRows.length === 0) {
+    const latestOpening = await FinancialTransaction.findOne({
+      where: { companyId, type: 'OPENING_BALANCE' },
+      order: [['date', 'DESC']],
+      raw: true
+    });
+    if (latestOpening) {
+      cashHistoryRows = [{
+        date: latestOpening.date,
+        amount: latestOpening.amount
+      }];
+    }
+  }
 
   return {
     monthlyCashflow,
-    cashHistory: cashHistory.map(c => ({
+    cashHistory: cashHistoryRows.map(c => ({
       date: c.date,
       amount: parseFloat(c.amount)
     }))

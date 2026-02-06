@@ -71,8 +71,12 @@ const transactionValidation = [
     .isIn(['REVENUE', 'EXPENSE', 'OPENING_BALANCE'])
     .withMessage('Type must be REVENUE, EXPENSE, or OPENING_BALANCE'),
   body('category')
-    .trim()
-    .notEmpty()
+    .custom((value, { req }) => {
+      if (req.body.type === 'OPENING_BALANCE') {
+        return true;
+      }
+      return typeof value === 'string' && value.trim().length > 0;
+    })
     .withMessage('Category is required'),
   body('amount')
     .isFloat({ min: 0 })
