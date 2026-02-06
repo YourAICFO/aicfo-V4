@@ -45,11 +45,27 @@ const getSubscription = async (companyId) => {
 const ensureSubscription = async (companyId) => {
   const existing = await getSubscription(companyId);
   if (existing) {
+    const updates = {};
     if (!existing.subscriptionStatus) {
-      const inferredStatus = existing.planType && existing.planType !== 'FREE' ? 'active' : 'trial';
-      await existing.update({ subscriptionStatus: inferredStatus });
+      updates.subscriptionStatus = existing.planType && existing.planType !== 'FREE' ? 'active' : 'trial';
     }
-    return existing;
+
+    if (updates.subscriptionStatus === 'trial' || existing.subscriptionStatus === 'trial') {
+      if (!existing.trialStartDate) {
+        updates.trialStartDate = new Date();
+      }
+      if (!existing.trialEndDate) {
+        updates.trialEndDate = addDays(updates.trialStartDate || existing.trialStartDate || new Date(), TRIAL_DAYS);
+      }
+      if (existing.accountLocked === null || existing.accountLocked === undefined) {
+        updates.accountLocked = false;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await existing.update(updates);
+    }
+    return existing.reload();
   }
   return createTrialSubscription(companyId);
 };
