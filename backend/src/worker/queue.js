@@ -1,4 +1,4 @@
-const { Queue, QueueScheduler, QueueEvents } = require('bullmq');
+const { Queue, QueueEvents } = require('bullmq');
 const IORedis = require('ioredis');
 const { logger } = require('./logger');
 
@@ -22,7 +22,6 @@ const queue = new Queue(QUEUE_NAME, {
   }
 });
 
-const scheduler = new QueueScheduler(QUEUE_NAME, { connection });
 const events = new QueueEvents(QUEUE_NAME, { connection });
 
 events.on('completed', ({ jobId }) => {
