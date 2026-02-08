@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
-const { FinancialTransaction, CashBalance, AIInsight } = require('../models');
-const { dashboardService } = require('./dashboardService');
+const { AIInsight } = require('../models');
+const dashboardService = require('./dashboardService');
 
 const SYSTEM_PROMPT = `You are a conservative CFO and Chartered Accountant advising Indian SMEs.
 Use only the provided company data.

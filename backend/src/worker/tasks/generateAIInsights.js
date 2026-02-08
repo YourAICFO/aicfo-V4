@@ -1,7 +1,7 @@
 const OpenAI = require('openai');
 const { Sequelize } = require('sequelize');
 const { AIInsight } = require('../../models');
-const { dashboardService } = require('../../services/dashboardService');
+const dashboardService = require('../../services/dashboardService');
 const { assertTrialOrActive } = require('../../services/subscriptionService');
 
 const openai = new OpenAI({
