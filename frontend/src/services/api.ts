@@ -74,16 +74,6 @@ export const dashboardApi = {
 export const transactionApi = {
   getAll: (params?: { type?: string; limit?: number; offset?: number }) =>
     api.get('/transactions', { params }),
-  create: (data: {
-    date: string;
-    type: 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE';
-    category: string;
-    amount: number;
-    description?: string;
-  }) => api.post('/transactions', data),
-  update: (id: string, data: Partial<{ amount: number; description: string }>) =>
-    api.put(`/transactions/${id}`, data),
-  delete: (id: string) => api.delete(`/transactions/${id}`),
   getCategories: () => api.get('/transactions/categories/list'),
 };
 
@@ -91,8 +81,6 @@ export const transactionApi = {
 export const cashBalanceApi = {
   getAll: () => api.get('/cash-balance'),
   getLatest: () => api.get('/cash-balance/latest'),
-  create: (data: { date: string; amount: number; bankName?: string }) =>
-    api.post('/cash-balance', data),
 };
 
 // AI API
@@ -114,4 +102,9 @@ export const integrationApi = {
     api.post('/integrations/quickbooks', data),
   disconnect: (id: string) => api.post(`/integrations/${id}/disconnect`),
   sync: (id: string) => api.post(`/integrations/${id}/sync`),
+};
+
+// Subscription API
+export const subscriptionApi = {
+  getStatus: () => api.get('/subscription/status'),
 };

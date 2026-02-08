@@ -1,5 +1,16 @@
 const { Integration, Subscription, FinancialTransaction } = require('../models');
 
+const enforceIntegrationLimit = async (companyId, subscription) => {
+  if (!subscription) return;
+  if (subscription.subscriptionStatus === 'trial') return;
+  if (!Number.isFinite(subscription.maxIntegrations)) return;
+
+  const integrationCount = await Integration.count({ where: { companyId } });
+  if (integrationCount >= subscription.maxIntegrations) {
+    throw new Error('Integration limit reached');
+  }
+};
+
 const getIntegrations = async (companyId) => {
   const integrations = await Integration.findAll({
     where: { companyId },
@@ -12,16 +23,11 @@ const getIntegrations = async (companyId) => {
 const connectTally = async (companyId, config) => {
   // Check subscription
   const subscription = await Subscription.findOne({ where: { companyId } });
-
-  if (!subscription || !subscription.features.tally) {
-    throw new Error('Tally integration requires a paid plan');
+  if (!subscription || subscription.subscriptionStatus === 'expired') {
+    throw new Error('Your free trial has expired. Please upgrade.');
   }
 
-  // Check integration limit
-  const integrationCount = await Integration.count({ where: { companyId } });
-  if (integrationCount >= subscription.maxIntegrations) {
-    throw new Error('Integration limit reached');
-  }
+  await enforceIntegrationLimit(companyId, subscription);
 
   // Check if already connected
   const existing = await Integration.findOne({
@@ -50,16 +56,11 @@ const connectTally = async (companyId, config) => {
 const connectZoho = async (companyId, config) => {
   // Check subscription
   const subscription = await Subscription.findOne({ where: { companyId } });
-
-  if (!subscription || !subscription.features.zoho) {
-    throw new Error('Zoho Books integration requires a Professional plan');
+  if (!subscription || subscription.subscriptionStatus === 'expired') {
+    throw new Error('Your free trial has expired. Please upgrade.');
   }
 
-  // Check integration limit
-  const integrationCount = await Integration.count({ where: { companyId } });
-  if (integrationCount >= subscription.maxIntegrations) {
-    throw new Error('Integration limit reached');
-  }
+  await enforceIntegrationLimit(companyId, subscription);
 
   // Check if already connected
   const existing = await Integration.findOne({
@@ -92,16 +93,11 @@ const connectZoho = async (companyId, config) => {
 const connectQuickBooks = async (companyId, config) => {
   // Check subscription
   const subscription = await Subscription.findOne({ where: { companyId } });
-
-  if (!subscription || !subscription.features.quickbooks) {
-    throw new Error('QuickBooks integration requires a Professional plan');
+  if (!subscription || subscription.subscriptionStatus === 'expired') {
+    throw new Error('Your free trial has expired. Please upgrade.');
   }
 
-  // Check integration limit
-  const integrationCount = await Integration.count({ where: { companyId } });
-  if (integrationCount >= subscription.maxIntegrations) {
-    throw new Error('Integration limit reached');
-  }
+  await enforceIntegrationLimit(companyId, subscription);
 
   // Check if already connected
   const existing = await Integration.findOne({

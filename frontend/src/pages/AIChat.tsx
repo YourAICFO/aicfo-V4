@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, AlertCircle } from 'lucide-react';
 import { aiApi } from '../services/api';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 
 interface Message {
   id: string;
@@ -22,6 +23,7 @@ export default function AIChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { isExpired, refresh } = useSubscriptionStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -58,7 +60,8 @@ export default function AIChat() {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: any) {
       if (err.response?.status === 403) {
-        setError('AI Chat requires a paid plan. Please upgrade to access this feature.');
+        await refresh();
+        setError(err.response?.data?.error || 'Your free trial has expired. Please upgrade.');
       } else {
         setError('Failed to get response. Please try again.');
       }
@@ -74,7 +77,7 @@ export default function AIChat() {
     'Should I be concerned about my cash flow?',
   ];
 
-  if (error) {
+  if (error && isExpired) {
     return (
       <div className="space-y-6">
         <div>
@@ -88,6 +91,24 @@ export default function AIChat() {
           <h2 className="text-xl font-semibold mb-2">Upgrade Required</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button className="btn-primary">Upgrade to Paid Plan</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">AI CFO Chat</h1>
+          <p className="text-gray-600">Chat with your AI CFO</p>
+        </div>
+        <div className="card text-center py-12">
+          <div className="text-amber-600 mb-4">
+            <AlertCircle className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Unable to start chat</h2>
+          <p className="text-gray-600">{error}</p>
         </div>
       </div>
     );

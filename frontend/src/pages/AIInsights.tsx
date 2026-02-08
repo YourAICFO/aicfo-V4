@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CheckCircle, AlertTriangle, AlertCircle, X, Check, Sparkles } from 'lucide-react';
 import { aiApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 
 interface Insight {
   id: string;
@@ -20,6 +21,7 @@ export default function AIInsights() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const { isExpired, refresh } = useSubscriptionStore();
 
   const unreadCount = insights.filter(i => !i.isRead).length;
   const highRiskCount = insights.filter(i => i.riskLevel === 'RED').length;
@@ -35,7 +37,8 @@ export default function AIInsights() {
       setInsights(response.data.data);
     } catch (err: any) {
       if (err.response?.status === 403) {
-        setError('AI Insights require a paid plan. Please upgrade to access this feature.');
+        await refresh();
+        setError(err.response?.data?.error || 'Your free trial has expired. Please upgrade.');
       } else {
         setError('Failed to load insights. Please try again.');
       }
@@ -96,7 +99,7 @@ export default function AIInsights() {
     );
   }
 
-  if (error) {
+  if (error && isExpired) {
     return (
       <div className="space-y-6">
         <div>
@@ -110,6 +113,24 @@ export default function AIInsights() {
           <h2 className="text-xl font-semibold mb-2">Upgrade Required</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button className="btn-primary">Upgrade to Paid Plan</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">AI Insights</h1>
+          <p className="text-gray-600">AI-powered financial intelligence</p>
+        </div>
+        <div className="card text-center py-12">
+          <div className="text-amber-600 mb-4">
+            <AlertCircle className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Unable to load insights</h2>
+          <p className="text-gray-600">{error}</p>
         </div>
       </div>
     );

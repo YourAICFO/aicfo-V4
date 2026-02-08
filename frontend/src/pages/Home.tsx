@@ -52,7 +52,7 @@ export default function Home() {
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-4">
                 <Link to="/register" className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-300">
-                  Start Free Trial
+                  Start your 30-day free trial
                 </Link>
                 <Link to="/login" className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 hover:border-white/40 hover:text-white">
                   View Demo Dashboard
@@ -138,7 +138,7 @@ export default function Home() {
             {
               icon: <PlugZap className="h-6 w-6 text-emerald-200" />,
               title: 'Tally Integration',
-              body: 'Connect your Tally software for automatic data sync. No manual entry required.',
+              body: 'Connect your Tally software for automatic data sync with real-time reconciliation.',
             },
             {
               icon: <CheckCircle2 className="h-6 w-6 text-sky-200" />,
@@ -148,7 +148,7 @@ export default function Home() {
             {
               icon: <CheckCircle2 className="h-6 w-6 text-teal-200" />,
               title: 'Simple, Transparent Pricing',
-              body: 'Start free, upgrade when you need more.',
+              body: 'Start your 30-day free trial, then ₹4,999/month.',
             },
           ].map((item) => (
             <div key={item.title} className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
@@ -167,42 +167,28 @@ export default function Home() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm text-emerald-200/80">Simple, Transparent Pricing</p>
-              <h2 className="text-3xl font-semibold">Start free, upgrade when you need more.</h2>
+              <h2 className="text-3xl font-semibold">Start your 30-day free trial.</h2>
             </div>
           </div>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl bg-white/5 p-8 ring-1 ring-white/10">
-              <p className="text-sm text-emerald-200/80">Free</p>
-              <h3 className="mt-2 text-xl font-semibold">Get started with manual entry</h3>
-              <p className="mt-4 text-3xl font-semibold">₹0/month</p>
-              <ul className="mt-6 space-y-2 text-sm text-slate-200">
-                <li>Manual data entry</li>
-                <li>Basic dashboards</li>
-                <li>Cash runway tracking</li>
-                <li>Revenue & expense charts</li>
-              </ul>
-              <Link to="/register" className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-300">
-                Get Started Free
-              </Link>
-            </div>
-
+          <div className="mt-10 grid gap-6 md:grid-cols-1">
             <div className="relative rounded-3xl bg-emerald-500/10 p-8 ring-2 ring-emerald-300/40">
               <span className="absolute -top-3 right-6 rounded-full bg-emerald-400 px-3 py-1 text-xs font-semibold text-slate-900">
-                Most Popular
+                30-Day Trial
               </span>
-              <p className="text-sm text-emerald-200/90">Pro</p>
+              <p className="text-sm text-emerald-200/90">AI CFO</p>
               <h3 className="mt-2 text-xl font-semibold">Full AI CFO experience</h3>
-              <p className="mt-4 text-3xl font-semibold">₹2,999/month</p>
+              <p className="mt-4 text-3xl font-semibold">₹4,999/month</p>
+              <p className="mt-2 text-sm text-emerald-100/80">After your 30-day free trial</p>
               <ul className="mt-6 space-y-2 text-sm text-slate-200">
-                <li>Everything in Free</li>
                 <li>Tally integration</li>
                 <li>AI CFO insights</li>
                 <li>Priority alerts</li>
                 <li>AI chat assistant</li>
+                <li>Advanced dashboards</li>
               </ul>
               <Link to="/register" className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-300">
-                Start Free Trial
+                Start your 30-day free trial
               </Link>
             </div>
           </div>

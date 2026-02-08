@@ -1,42 +1,10 @@
 const { Sequelize } = require('sequelize');
-const { FinancialTransaction, Subscription, CashBalance } = require('../models');
+const { FinancialTransaction } = require('../models');
 const { assertTrialOrActive } = require('./subscriptionService');
 
 const createTransaction = async (companyId, transactionData) => {
   await assertTrialOrActive(companyId);
-  // Check subscription limits
-  const subscription = await Subscription.findOne({ where: { companyId } });
-
-  if (subscription && subscription.planType === 'FREE') {
-    const transactionCount = await FinancialTransaction.count({ where: { companyId } });
-    if (transactionCount >= subscription.maxTransactions) {
-      throw new Error('Transaction limit reached for FREE plan. Upgrade to add more transactions.');
-    }
-  }
-
-  const payload = {
-    companyId,
-    ...transactionData,
-    source: 'MANUAL'
-  };
-
-  if (payload.type === 'OPENING_BALANCE' && !payload.category) {
-    payload.category = 'Opening Balance';
-  }
-
-  const transaction = await FinancialTransaction.create(payload);
-
-  if (transaction.type === 'OPENING_BALANCE') {
-    await CashBalance.create({
-      companyId,
-      date: transaction.date,
-      amount: transaction.amount,
-      source: 'CALCULATED',
-      notes: 'Opening balance from manual transaction'
-    });
-  }
-
-  return transaction;
+  throw new Error('Manual transaction entry is disabled. Connect your accounting software to sync data.');
 };
 
 const getTransactions = async (companyId, options = {}) => {
@@ -84,49 +52,12 @@ const getTransactionById = async (transactionId, companyId) => {
 
 const updateTransaction = async (transactionId, companyId, updateData) => {
   await assertTrialOrActive(companyId);
-  const transaction = await FinancialTransaction.findOne({
-    where: { id: transactionId, companyId }
-  });
-
-  if (!transaction) {
-    throw new Error('Transaction not found');
-  }
-
-  // Only allow updating manual transactions
-  if (transaction.source !== 'MANUAL') {
-    throw new Error('Cannot update transactions from integrated sources');
-  }
-
-  const allowedUpdates = ['date', 'type', 'category', 'subcategory', 'amount', 'description', 'reference', 'tags'];
-  const updates = {};
-
-  allowedUpdates.forEach(field => {
-    if (updateData[field] !== undefined) {
-      updates[field] = updateData[field];
-    }
-  });
-
-  await transaction.update(updates);
-  return transaction;
+  throw new Error('Manual transaction entry is disabled.');
 };
 
 const deleteTransaction = async (transactionId, companyId) => {
   await assertTrialOrActive(companyId);
-  const transaction = await FinancialTransaction.findOne({
-    where: { id: transactionId, companyId }
-  });
-
-  if (!transaction) {
-    throw new Error('Transaction not found');
-  }
-
-  // Only allow deleting manual transactions
-  if (transaction.source !== 'MANUAL') {
-    throw new Error('Cannot delete transactions from integrated sources');
-  }
-
-  await transaction.destroy();
-  return { message: 'Transaction deleted successfully' };
+  throw new Error('Manual transaction entry is disabled.');
 };
 
 const getCategories = async (companyId) => {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plug, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { integrationApi } from '../services/api';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 
 interface Integration {
   id: string;
@@ -16,19 +17,19 @@ const integrationInfo = {
     name: 'Tally ERP 9 / Prime',
     description: 'Sync data directly from your Tally installation',
     icon: '📊',
-    plan: 'Starter+',
+    plan: 'Included in trial',
   },
   ZOHO: {
     name: 'Zoho Books',
     description: 'Connect your Zoho Books account',
     icon: '📚',
-    plan: 'Professional+',
+    plan: 'Included in trial',
   },
   QUICKBOOKS: {
     name: 'QuickBooks Online',
     description: 'Connect your QuickBooks account',
     icon: '💼',
-    plan: 'Professional+',
+    plan: 'Included in trial',
   },
 };
 
@@ -39,6 +40,7 @@ export default function Integrations() {
   const [showTallyModal, setShowTallyModal] = useState(false);
   const [tallyConfig, setTallyConfig] = useState({ serverUrl: '', companyName: '' });
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const { isExpired, refresh } = useSubscriptionStore();
 
   useEffect(() => {
     loadIntegrations();
@@ -50,7 +52,8 @@ export default function Integrations() {
       setIntegrations(response.data.data);
     } catch (err: any) {
       if (err.response?.status === 403) {
-        setError('Integrations require a paid plan. Please upgrade to access this feature.');
+        await refresh();
+        setError(err.response?.data?.error || 'Your free trial has expired. Please upgrade.');
       } else {
         setError('Failed to load integrations.');
       }
@@ -108,7 +111,7 @@ export default function Integrations() {
     );
   }
 
-  if (error) {
+  if (error && isExpired) {
     return (
       <div className="space-y-6">
         <div>
@@ -122,6 +125,24 @@ export default function Integrations() {
           <h2 className="text-xl font-semibold mb-2">Upgrade Required</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button className="btn-primary">Upgrade to Paid Plan</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
+          <p className="text-gray-600">Connect your accounting software</p>
+        </div>
+        <div className="card text-center py-12">
+          <div className="text-amber-600 mb-4">
+            <AlertCircle className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Unable to load integrations</h2>
+          <p className="text-gray-600">{error}</p>
         </div>
       </div>
     );

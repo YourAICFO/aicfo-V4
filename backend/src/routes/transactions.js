@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { transactionValidation } = require('../middleware/validation');
 const { transactionService } = require('../services');
 
 // GET /api/transactions
@@ -31,24 +30,6 @@ router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (re
   }
 });
 
-// POST /api/transactions
-router.post('/', authenticate, requireCompany, checkSubscriptionAccess, transactionValidation, async (req, res) => {
-  try {
-    const transaction = await transactionService.createTransaction(req.companyId, req.body);
-    res.status(201).json({
-      success: true,
-      message: 'Transaction created successfully',
-      data: transaction
-    });
-  } catch (error) {
-    console.error('Create transaction error:', error);
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
 // GET /api/transactions/:id
 router.get('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
@@ -60,45 +41,6 @@ router.get('/:id', authenticate, requireCompany, checkSubscriptionAccess, async 
   } catch (error) {
     console.error('Get transaction error:', error);
     res.status(404).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// PUT /api/transactions/:id
-router.put('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
-  try {
-    const transaction = await transactionService.updateTransaction(
-      req.params.id,
-      req.companyId,
-      req.body
-    );
-    res.json({
-      success: true,
-      message: 'Transaction updated successfully',
-      data: transaction
-    });
-  } catch (error) {
-    console.error('Update transaction error:', error);
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// DELETE /api/transactions/:id
-router.delete('/:id', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
-  try {
-    const result = await transactionService.deleteTransaction(req.params.id, req.companyId);
-    res.json({
-      success: true,
-      message: result.message
-    });
-  } catch (error) {
-    console.error('Delete transaction error:', error);
-    res.status(400).json({
       success: false,
       error: error.message
     });

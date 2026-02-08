@@ -79,7 +79,6 @@ const Subscription = sequelize.define('Subscription', {
   features: {
     type: DataTypes.JSONB,
     defaultValue: {
-      manualEntry: true,
       aiInsights: false,
       aiChat: false,
       tally: false,

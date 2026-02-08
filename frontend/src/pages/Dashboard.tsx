@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
+import { useSubscriptionStore } from '../store/subscriptionStore';
 
 interface OverviewData {
   cashPosition: {
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const { isTrial, trialEndsInDays } = useSubscriptionStore();
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -145,6 +147,21 @@ export default function Dashboard() {
           + Create Company
         </Link>
       </div>
+      {isTrial && trialEndsInDays !== null && (
+        <div className={`card ${trialEndsInDays <= 7 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`rounded-full p-2 ${trialEndsInDays <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+              {trialEndsInDays <= 7 ? <AlertCircle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Free trial: {trialEndsInDays} days remaining</p>
+              <p className="text-xs text-gray-600">
+                {trialEndsInDays <= 7 ? 'Your trial ends soon. Upgrade anytime to keep full access.' : 'Enjoy full access during your trial.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -299,7 +316,7 @@ export default function Dashboard() {
 
         {(data?.insights.recent || []).length === 0 ? (
           <div className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-6 text-center">
-            No insights yet. Add transactions to unlock AI recommendations.
+            No insights yet. Connect accounting software to unlock AI recommendations.
           </div>
         ) : (
           <div className="space-y-3">

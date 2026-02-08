@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter, Edit2, Trash2, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
-import { transactionApi } from '../services/api';
+import { Filter, Wallet, TrendingUp, TrendingDown, Plug } from 'lucide-react';
+import { integrationApi, transactionApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { Link } from 'react-router-dom';
 
 interface Transaction {
   id: string;
@@ -16,23 +17,14 @@ interface Transaction {
 export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [filter, setFilter] = useState({ type: '' });
-  const [error, setError] = useState('');
+  const [integrations, setIntegrations] = useState<any[]>([]);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
-
-  const [formData, setFormData] = useState({
-    date: '',
-    type: 'EXPENSE',
-    category: '',
-    amount: '',
-    description: '',
-  });
 
   useEffect(() => {
     if (!selectedCompanyId) return;
     loadTransactions();
+    loadIntegrations();
   }, [filter, selectedCompanyId]);
 
   const loadTransactions = async () => {
@@ -49,65 +41,13 @@ export default function Transactions() {
       setLoading(false);
     }
   };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
+  const loadIntegrations = async () => {
     try {
-      if (editingTransaction) {
-        await transactionApi.update(editingTransaction.id, {
-          amount: parseFloat(formData.amount),
-          description: formData.description,
-        });
-      } else {
-        await transactionApi.create({
-          date: formData.date,
-          type: formData.type as 'OPENING_BALANCE' | 'REVENUE' | 'EXPENSE',
-          category: formData.type === 'OPENING_BALANCE' ? 'Opening Balance' : formData.category,
-          amount: parseFloat(formData.amount),
-          description: formData.description,
-        });
-      }
-
-      setShowModal(false);
-      setEditingTransaction(null);
-      setFormData({
-        date: '',
-        type: 'EXPENSE',
-        category: '',
-        amount: '',
-        description: '',
-      });
-
-      loadTransactions();
-    } catch (error: any) {
-      console.error('Failed to save transaction:', error);
-      setError(error.response?.data?.error || 'Failed to save transaction. Please try again.');
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
-
-    try {
-      await transactionApi.delete(id);
-      loadTransactions();
+      const response = await integrationApi.getAll();
+      setIntegrations(response.data.data || []);
     } catch (error) {
-      console.error('Failed to delete transaction:', error);
+      console.error('Failed to load integrations:', error);
     }
-  };
-
-  const handleEdit = (transaction: Transaction) => {
-    setEditingTransaction(transaction);
-    setFormData({
-      date: transaction.date,
-      type: transaction.type,
-      category: transaction.category,
-      amount: transaction.amount.toString(),
-      description: transaction.description || '',
-    });
-    setShowModal(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -182,6 +122,7 @@ export default function Transactions() {
   const expenseTrendClass = expenseDown ? 'from-white to-emerald-50' : 'from-white to-rose-50';
   const expenseIconClass = expenseDown ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600';
   const expenseBadgeClass = expenseDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+  const hasConnectedIntegrations = integrations.some((i) => i.status === 'CONNECTED');
 
   if (loading) {
     return (
@@ -201,23 +142,9 @@ export default function Transactions() {
           <p className="text-gray-600">Manage your financial transactions</p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingTransaction(null);
-            setFormData({
-              date: '',
-              type: 'EXPENSE',
-              category: '',
-              amount: '',
-              description: '',
-            });
-            setShowModal(true);
-          }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Transaction
-        </button>
+        <div className="text-sm text-gray-500">
+          Transactions sync automatically from your accounting software
+        </div>
       </div>
 
       {/* Summary */}
@@ -283,163 +210,64 @@ export default function Transactions() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
-              <th className="text-left py-3 px-4 font-medium text-gray-600">Type</th>
-              <th className="text-left py-3 px-4 font-medium text-gray-600">Category</th>
-              <th className="text-left py-3 px-4 font-medium text-gray-600">Description</th>
-              <th className="text-right py-3 px-4 font-medium text-gray-600">Amount</th>
-              <th className="text-center py-3 px-4 font-medium text-gray-600">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-500">
-                  No transactions found.
-                </td>
+      {!hasConnectedIntegrations && transactions.length === 0 ? (
+        <div className="card text-center py-12">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+            <Plug className="h-6 w-6 text-emerald-600" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Connect your accounting software</h2>
+          <p className="text-gray-600 mb-6">
+            Transactions will appear here as soon as you connect and sync your integration.
+          </p>
+          <Link to="/integrations" className="btn-primary inline-flex items-center gap-2">
+            Connect Integrations
+          </Link>
+        </div>
+      ) : (
+        <div className="card overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Type</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Category</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Description</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-600">Amount</th>
               </tr>
-            ) : (
-              transactions.map((transaction) => (
-                <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    {new Date(transaction.date).toLocaleDateString('en-IN')}
-                  </td>
+            </thead>
 
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-700">
-                      {transaction.type.replace('_', ' ')}
-                    </span>
-                  </td>
-
-                  <td className="py-3 px-4">{transaction.category}</td>
-                  <td className="py-3 px-4">{transaction.description || '-'}</td>
-
-                  <td className={`py-3 px-4 text-right font-medium ${getAmountColor(transaction.type)}`}>
-                    {getAmountPrefix(transaction.type)}
-                    {formatCurrency(transaction.amount)}
-                  </td>
-
-                  <td className="py-3 px-4 text-center">
-                    {transaction.source === 'MANUAL' && (
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => handleEdit(transaction)}>
-                          <Edit2 className="w-4 h-4 text-gray-400 hover:text-blue-600" />
-                        </button>
-                        <button onClick={() => handleDelete(transaction.id)}>
-                          <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
-                        </button>
-                      </div>
-                    )}
+            <tbody>
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                    No transactions found for this period.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                transactions.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      {new Date(transaction.date).toLocaleDateString('en-IN')}
+                    </td>
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">
-              {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
-            </h2>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-700">
+                        {transaction.type.replace('_', ' ')}
+                      </span>
+                    </td>
 
-            {error && (
-              <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
+                    <td className="py-3 px-4">{transaction.category}</td>
+                    <td className="py-3 px-4">{transaction.description || '-'}</td>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-
-              {!editingTransaction && (
-                <>
-                  <div>
-                    <label className="label">Date</label>
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="input"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label">Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => {
-                        const nextType = e.target.value;
-                        setFormData({
-                          ...formData,
-                          type: nextType,
-                          category: nextType === 'OPENING_BALANCE' ? 'Opening Balance' : formData.category,
-                        });
-                      }}
-                      className="input"
-                      required
-                    >
-                      <option value="OPENING_BALANCE">Current Cash / Bank Balance</option>
-                      <option value="REVENUE">Revenue</option>
-                      <option value="EXPENSE">Expense</option>
-                    </select>
-                  </div>
-
-                  {formData.type !== 'OPENING_BALANCE' && (
-                    <div>
-                      <label className="label">Category</label>
-                      <input
-                        type="text"
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="input"
-                        required
-                      />
-                    </div>
-                  )}
-                </>
+                    <td className={`py-3 px-4 text-right font-medium ${getAmountColor(transaction.type)}`}>
+                      {getAmountPrefix(transaction.type)}
+                      {formatCurrency(transaction.amount)}
+                    </td>
+                  </tr>
+                ))
               )}
-
-              <div>
-                <label className="label">Amount</label>
-                <input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="input"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label">Description</label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="input"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="flex-1 btn-primary">
-                  {editingTransaction ? 'Update' : 'Add'}
-                </button>
-              </div>
-
-            </form>
-          </div>
+            </tbody>
+          </table>
         </div>
       )}
 

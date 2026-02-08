@@ -196,9 +196,23 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Last month revenue for growth calculation
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Latest month vs previous month growth
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const currentMonthRevenue = await FinancialTransaction.findOne({
+    where: {
+      companyId,
+      type: 'REVENUE',
+      date: {
+        [Sequelize.Op.gte]: currentMonthStart,
+        [Sequelize.Op.lt]: nextMonthStart
+      }
+    },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
+    raw: true
+  });
 
   const prevRevenue = await FinancialTransaction.findOne({
     where: {
@@ -206,14 +220,15 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
       type: 'REVENUE',
       date: {
         [Sequelize.Op.gte]: prevMonthStart,
-        [Sequelize.Op.lt]: lastMonthStart
+        [Sequelize.Op.lt]: currentMonthStart
       }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
     raw: true
   });
 
-  const currentTotal = parseFloat(totalRevenue?.total || 0);
+  const periodTotal = parseFloat(totalRevenue?.total || 0);
+  const currentTotal = parseFloat(currentMonthRevenue?.total || 0);
   const previousTotal = parseFloat(prevRevenue?.total || 0);
   const growthRate = previousTotal > 0
     ? ((currentTotal - previousTotal) / previousTotal) * 100
@@ -221,7 +236,7 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
 
   return {
     summary: {
-      totalRevenue: currentTotal,
+      totalRevenue: periodTotal,
       growthRate: Math.round(growthRate * 100) / 100,
       period
     },

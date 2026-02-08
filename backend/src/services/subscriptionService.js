@@ -21,14 +21,13 @@ const createTrialSubscription = async (companyId) => {
     trialEndDate: trialEnd,
     accountLocked: false,
     maxTransactions: 100,
-    maxIntegrations: 0,
+    maxIntegrations: 10,
     features: {
-      manualEntry: true,
       aiInsights: true,
       aiChat: true,
-      tally: false,
-      zoho: false,
-      quickbooks: false,
+      tally: true,
+      zoho: true,
+      quickbooks: true,
       alerts: true,
       exports: true
     }
