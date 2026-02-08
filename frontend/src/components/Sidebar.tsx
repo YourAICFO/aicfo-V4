@@ -9,6 +9,7 @@ import {
   List,
   Plug,
   Settings,
+  Users,
 } from 'lucide-react';
 
 const menuItems = [
@@ -16,6 +17,8 @@ const menuItems = [
   { path: '/revenue', label: 'Revenue', icon: TrendingUp },
   { path: '/expenses', label: 'Expenses', icon: TrendingDown },
   { path: '/cashflow', label: 'Cashflow', icon: Wallet },
+  { path: '/debtors', label: 'Debtors', icon: Users },
+  { path: '/creditors', label: 'Creditors', icon: Users },
   { path: '/ai-insights', label: 'AI Insights', icon: Brain },
   { path: '/ai-chat', label: 'AI Chat', icon: MessageSquare },
   { path: '/transactions', label: 'Transactions', icon: List },

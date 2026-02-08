@@ -15,6 +15,9 @@ import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
 import CreateCompany from './pages/CreateCompany';
 import Home from './pages/Home';
+import Debtors from './pages/Debtors';
+import Creditors from './pages/Creditors';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -34,8 +37,11 @@ function App() {
           <Route path="/ai-chat" element={<AIChat />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/integrations" element={<Integrations />} />
+          <Route path="/debtors" element={<Debtors />} />
+          <Route path="/creditors" element={<Creditors />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/create-company" element={<CreateCompany />} />
+          <Route path="/admin" element={<AdminDashboard />} />
         </Route>
       </Route>
     </Routes>

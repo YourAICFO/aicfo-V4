@@ -15,6 +15,10 @@ const { MonthlyExpenseBreakdown } = require('./MonthlyExpenseBreakdown');
 const { MonthlyDebtorsSnapshot } = require('./MonthlyDebtorsSnapshot');
 const { MonthlyCreditorsSnapshot } = require('./MonthlyCreditorsSnapshot');
 const { AccountingTermMapping } = require('./AccountingTermMapping');
+const { MonthlyDebtor } = require('./MonthlyDebtor');
+const { MonthlyCreditor } = require('./MonthlyCreditor');
+const { AdminUsageEvent } = require('./AdminUsageEvent');
+const { AdminAIQuestion } = require('./AdminAIQuestion');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -72,6 +76,12 @@ MonthlyDebtorsSnapshot.belongsTo(Company, { foreignKey: 'company_id', as: 'compa
 Company.hasMany(MonthlyCreditorsSnapshot, { foreignKey: 'company_id', as: 'monthlyCreditors' });
 MonthlyCreditorsSnapshot.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+Company.hasMany(MonthlyDebtor, { foreignKey: 'company_id', as: 'monthlyDebtorsPhase2' });
+MonthlyDebtor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(MonthlyCreditor, { foreignKey: 'company_id', as: 'monthlyCreditorsPhase2' });
+MonthlyCreditor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
   sequelize,
   User,
@@ -89,5 +99,9 @@ module.exports = {
   MonthlyExpenseBreakdown,
   MonthlyDebtorsSnapshot,
   MonthlyCreditorsSnapshot,
-  AccountingTermMapping
+  AccountingTermMapping,
+  MonthlyDebtor,
+  MonthlyCreditor,
+  AdminUsageEvent,
+  AdminAIQuestion
 };

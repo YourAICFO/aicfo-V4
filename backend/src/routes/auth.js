@@ -3,7 +3,7 @@ const router = express.Router();
 
 const { authenticate } = require('../middleware/auth');
 const { registerValidation, loginValidation } = require('../middleware/validation');
-const { authService } = require('../services');
+const { authService, adminUsageService } = require('../services');
 
 /* ===============================
    TEST ROUTE (VERY IMPORTANT)
@@ -43,6 +43,11 @@ router.post('/login', loginValidation, async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
+    try {
+      await adminUsageService.logEvent(result?.user?.companyId || null, result?.user?.id || null, 'login');
+    } catch (e) {
+      console.warn('Usage log failed:', e.message);
+    }
     res.json({
       success: true,
       message: 'Login successful',

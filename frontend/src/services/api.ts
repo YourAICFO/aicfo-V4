@@ -108,3 +108,20 @@ export const integrationApi = {
 export const subscriptionApi = {
   getStatus: () => api.get('/subscription/status'),
 };
+
+// Finance API
+export const financeApi = {
+  getDebtorsSummary: () => api.get('/finance/debtors/summary'),
+  getDebtorsTop: () => api.get('/finance/debtors/top'),
+  getDebtorsTrends: () => api.get('/finance/debtors/trends'),
+  getCreditorsSummary: () => api.get('/finance/creditors/summary'),
+  getCreditorsTop: () => api.get('/finance/creditors/top'),
+  getCreditorsTrends: () => api.get('/finance/creditors/trends'),
+};
+
+// Admin API
+export const adminApi = {
+  getUsageSummary: () => api.get('/admin/usage/summary'),
+  getAIQuestions: () => api.get('/admin/ai/questions'),
+  getCompaniesActivity: () => api.get('/admin/companies/activity'),
+};

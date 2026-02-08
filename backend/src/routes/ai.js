@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { aiService } = require('../services');
+const { aiService, adminUsageService } = require('../services');
 
 // GET /api/ai/insights
 router.get('/insights', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const insights = await aiService.getInsights(req.companyId);
+    adminUsageService.logEvent(req.companyId, req.userId, 'ai_insights_open').catch(() => {});
     res.json({
       success: true,
       data: insights
@@ -67,12 +68,15 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
     }
 
     const response = await aiService.chatWithCFO(req.companyId, message);
+    adminUsageService.logEvent(req.companyId, req.userId, 'ai_chat').catch(() => {});
+    adminUsageService.logAIQuestion(req.companyId, req.userId, message, true).catch(() => {});
     res.json({
       success: true,
       data: response
     });
   } catch (error) {
     console.error('Chat error:', error);
+    adminUsageService.logAIQuestion(req.companyId, req.userId, req.body?.message || '', false).catch(() => {});
     res.status(400).json({
       success: false,
       error: error.message

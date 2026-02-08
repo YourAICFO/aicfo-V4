@@ -1,6 +1,8 @@
 const { Sequelize } = require('sequelize');
 const { AIInsight } = require('../models');
 const dashboardService = require('./dashboardService');
+const debtorsService = require('./debtorsService');
+const creditorsService = require('./creditorsService');
 
 const SYSTEM_PROMPT = `You are a conservative CFO and Chartered Accountant advising Indian SMEs.
 Use only the provided company data.
@@ -51,71 +53,48 @@ const generateInsights = async (companyId) => {
     });
   }
 
-  // Revenue trend analysis
-  const revenueData = await dashboardService.getRevenueDashboard(companyId, '3m');
-  if (revenueData.summary.growthRate < -10) {
+  const debtorsSummary = await debtorsService.getSummary(companyId);
+  if (debtorsSummary?.divergenceFlag) {
     insights.push({
-      type: 'REVENUE',
-      riskLevel: 'RED',
-      title: 'Revenue Declining',
-      content: `Revenue has declined by ${Math.abs(revenueData.summary.growthRate).toFixed(1)}% compared to previous period.`,
-      explanation: 'Comparing current 3-month period to previous 3-month period.',
+      type: 'DEBTORS',
+      riskLevel: 'AMBER',
+      title: 'Debtors Growing Faster Than Revenue',
+      content: 'Debtors are increasing while revenue is not keeping pace.',
+      explanation: 'Receivables growth is outpacing revenue growth.',
       recommendations: [
-        'Analyze customer churn reasons',
-        'Review pricing strategy',
-        'Explore new revenue channels'
-      ]
-    });
-  } else if (revenueData.summary.growthRate > 20) {
-    insights.push({
-      type: 'REVENUE',
-      riskLevel: 'GREEN',
-      title: 'Strong Revenue Growth',
-      content: `Revenue has grown by ${revenueData.summary.growthRate.toFixed(1)}% compared to previous period.`,
-      explanation: 'Comparing current 3-month period to previous 3-month period.',
-      recommendations: [
-        'Invest in scaling operations',
-        'Consider expanding team',
-        'Maintain growth momentum'
+        'Tighten credit terms',
+        'Prioritize collections for top debtors'
       ]
     });
   }
 
-  // Expense analysis
-  const expenseData = await dashboardService.getExpenseDashboard(companyId, '3m');
-  const revenueTotal = revenueData.summary.totalRevenue;
-  const expenseTotal = expenseData.summary.totalExpenses;
+  if (debtorsSummary?.concentrationRatio && debtorsSummary.concentrationRatio > 0.5) {
+    insights.push({
+      type: 'DEBTORS',
+      riskLevel: 'AMBER',
+      title: 'Receivables Concentration Risk',
+      content: 'A large share of receivables is concentrated in top customers.',
+      explanation: 'High concentration can increase cashflow volatility.',
+      recommendations: [
+        'Diversify customer base',
+        'Monitor top debtor exposure weekly'
+      ]
+    });
+  }
 
-  if (revenueTotal > 0) {
-    const expenseRatio = (expenseTotal / revenueTotal) * 100;
-    if (expenseRatio > 90) {
-      insights.push({
-        type: 'EXPENSE',
-        riskLevel: 'RED',
-        title: 'High Expense Ratio',
-        content: `Expenses are ${expenseRatio.toFixed(1)}% of revenue. Margins are critically low.`,
-        explanation: `Total expenses: ₹${expenseTotal.toLocaleString()}. Total revenue: ₹${revenueTotal.toLocaleString()}.`,
-        recommendations: [
-          'Conduct immediate expense audit',
-          'Identify and eliminate non-essential costs',
-          'Renegotiate vendor contracts',
-          'Consider operational restructuring'
-        ]
-      });
-    } else if (expenseRatio > 80) {
-      insights.push({
-        type: 'EXPENSE',
-        riskLevel: 'AMBER',
-        title: 'Elevated Expense Ratio',
-        content: `Expenses are ${expenseRatio.toFixed(1)}% of revenue.`,
-        explanation: `Total expenses: ₹${expenseTotal.toLocaleString()}. Total revenue: ₹${revenueTotal.toLocaleString()}.`,
-        recommendations: [
-          'Review major expense categories',
-          'Implement cost control measures',
-          'Track expenses weekly'
-        ]
-      });
-    }
+  const creditorsSummary = await creditorsService.getSummary(companyId);
+  if (creditorsSummary?.cashPressure) {
+    insights.push({
+      type: 'CREDITORS',
+      riskLevel: 'AMBER',
+      title: 'Creditors Pressure',
+      content: 'Creditors outstanding exceed current cash balance.',
+      explanation: 'Payables may create near-term cash pressure.',
+      recommendations: [
+        'Review payment schedules',
+        'Forecast cash commitments for the next 30 days'
+      ]
+    });
   }
 
   // Save insights to database
@@ -198,6 +177,8 @@ const chatWithCFO = async (companyId, message) => {
   const overview = await dashboardService.getCFOOverview(companyId);
   const revenue = await dashboardService.getRevenueDashboard(companyId, '3m');
   const expenses = await dashboardService.getExpenseDashboard(companyId, '3m');
+  const debtors = await debtorsService.getSummary(companyId);
+  const creditors = await creditorsService.getSummary(companyId);
 
   const safeByCategory = Array.isArray(expenses.byCategory) ? expenses.byCategory : [];
   const context = {
@@ -205,7 +186,9 @@ const chatWithCFO = async (companyId, message) => {
     runway: overview.runway,
     revenue: revenue.summary,
     expenses: expenses.summary,
-    expenseCategories: safeByCategory
+    expenseCategories: safeByCategory,
+    debtors,
+    creditors
   };
 
   // Simple response logic (in production, this would call OpenAI API)
@@ -215,7 +198,7 @@ const chatWithCFO = async (companyId, message) => {
       `your runway is approximately ${context.runway.months} months. Status: ${context.runway.status}.`,
     'revenue': `Your total revenue for the last 3 months is ₹${context.revenue.totalRevenue.toLocaleString()} ` +
       `with a growth rate of ${context.revenue.growthRate.toFixed(1)}%.`,
-    'expenses': `Your total expenses for the last 3 months are ₹${context.expenses.totalExpenses.toLocaleString()}. ` +
+    'expenses': `Your total expenses for the latest closed month are ₹${context.expenses.totalExpenses.toLocaleString()}. ` +
       `Top categories: ${context.expenseCategories.slice(0, 3).map(c => c.category).join(', ') || 'Not enough data'}.`,
     'cash': `Your current cash balance is ₹${context.cashBalance.toLocaleString()}. ` +
       `Runway: ${context.runway.months} months (${context.runway.status}).`,

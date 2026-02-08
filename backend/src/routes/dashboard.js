@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { dashboardService } = require('../services');
+const { dashboardService, adminUsageService } = require('../services');
 
 // GET /api/dashboard/overview
 router.get('/overview', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const data = await dashboardService.getCFOOverview(req.companyId);
+    adminUsageService.logEvent(req.companyId, req.userId, 'dashboard_open').catch(() => {});
     res.json({
       success: true,
       data

@@ -5,7 +5,9 @@ const {
   AIInsight,
   MonthlyTrialBalanceSummary,
   MonthlyRevenueBreakdown,
-  MonthlyExpenseBreakdown
+  MonthlyExpenseBreakdown,
+  MonthlyDebtor,
+  MonthlyCreditor
 } = require('../models');
 
 const normalizeMonth = (value) => {
@@ -184,6 +186,52 @@ const getCFOOverview = async (companyId) => {
     where: { companyId, isRead: false, isDismissed: false }
   });
 
+  const latestClosedKey = normalizeMonth(latestClosedStart);
+  const latestSummary = await MonthlyTrialBalanceSummary.findOne({
+    where: { companyId, month: latestClosedKey },
+    raw: true
+  });
+  const prevSummary = await MonthlyTrialBalanceSummary.findOne({
+    where: { companyId, month: normalizeMonth(new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - 1, 1)) },
+    raw: true
+  });
+  const prev6Summary = await MonthlyTrialBalanceSummary.findOne({
+    where: { companyId, month: normalizeMonth(new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - 6, 1)) },
+    raw: true
+  });
+  const revenueLatest = Number(latestSummary?.total_revenue || 0);
+  const expenseLatest = Number(latestSummary?.total_expenses || 0);
+  const netProfitLatest = Number(latestSummary?.net_profit || (revenueLatest - expenseLatest));
+  const margin = revenueLatest > 0 ? netProfitLatest / revenueLatest : 0;
+
+  const debtorTotalRow = await MonthlyDebtor.findOne({
+    where: { companyId, month: latestClosedKey },
+    attributes: [[Sequelize.fn('MAX', Sequelize.col('total_debtors_balance')), 'total']],
+    raw: true
+  });
+  const creditorTotalRow = await MonthlyCreditor.findOne({
+    where: { companyId, month: latestClosedKey },
+    attributes: [[Sequelize.fn('MAX', Sequelize.col('total_creditors_balance')), 'total']],
+    raw: true
+  });
+  const debtorsOutstanding = Number(debtorTotalRow?.total || 0);
+  const creditorsOutstanding = Number(creditorTotalRow?.total || 0);
+
+  const revenueGrowth3m = prevSummary?.total_revenue
+    ? (revenueLatest - Number(prevSummary.total_revenue || 0)) / Number(prevSummary.total_revenue || 1)
+    : 0;
+  const expenseGrowth3m = prevSummary?.total_expenses
+    ? (expenseLatest - Number(prevSummary.total_expenses || 0)) / Number(prevSummary.total_expenses || 1)
+    : 0;
+  const revenueGrowth6m = prev6Summary?.total_revenue
+    ? (revenueLatest - Number(prev6Summary.total_revenue || 0)) / Number(prev6Summary.total_revenue || 1)
+    : 0;
+  const expenseGrowth6m = prev6Summary?.total_expenses
+    ? (expenseLatest - Number(prev6Summary.total_expenses || 0)) / Number(prev6Summary.total_expenses || 1)
+    : 0;
+
+  const needsAttention = runwayStatus === 'RED' || debtorsOutstanding > 0;
+
   return {
     cashPosition: {
       currentBalance: currentCash + bankBalance,
@@ -197,6 +245,21 @@ const getCFOOverview = async (companyId) => {
       avgMonthlyOutflow: Math.round(avgMonthlyOutflow),
       netCashFlow: Math.round(netCashFlow)
     },
+    kpis: [
+      { key: 'revenue', label: 'Revenue', value: revenueLatest, link: '/revenue' },
+      { key: 'net_profit', label: 'Net Profit', value: netProfitLatest, link: '/revenue' },
+      { key: 'margin', label: 'Margin', value: margin, link: '/revenue' },
+      { key: 'cash_balance', label: 'Cash Balance', value: currentCash + bankBalance, link: '/cashflow' },
+      { key: 'burn_rate', label: 'Burn Rate', value: avgMonthlyOutflow, link: '/cashflow' },
+      { key: 'cash_runway', label: 'Cash Runway', value: runwayMonths, link: '/dashboard' },
+      { key: 'debtors', label: 'Debtors Outstanding', value: debtorsOutstanding, link: '/debtors' },
+      { key: 'creditors', label: 'Creditors Outstanding', value: creditorsOutstanding, link: '/creditors' },
+      { key: 'revenue_growth_3m', label: 'Revenue Growth (3M)', value: revenueGrowth3m, link: '/revenue' },
+      { key: 'expense_growth_3m', label: 'Expense Growth (3M)', value: expenseGrowth3m, link: '/expenses' },
+      { key: 'revenue_growth_6m', label: 'Revenue Growth (6M)', value: revenueGrowth6m, link: '/revenue' },
+      { key: 'expense_growth_6m', label: 'Expense Growth (6M)', value: expenseGrowth6m, link: '/expenses' },
+      { key: 'needs_attention', label: 'Needs Attention', value: needsAttention, link: '/ai-insights' }
+    ],
     insights: {
       recent: recentInsights,
       unreadCount
