@@ -10,6 +10,9 @@ Provide structured, actionable recommendations.
 Never hallucinate numbers or make up data.`;
 
 const generateInsights = async (companyId) => {
+  if (!dashboardService || typeof dashboardService.getCFOOverview !== 'function') {
+    throw new Error('dashboardService not initialized correctly');
+  }
   const insights = [];
 
   // Get CFO overview for runway calculation
@@ -188,6 +191,9 @@ const dismissInsight = async (insightId, companyId) => {
 };
 
 const chatWithCFO = async (companyId, message) => {
+  if (!dashboardService || typeof dashboardService.getCFOOverview !== 'function') {
+    throw new Error('dashboardService not initialized correctly');
+  }
   // Get context data
   const overview = await dashboardService.getCFOOverview(companyId);
   const revenue = await dashboardService.getRevenueDashboard(companyId, '3m');
