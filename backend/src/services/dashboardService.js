@@ -107,7 +107,7 @@ const getCFOOverview = async (companyId) => {
 
   return {
     cashPosition: {
-      currentBalance: currentCash,
+      currentBalance: currentCash + bankBalance,
       bankBalance,
       currency: 'INR'
     },
