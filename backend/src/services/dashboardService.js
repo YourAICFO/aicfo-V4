@@ -1,6 +1,23 @@
 const { Sequelize } = require('sequelize');
 const { FinancialTransaction, CashBalance, AIInsight } = require('../models');
 
+const normalizeMonth = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 7);
+  }
+  if (typeof value === 'number') {
+    const asDate = new Date(value);
+    return Number.isNaN(asDate.getTime()) ? null : asDate.toISOString().slice(0, 7);
+  }
+  if (typeof value === 'string') {
+    if (/^\d{4}-\d{2}$/.test(value)) return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 7);
+  }
+  return null;
+};
+
 const getCFOOverview = async (companyId) => {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -65,10 +82,10 @@ const getCFOOverview = async (companyId) => {
     const monthStr = month.toISOString().slice(0, 7);
 
     const inflow = monthlyData.find(
-      d => d.month && d.month.startsWith(monthStr) && d.type === 'REVENUE'
+      d => normalizeMonth(d.month) === monthStr && d.type === 'REVENUE'
     );
     const outflow = monthlyData.find(
-      d => d.month && d.month.startsWith(monthStr) && d.type === 'EXPENSE'
+      d => normalizeMonth(d.month) === monthStr && d.type === 'EXPENSE'
     );
 
     monthlyInflows.push(inflow ? parseFloat(inflow.total) : 0);
@@ -241,7 +258,7 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
       period
     },
     monthlyTrend: monthlyRevenue.map(r => ({
-      month: r.month,
+      month: normalizeMonth(r.month) ? `${normalizeMonth(r.month)}-01` : r.month,
       amount: parseFloat(r.total)
     })),
     byCategory: revenueByCategory.map(c => ({
@@ -332,7 +349,7 @@ const getExpenseDashboard = async (companyId, period = '6m') => {
       period
     },
     monthlyTrend: monthlyExpenses.map(e => ({
-      month: e.month,
+      month: normalizeMonth(e.month) ? `${normalizeMonth(e.month)}-01` : e.month,
       amount: parseFloat(e.total)
     })),
     byCategory: expensesByCategory.map(c => ({
@@ -386,7 +403,10 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
   // Format monthly data (normalize month key to avoid Date object identity issues)
   const monthlyMap = {};
   cashflowData.forEach((row) => {
-    const monthKey = new Date(row.month).toISOString().slice(0, 7);
+    const monthKey = normalizeMonth(row.month);
+    if (!monthKey) {
+      return;
+    }
     if (!monthlyMap[monthKey]) {
       monthlyMap[monthKey] = { inflow: 0, outflow: 0 };
     }
