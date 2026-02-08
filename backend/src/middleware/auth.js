@@ -47,8 +47,18 @@ const authenticate = async (req, res, next) => {
 
 const requireCompany = async (req, res, next) => {
   try {
-    const companyId = req.headers['x-company-id'];
-    
+    let companyId = req.headers['x-company-id'];
+
+    if (!companyId) {
+      const fallbackCompany = await Company.findOne({
+        where: { ownerId: req.userId },
+        order: [['created_at', 'DESC']]
+      });
+      if (fallbackCompany) {
+        companyId = fallbackCompany.id;
+      }
+    }
+
     if (!companyId) {
       return res.status(400).json({ error: 'Company ID required.' });
     }
