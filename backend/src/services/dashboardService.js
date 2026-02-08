@@ -19,36 +19,27 @@ const getCFOOverview = async (companyId) => {
     order: [['date', 'DESC']]
   });
 
-  let currentCash = latestCash ? parseFloat(latestCash.amount) : 0;
   let bankBalance = latestBank ? parseFloat(latestBank.amount) : 0;
-  if (!latestCash) {
-    const latestOpening = await FinancialTransaction.findOne({
-      where: { companyId, type: 'OPENING_BALANCE' },
-      order: [['date', 'DESC']]
-    });
-    currentCash = latestOpening ? parseFloat(latestOpening.amount) : 0;
-  }
   if (!latestBank) {
     bankBalance = 0;
   }
-  if (!latestCash && currentCash === 0) {
-    const totals = await FinancialTransaction.findAll({
-      where: { companyId },
-      attributes: [
-        'type',
-        [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
-      ],
-      group: ['type'],
-      raw: true
-    });
-    const revenueTotal = totals.find(t => t.type === 'REVENUE');
-    const expenseTotal = totals.find(t => t.type === 'EXPENSE');
-    const openingTotal = totals.find(t => t.type === 'OPENING_BALANCE');
-    const revenue = parseFloat(revenueTotal?.total || 0);
-    const expenses = parseFloat(expenseTotal?.total || 0);
-    const opening = parseFloat(openingTotal?.total || 0);
-    currentCash = opening + revenue - expenses;
-  }
+
+  const totals = await FinancialTransaction.findAll({
+    where: { companyId },
+    attributes: [
+      'type',
+      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+    ],
+    group: ['type'],
+    raw: true
+  });
+  const revenueTotal = totals.find(t => t.type === 'REVENUE');
+  const expenseTotal = totals.find(t => t.type === 'EXPENSE');
+  const openingTotal = totals.find(t => t.type === 'OPENING_BALANCE');
+  const revenue = parseFloat(revenueTotal?.total || 0);
+  const expenses = parseFloat(expenseTotal?.total || 0);
+  const opening = parseFloat(openingTotal?.total || 0);
+  const currentCash = opening + revenue - expenses;
 
   // Get monthly inflows and outflows for last 6 months
   const monthlyData = await FinancialTransaction.findAll({

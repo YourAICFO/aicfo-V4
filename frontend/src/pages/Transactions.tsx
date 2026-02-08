@@ -142,6 +142,8 @@ export default function Transactions() {
     .filter(t => t.type === 'OPENING_BALANCE')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const currentCashTotal = openingTotal + revenueTotal - expenseTotal;
+
   const getMonthKey = (dateStr: string) => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -227,7 +229,7 @@ export default function Transactions() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Current Cash / Bank Balance</p>
-              <p className="text-2xl font-bold">{formatCurrency(openingTotal)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(currentCashTotal)}</p>
             </div>
           </div>
         </div>
