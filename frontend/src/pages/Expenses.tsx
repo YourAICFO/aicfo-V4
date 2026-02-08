@@ -23,19 +23,18 @@ const COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'
 
 export default function Expenses() {
   const [data, setData] = useState<ExpenseData | null>(null);
-  const [period, setPeriod] = useState('6m');
   const [loading, setLoading] = useState(true);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
     loadData();
-  }, [period, selectedCompanyId]);
+  }, [selectedCompanyId]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await dashboardApi.getExpenses(period);
+      const response = await dashboardApi.getExpenses('3m');
       setData(response.data.data);
     } catch (error) {
       console.error('Failed to load expense data:', error);
@@ -87,16 +86,7 @@ export default function Expenses() {
           <h1 className="text-2xl font-bold text-gray-900">Expense Dashboard</h1>
           <p className="text-gray-600">Monitor and analyze your expenses</p>
         </div>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="input w-32"
-        >
-          <option value="1m">Last Month</option>
-          <option value="3m">Last 3 Months</option>
-          <option value="6m">Last 6 Months</option>
-          <option value="12m">Last Year</option>
-        </select>
+        <div className="text-sm text-gray-500">Latest closed month</div>
       </div>
 
       {/* Summary */}
@@ -107,7 +97,7 @@ export default function Expenses() {
               <ReceiptText className="w-6 h-6 text-rose-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Total Expenses</p>
+              <p className="text-sm text-gray-600">Latest Closed Month Expenses</p>
               <p className="text-2xl font-bold">{formatCurrency(data?.summary.totalExpenses || 0)}</p>
             </div>
           </div>
@@ -143,7 +133,7 @@ export default function Expenses() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Monthly Expense Trend</h2>
+          <h2 className="text-lg font-semibold mb-4">Trailing 3 Closed Months</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyTrend || []}>
@@ -175,7 +165,7 @@ export default function Expenses() {
         </div>
 
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Expenses by Category</h2>
+          <h2 className="text-lg font-semibold mb-4">Expenses by Category (3 Closed Months)</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

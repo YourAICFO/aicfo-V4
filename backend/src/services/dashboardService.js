@@ -18,10 +18,20 @@ const normalizeMonth = (value) => {
   return null;
 };
 
+const getLatestClosedMonthStart = (now = new Date()) => {
+  return new Date(now.getFullYear(), now.getMonth() - 1, 1);
+};
+
+const getClosedRange = (months = 3, now = new Date()) => {
+  const latestClosedStart = getLatestClosedMonthStart(now);
+  const rangeStart = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - (months - 1), 1);
+  const rangeEndExclusive = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() + 1, 1);
+  return { latestClosedStart, rangeStart, rangeEndExclusive };
+};
+
 const getCFOOverview = async (companyId) => {
   const now = new Date();
-  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { latestClosedStart, rangeStart, rangeEndExclusive } = getClosedRange(3, now);
 
   // Get current cash balance
   const latestCash = await CashBalance.findOne({
@@ -62,7 +72,7 @@ const getCFOOverview = async (companyId) => {
   const monthlyData = await FinancialTransaction.findAll({
     where: {
       companyId,
-      date: { [Sequelize.Op.gte]: threeMonthsAgo }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
@@ -78,7 +88,7 @@ const getCFOOverview = async (companyId) => {
   const monthlyOutflows = [];
 
   for (let i = 0; i < 3; i++) {
-    const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - i, 1);
     const monthStr = month.toISOString().slice(0, 7);
 
     const inflow = monthlyData.find(
@@ -95,21 +105,19 @@ const getCFOOverview = async (companyId) => {
   const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / 3;
   const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / 3;
   const netCashFlow = avgMonthlyInflow - avgMonthlyOutflow;
+  const avgNetCashFlow = netCashFlow;
 
   // Calculate runway
   let runwayMonths = 0;
   let runwayStatus = 'RED';
 
   const cashBase = currentCash + bankBalance;
-  const runwayDenominator = avgMonthlyOutflow > 0 && avgMonthlyInflow > 0
-    ? (avgMonthlyInflow / avgMonthlyOutflow)
-    : 0;
-
-  if (runwayDenominator <= 0) {
-    runwayMonths = 0;
-    runwayStatus = 'RED';
+  if (avgNetCashFlow >= 0) {
+    runwayMonths = 99;
+    runwayStatus = 'GREEN';
   } else {
-    runwayMonths = cashBase / runwayDenominator;
+    const denom = Math.abs(avgNetCashFlow);
+    runwayMonths = denom > 0 ? (cashBase / denom) : 0;
     if (runwayMonths >= 6) {
       runwayStatus = 'GREEN';
     } else if (runwayMonths >= 3) {
@@ -151,31 +159,16 @@ const getCFOOverview = async (companyId) => {
   };
 };
 
-const getRevenueDashboard = async (companyId, period = '6m') => {
+const getRevenueDashboard = async (companyId, period = '3m') => {
   const now = new Date();
-  let startDate;
-
-  switch (period) {
-    case '1m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      break;
-    case '3m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      break;
-    case '12m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
-      break;
-    case '6m':
-    default:
-      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  }
+  const { latestClosedStart, rangeStart, rangeEndExclusive } = getClosedRange(3, now);
 
   // Monthly revenue trend
   const monthlyRevenue = await FinancialTransaction.findAll({
     where: {
       companyId,
       type: 'REVENUE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
@@ -191,7 +184,7 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
     where: {
       companyId,
       type: 'REVENUE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       'category',
@@ -202,29 +195,27 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Total revenue (current period)
+  // Total revenue (latest closed month only)
   const totalRevenue = await FinancialTransaction.findOne({
     where: {
       companyId,
       type: 'REVENUE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: latestClosedStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
     raw: true
   });
 
-  // Latest month vs previous month growth
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  // Latest closed month vs previous closed month growth
+  const prevClosedStart = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - 1, 1);
 
   const currentMonthRevenue = await FinancialTransaction.findOne({
     where: {
       companyId,
       type: 'REVENUE',
       date: {
-        [Sequelize.Op.gte]: currentMonthStart,
-        [Sequelize.Op.lt]: nextMonthStart
+        [Sequelize.Op.gte]: latestClosedStart,
+        [Sequelize.Op.lt]: rangeEndExclusive
       }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
@@ -236,8 +227,8 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
       companyId,
       type: 'REVENUE',
       date: {
-        [Sequelize.Op.gte]: prevMonthStart,
-        [Sequelize.Op.lt]: currentMonthStart
+        [Sequelize.Op.gte]: prevClosedStart,
+        [Sequelize.Op.lt]: latestClosedStart
       }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
@@ -268,31 +259,16 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
   };
 };
 
-const getExpenseDashboard = async (companyId, period = '6m') => {
+const getExpenseDashboard = async (companyId, period = '3m') => {
   const now = new Date();
-  let startDate;
-
-  switch (period) {
-    case '1m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      break;
-    case '3m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      break;
-    case '12m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
-      break;
-    case '6m':
-    default:
-      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  }
+  const { latestClosedStart, rangeStart, rangeEndExclusive } = getClosedRange(3, now);
 
   // Monthly expense trend
   const monthlyExpenses = await FinancialTransaction.findAll({
     where: {
       companyId,
       type: 'EXPENSE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
@@ -308,7 +284,7 @@ const getExpenseDashboard = async (companyId, period = '6m') => {
     where: {
       companyId,
       type: 'EXPENSE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       'category',
@@ -319,12 +295,12 @@ const getExpenseDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Total expenses
+  // Total expenses (latest closed month only)
   const totalExpenses = await FinancialTransaction.findOne({
     where: {
       companyId,
       type: 'EXPENSE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: latestClosedStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],
     raw: true
@@ -335,7 +311,7 @@ const getExpenseDashboard = async (companyId, period = '6m') => {
     where: {
       companyId,
       type: 'EXPENSE',
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: ['category', 'description', 'amount', 'date'],
     order: [['amount', 'DESC']],
@@ -365,30 +341,15 @@ const getExpenseDashboard = async (companyId, period = '6m') => {
   };
 };
 
-const getCashflowDashboard = async (companyId, period = '6m') => {
+const getCashflowDashboard = async (companyId, period = '3m') => {
   const now = new Date();
-  let startDate;
-
-  switch (period) {
-    case '1m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      break;
-    case '3m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      break;
-    case '12m':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
-      break;
-    case '6m':
-    default:
-      startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  }
+  const { rangeStart, rangeEndExclusive } = getClosedRange(3, now);
 
   // Get monthly cashflow data
   const cashflowData = await FinancialTransaction.findAll({
     where: {
       companyId,
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     attributes: [
       [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
@@ -435,7 +396,7 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
   const cashHistory = await CashBalance.findAll({
     where: {
       companyId,
-      date: { [Sequelize.Op.gte]: startDate }
+      date: { [Sequelize.Op.gte]: rangeStart, [Sequelize.Op.lt]: rangeEndExclusive }
     },
     order: [['date', 'ASC']],
     raw: true

@@ -19,19 +19,18 @@ interface CashflowData {
 
 export default function Cashflow() {
   const [data, setData] = useState<CashflowData | null>(null);
-  const [period, setPeriod] = useState('6m');
   const [loading, setLoading] = useState(true);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
     loadData();
-  }, [period, selectedCompanyId]);
+  }, [selectedCompanyId]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await dashboardApi.getCashflow(period);
+      const response = await dashboardApi.getCashflow('3m');
       setData(response.data.data);
     } catch (error) {
       console.error('Failed to load cashflow data:', error);
@@ -70,7 +69,11 @@ export default function Cashflow() {
   const prevInflow = Number(prevMonth?.inflow || 0);
   const prevOutflow = Number(prevMonth?.outflow || 0);
 
-  const avgNetCashflow = latestInflow - latestOutflow;
+  const totalInflow = months.reduce((sum, m) => sum + Number(m.inflow || 0), 0);
+  const totalOutflow = months.reduce((sum, m) => sum + Number(m.outflow || 0), 0);
+  const avgInflow = months.length ? totalInflow / months.length : 0;
+  const avgOutflow = months.length ? totalOutflow / months.length : 0;
+  const avgNetCashflow = avgInflow - avgOutflow;
   const prevAvgNetCashflow = prevInflow - prevOutflow;
   const netDelta = avgNetCashflow - prevAvgNetCashflow;
   const netTrend = prevMonth
@@ -103,16 +106,7 @@ export default function Cashflow() {
           <h1 className="text-2xl font-bold text-gray-900">Cashflow Dashboard</h1>
           <p className="text-gray-600">Track your cash inflows and outflows</p>
         </div>
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="input w-32"
-        >
-          <option value="1m">Last Month</option>
-          <option value="3m">Last 3 Months</option>
-          <option value="6m">Last 6 Months</option>
-          <option value="12m">Last Year</option>
-        </select>
+        <div className="text-sm text-gray-500">Trailing 3 closed months</div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -122,7 +116,7 @@ export default function Cashflow() {
               <Wallet className={`w-6 h-6 ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`} />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Avg Net Cashflow</p>
+              <p className="text-sm text-gray-600">Avg Net Cashflow (3 months)</p>
               <p className={`text-2xl font-bold ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {formatCurrency(avgNetCashflow)}
               </p>
@@ -143,9 +137,9 @@ export default function Cashflow() {
               )}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Month Revenue</p>
+              <p className="text-sm text-gray-600">Avg Revenue (3 months)</p>
               <p className="text-2xl font-bold text-emerald-700">
-                {formatCurrency(latestInflow)}
+                {formatCurrency(avgInflow)}
               </p>
             </div>
           </div>
@@ -164,9 +158,9 @@ export default function Cashflow() {
               )}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Month Expenses</p>
+              <p className="text-sm text-gray-600">Avg Expenses (3 months)</p>
               <p className="text-2xl font-bold text-rose-700">
-                {formatCurrency(latestOutflow)}
+                {formatCurrency(avgOutflow)}
               </p>
             </div>
           </div>
@@ -179,7 +173,7 @@ export default function Cashflow() {
 
       {/* Monthly Cashflow */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Monthly Cashflow</h2>
+        <h2 className="text-lg font-semibold mb-4">Monthly Cashflow (3 Closed Months)</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyCashflow || []}>
@@ -214,7 +208,7 @@ export default function Cashflow() {
 
       {/* Net Cashflow */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Net Cashflow</h2>
+        <h2 className="text-lg font-semibold mb-4">Net Cashflow (3 Closed Months)</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data?.monthlyCashflow || []}>
@@ -253,7 +247,7 @@ export default function Cashflow() {
 
       {/* Cash Balance History */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Cash Balance History</h2>
+        <h2 className="text-lg font-semibold mb-4">Cash Balance History (3 Closed Months)</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data?.cashHistory || []}>

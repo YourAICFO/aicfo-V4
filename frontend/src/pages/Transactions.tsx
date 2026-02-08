@@ -91,6 +91,12 @@ export default function Transactions() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
+  const getLatestClosedMonthKey = () => {
+    const now = new Date();
+    const closed = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return `${closed.getFullYear()}-${String(closed.getMonth() + 1).padStart(2, '0')}`;
+  };
+
   const monthTotals = transactions.reduce(
     (acc, t) => {
       const key = getMonthKey(t.date);
@@ -106,12 +112,16 @@ export default function Transactions() {
   );
 
   const sortedMonths = Object.keys(monthTotals).sort();
-  const latestMonthKey = sortedMonths[sortedMonths.length - 1];
-  const prevMonthKey = sortedMonths.length > 1 ? sortedMonths[sortedMonths.length - 2] : null;
-  const latestRevenue = latestMonthKey ? monthTotals[latestMonthKey].revenue : 0;
-  const latestExpense = latestMonthKey ? monthTotals[latestMonthKey].expense : 0;
-  const prevRevenue = prevMonthKey ? monthTotals[prevMonthKey].revenue : 0;
-  const prevExpense = prevMonthKey ? monthTotals[prevMonthKey].expense : 0;
+  const latestMonthKey = getLatestClosedMonthKey();
+  const prevMonthKey = (() => {
+    const [year, month] = latestMonthKey.split('-').map(Number);
+    const prev = new Date(year, month - 2, 1);
+    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const latestRevenue = monthTotals[latestMonthKey]?.revenue || 0;
+  const latestExpense = monthTotals[latestMonthKey]?.expense || 0;
+  const prevRevenue = monthTotals[prevMonthKey]?.revenue || 0;
+  const prevExpense = monthTotals[prevMonthKey]?.expense || 0;
 
   const revenueUp = latestRevenue >= prevRevenue;
   const expenseDown = latestExpense <= prevExpense;
@@ -166,7 +176,7 @@ export default function Transactions() {
               {revenueUp ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Month Revenue</p>
+              <p className="text-sm text-gray-600">Latest Closed Month Revenue</p>
               <p className="text-2xl font-bold">{formatCurrency(latestRevenue)}</p>
             </div>
           </div>
@@ -181,7 +191,7 @@ export default function Transactions() {
               {expenseDown ? <TrendingDown className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Month Expenses</p>
+              <p className="text-sm text-gray-600">Latest Closed Month Expenses</p>
               <p className="text-2xl font-bold">{formatCurrency(latestExpense)}</p>
             </div>
           </div>

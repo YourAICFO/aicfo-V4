@@ -242,7 +242,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Inflow vs Outflow Mix</h2>
-              <p className="text-sm text-gray-600">Based on trailing six months</p>
+              <p className="text-sm text-gray-600">Based on trailing 3 closed months</p>
             </div>
             <div className="text-right">
               <p className="text-xs uppercase text-gray-400">Net Cash Flow</p>
