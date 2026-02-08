@@ -147,7 +147,7 @@ export default function Dashboard() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         {/* Cash */}
         <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
@@ -158,22 +158,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-gray-600">Current Cash</p>
               <p className="text-2xl font-bold">
-                {formatCurrency(data?.cashPosition.currentBalance || 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Bank Balance */}
-        <div className="card border-transparent bg-gradient-to-br from-white to-sky-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-sky-100 rounded-lg">
-              <Wallet className="w-6 h-6 text-sky-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Bank Balance</p>
-              <p className="text-2xl font-bold">
-                {formatCurrency(data?.cashPosition.bankBalance || 0)}
+                {formatCurrency((data?.cashPosition.currentBalance || 0) + (data?.cashPosition.bankBalance || 0))}
               </p>
             </div>
           </div>

@@ -142,6 +142,33 @@ export default function Transactions() {
     .filter(t => t.type === 'OPENING_BALANCE')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const getMonthKey = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const monthTotals = transactions.reduce(
+    (acc, t) => {
+      const key = getMonthKey(t.date);
+      if (!acc[key]) acc[key] = { revenue: 0, expense: 0 };
+      if (t.type === 'REVENUE') acc[key].revenue += t.amount;
+      if (t.type === 'EXPENSE') acc[key].expense += t.amount;
+      return acc;
+    },
+    {} as Record<string, { revenue: number; expense: number }>
+  );
+
+  const sortedMonths = Object.keys(monthTotals).sort();
+  const latestMonthKey = sortedMonths[sortedMonths.length - 1];
+  const prevMonthKey = sortedMonths.length > 1 ? sortedMonths[sortedMonths.length - 2] : null;
+  const latestRevenue = latestMonthKey ? monthTotals[latestMonthKey].revenue : 0;
+  const latestExpense = latestMonthKey ? monthTotals[latestMonthKey].expense : 0;
+  const prevRevenue = prevMonthKey ? monthTotals[prevMonthKey].revenue : 0;
+  const prevExpense = prevMonthKey ? monthTotals[prevMonthKey].expense : 0;
+
+  const revenueUp = latestRevenue >= prevRevenue;
+  const expenseDown = latestExpense <= prevExpense;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -187,7 +214,7 @@ export default function Transactions() {
               <Wallet className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Opening Balance</p>
+              <p className="text-sm text-gray-600">Current Cash / Bank Balance</p>
               <p className="text-2xl font-bold">{formatCurrency(openingTotal)}</p>
             </div>
           </div>
@@ -198,9 +225,13 @@ export default function Transactions() {
               <TrendingUp className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Revenue</p>
-              <p className="text-2xl font-bold">{formatCurrency(revenueTotal)}</p>
+              <p className="text-sm text-gray-600">Latest Month Revenue</p>
+              <p className="text-2xl font-bold">{formatCurrency(latestRevenue)}</p>
             </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${revenueUp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {revenueUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {revenueUp ? 'Up vs last month' : 'Down vs last month'}
           </div>
         </div>
         <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
@@ -209,9 +240,13 @@ export default function Transactions() {
               <TrendingDown className="w-6 h-6 text-rose-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Expenses</p>
-              <p className="text-2xl font-bold">{formatCurrency(expenseTotal)}</p>
+              <p className="text-sm text-gray-600">Latest Month Expenses</p>
+              <p className="text-2xl font-bold">{formatCurrency(latestExpense)}</p>
             </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${expenseDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {expenseDown ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+            {expenseDown ? 'Down vs last month' : 'Up vs last month'}
           </div>
         </div>
       </div>
