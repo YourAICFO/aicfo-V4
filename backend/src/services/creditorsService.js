@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { MonthlyCreditor, MonthlyTrialBalanceSummary } = require('../models');
+const { MonthlyCreditor, MonthlyTrialBalanceSummary, CurrentCreditor, CurrentCashBalance } = require('../models');
 const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
 
 const getLatestMonthKey = () => getLatestClosedMonthKey();
@@ -31,26 +31,20 @@ const getSummary = async (companyId) => {
   const latestMonth = getLatestMonthKey();
   if (!latestMonth) return { month: null, totalBalance: 0 };
 
-  const rows = await MonthlyCreditor.findAll({
-    where: { companyId, month: latestMonth },
-    order: [['closing_balance', 'DESC']],
+  const currentRows = await CurrentCreditor.findAll({
+    where: { companyId },
+    order: [['balance', 'DESC']],
     raw: true
   });
+  if (currentRows.length === 0) return { month: latestMonth, totalBalance: 0 };
 
-  if (rows.length === 0) {
-    return { month: latestMonth, totalBalance: 0 };
-  }
-
-  const totalBalance = Number(rows[0].total_creditors_balance || 0);
-  const top1 = rows[0]?.closing_balance ? Number(rows[0].closing_balance) : 0;
-  const top5 = rows.slice(0, 5).reduce((sum, r) => sum + Number(r.closing_balance || 0), 0);
+  const totalBalance = currentRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const top1 = currentRows[0]?.balance ? Number(currentRows[0].balance) : 0;
+  const top5 = currentRows.slice(0, 5).reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const concentrationRatio = totalBalance > 0 ? top5 / totalBalance : 0;
 
-  const cashRow = await MonthlyTrialBalanceSummary.findOne({
-    where: { companyId, month: latestMonth },
-    raw: true
-  });
-  const cashBalance = Number(cashRow?.cash_and_bank_balance || 0);
+  const cashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
+  const cashBalance = cashRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const cashPressure = totalBalance > cashBalance;
 
   return {
@@ -64,14 +58,13 @@ const getSummary = async (companyId) => {
 };
 
 const getTop = async (companyId) => {
-  const latestMonth = getLatestMonthKey();
-  if (!latestMonth) return [];
-  return MonthlyCreditor.findAll({
-    where: { companyId, month: latestMonth },
-    order: [['closing_balance', 'DESC']],
+  const rows = await CurrentCreditor.findAll({
+    where: { companyId },
+    order: [['balance', 'DESC']],
     limit: 10,
     raw: true
   });
+  return rows;
 };
 
 const getTrends = async (companyId) => {

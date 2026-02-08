@@ -19,6 +19,12 @@ const { MonthlyDebtor } = require('./MonthlyDebtor');
 const { MonthlyCreditor } = require('./MonthlyCreditor');
 const { AdminUsageEvent } = require('./AdminUsageEvent');
 const { AdminAIQuestion } = require('./AdminAIQuestion');
+const { CurrentCashBalance } = require('./CurrentCashBalance');
+const { CurrentDebtor } = require('./CurrentDebtor');
+const { CurrentCreditor } = require('./CurrentCreditor');
+const { CurrentLoan } = require('./CurrentLoan');
+const { CurrentLiquidityMetric } = require('./CurrentLiquidityMetric');
+const { CFOAlert } = require('./CFOAlert');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -82,6 +88,24 @@ MonthlyDebtor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 Company.hasMany(MonthlyCreditor, { foreignKey: 'company_id', as: 'monthlyCreditorsPhase2' });
 MonthlyCreditor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+Company.hasMany(CurrentCashBalance, { foreignKey: 'company_id', as: 'currentCash' });
+CurrentCashBalance.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(CurrentDebtor, { foreignKey: 'company_id', as: 'currentDebtors' });
+CurrentDebtor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(CurrentCreditor, { foreignKey: 'company_id', as: 'currentCreditors' });
+CurrentCreditor.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(CurrentLoan, { foreignKey: 'company_id', as: 'currentLoans' });
+CurrentLoan.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasOne(CurrentLiquidityMetric, { foreignKey: 'company_id', as: 'currentLiquidity' });
+CurrentLiquidityMetric.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(CFOAlert, { foreignKey: 'company_id', as: 'alerts' });
+CFOAlert.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
   sequelize,
   User,
@@ -103,5 +127,11 @@ module.exports = {
   MonthlyDebtor,
   MonthlyCreditor,
   AdminUsageEvent,
-  AdminAIQuestion
+  AdminAIQuestion,
+  CurrentCashBalance,
+  CurrentDebtor,
+  CurrentCreditor,
+  CurrentLoan,
+  CurrentLiquidityMetric,
+  CFOAlert
 };

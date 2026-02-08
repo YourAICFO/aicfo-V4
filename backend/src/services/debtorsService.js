@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { MonthlyDebtor, MonthlyTrialBalanceSummary } = require('../models');
+const { MonthlyDebtor, MonthlyTrialBalanceSummary, CurrentDebtor } = require('../models');
 const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
 
 const getLatestMonthKey = () => getLatestClosedMonthKey();
@@ -27,19 +27,17 @@ const getSummary = async (companyId) => {
     return { month: null, totalBalance: 0 };
   }
 
-  const rows = await MonthlyDebtor.findAll({
-    where: { companyId, month: latestMonth },
-    order: [['closing_balance', 'DESC']],
+  const currentRows = await CurrentDebtor.findAll({
+    where: { companyId },
+    order: [['balance', 'DESC']],
     raw: true
   });
-
-  if (rows.length === 0) {
+  if (currentRows.length === 0) {
     return { month: latestMonth, totalBalance: 0 };
   }
-
-  const totalBalance = Number(rows[0].total_debtors_balance || 0);
-  const top1 = rows[0]?.closing_balance ? Number(rows[0].closing_balance) : 0;
-  const top5 = rows.slice(0, 5).reduce((sum, r) => sum + Number(r.closing_balance || 0), 0);
+  const totalBalance = currentRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const top1 = currentRows[0]?.balance ? Number(currentRows[0].balance) : 0;
+  const top5 = currentRows.slice(0, 5).reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const concentrationRatio = totalBalance > 0 ? top5 / totalBalance : 0;
 
   const prevMonthKey = listMonthKeysBetween(latestMonth, latestMonth).length
@@ -82,14 +80,13 @@ const getSummary = async (companyId) => {
 };
 
 const getTop = async (companyId) => {
-  const latestMonth = getLatestMonthKey();
-  if (!latestMonth) return [];
-  return MonthlyDebtor.findAll({
-    where: { companyId, month: latestMonth },
-    order: [['closing_balance', 'DESC']],
+  const rows = await CurrentDebtor.findAll({
+    where: { companyId },
+    order: [['balance', 'DESC']],
     limit: 10,
     raw: true
   });
+  return rows;
 };
 
 const getTrends = async (companyId) => {

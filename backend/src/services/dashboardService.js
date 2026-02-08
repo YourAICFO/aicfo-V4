@@ -7,7 +7,12 @@ const {
   MonthlyRevenueBreakdown,
   MonthlyExpenseBreakdown,
   MonthlyDebtor,
-  MonthlyCreditor
+  MonthlyCreditor,
+  CurrentCashBalance,
+  CurrentDebtor,
+  CurrentCreditor,
+  CurrentLiquidityMetric,
+  CFOAlert
 } = require('../models');
 
 const normalizeMonth = (value) => {
@@ -48,22 +53,18 @@ const getCFOOverview = async (companyId) => {
   const { latestClosedStart, rangeStart, rangeEndExclusive } = getClosedRange(3, now);
   const latestClosedKey = normalizeMonth(latestClosedStart);
 
-  // Get current cash balance
-  const latestCash = await CashBalance.findOne({
-    where: { companyId },
-    order: [['date', 'DESC']]
-  });
-  const latestBank = await CashBalance.findOne({
-    where: {
-      companyId,
-      bankName: { [Sequelize.Op.ne]: null }
-    },
-    order: [['date', 'DESC']]
-  });
-
-  let bankBalance = latestBank ? parseFloat(latestBank.amount) : 0;
-  if (!latestBank) {
-    bankBalance = 0;
+  // Live current cash balance (fallback to historical cash if none)
+  const currentCashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
+  let bankBalance = 0;
+  let cashBalance = 0;
+  if (currentCashRows.length > 0) {
+    cashBalance = currentCashRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  } else {
+    const latestCash = await CashBalance.findOne({
+      where: { companyId },
+      order: [['date', 'DESC']]
+    });
+    cashBalance = latestCash ? parseFloat(latestCash.amount) : 0;
   }
 
   const summaryRows = await MonthlyTrialBalanceSummary.findAll({
@@ -158,7 +159,7 @@ const getCFOOverview = async (companyId) => {
   let runwayMonths = 0;
   let runwayStatus = 'RED';
 
-  const cashBase = currentCash + bankBalance;
+  const cashBase = cashBalance || (currentCash + bankBalance);
   if (avgNetCashFlow >= 0) {
     runwayMonths = 99;
     runwayStatus = 'GREEN';
@@ -204,18 +205,10 @@ const getCFOOverview = async (companyId) => {
   const netProfitLatest = Number(latestSummary?.net_profit || (revenueLatest - expenseLatest));
   const margin = revenueLatest > 0 ? netProfitLatest / revenueLatest : 0;
 
-  const debtorTotalRow = await MonthlyDebtor.findOne({
-    where: { companyId, month: latestClosedKey },
-    attributes: [[Sequelize.fn('MAX', Sequelize.col('total_debtors_balance')), 'total']],
-    raw: true
-  });
-  const creditorTotalRow = await MonthlyCreditor.findOne({
-    where: { companyId, month: latestClosedKey },
-    attributes: [[Sequelize.fn('MAX', Sequelize.col('total_creditors_balance')), 'total']],
-    raw: true
-  });
-  const debtorsOutstanding = Number(debtorTotalRow?.total || 0);
-  const creditorsOutstanding = Number(creditorTotalRow?.total || 0);
+  const currentDebtors = await CurrentDebtor.findAll({ where: { companyId }, raw: true });
+  const currentCreditors = await CurrentCreditor.findAll({ where: { companyId }, raw: true });
+  const debtorsOutstanding = currentDebtors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const creditorsOutstanding = currentCreditors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
 
   const revenueGrowth3m = prevSummary?.total_revenue
     ? (revenueLatest - Number(prevSummary.total_revenue || 0)) / Number(prevSummary.total_revenue || 1)
@@ -232,14 +225,19 @@ const getCFOOverview = async (companyId) => {
 
   const needsAttention = runwayStatus === 'RED' || debtorsOutstanding > 0;
 
+  const liquidityMetric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
+  const alerts = await CFOAlert.findAll({ where: { companyId }, order: [['generated_at', 'DESC']], raw: true });
+
   return {
     cashPosition: {
-      currentBalance: currentCash + bankBalance,
+      currentBalance: cashBalance || (currentCash + bankBalance),
       bankBalance,
       currency: 'INR'
     },
     runway: {
-      months: Math.round(runwayMonths * 10) / 10,
+      months: liquidityMetric?.cash_runway_months !== null && liquidityMetric?.cash_runway_months !== undefined
+        ? Number(liquidityMetric.cash_runway_months)
+        : Math.round(runwayMonths * 10) / 10,
       status: runwayStatus,
       avgMonthlyInflow: Math.round(avgMonthlyInflow),
       avgMonthlyOutflow: Math.round(avgMonthlyOutflow),
@@ -249,9 +247,9 @@ const getCFOOverview = async (companyId) => {
       { key: 'revenue', label: 'Revenue', value: revenueLatest, link: '/revenue' },
       { key: 'net_profit', label: 'Net Profit', value: netProfitLatest, link: '/revenue' },
       { key: 'margin', label: 'Margin', value: margin, link: '/revenue' },
-      { key: 'cash_balance', label: 'Cash Balance', value: currentCash + bankBalance, link: '/cashflow' },
+      { key: 'cash_balance', label: 'Cash Balance', value: cashBalance || (currentCash + bankBalance), link: '/cashflow' },
       { key: 'burn_rate', label: 'Burn Rate', value: avgMonthlyOutflow, link: '/cashflow' },
-      { key: 'cash_runway', label: 'Cash Runway', value: runwayMonths, link: '/dashboard' },
+      { key: 'cash_runway', label: 'Cash Runway', value: liquidityMetric?.cash_runway_months ?? runwayMonths, link: '/dashboard' },
       { key: 'debtors', label: 'Debtors Outstanding', value: debtorsOutstanding, link: '/debtors' },
       { key: 'creditors', label: 'Creditors Outstanding', value: creditorsOutstanding, link: '/creditors' },
       { key: 'revenue_growth_3m', label: 'Revenue Growth (3M)', value: revenueGrowth3m, link: '/revenue' },
@@ -260,6 +258,7 @@ const getCFOOverview = async (companyId) => {
       { key: 'expense_growth_6m', label: 'Expense Growth (6M)', value: expenseGrowth6m, link: '/expenses' },
       { key: 'needs_attention', label: 'Needs Attention', value: needsAttention, link: '/ai-insights' }
     ],
+    alerts,
     insights: {
       recent: recentInsights,
       unreadCount

@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { AdminUsageEvent, AdminAIQuestion, Company, User, sequelize } = require('../models');
+const { AdminUsageEvent, AdminAIQuestion, Company, sequelize } = require('../models');
 
 const logEvent = async (companyId, userId, eventType, metadata = {}) => {
   await AdminUsageEvent.create({
@@ -27,6 +27,18 @@ const getUsageSummary = async () => {
      WHERE created_at >= NOW() - INTERVAL '30 days'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
+  const dau = await sequelize.query(
+    `SELECT COUNT(DISTINCT user_id) AS count
+     FROM admin_usage_events
+     WHERE created_at >= NOW() - INTERVAL '1 day'`,
+    { type: Sequelize.QueryTypes.SELECT }
+  );
+  const mau = await sequelize.query(
+    `SELECT COUNT(DISTINCT user_id) AS count
+     FROM admin_usage_events
+     WHERE created_at >= NOW() - INTERVAL '30 days'`,
+    { type: Sequelize.QueryTypes.SELECT }
+  );
   const loginCounts = await sequelize.query(
     `SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*) AS count
      FROM admin_usage_events
@@ -43,14 +55,21 @@ const getUsageSummary = async () => {
   );
   const aiQuestions = await AdminAIQuestion.count();
   const aiFailures = await AdminAIQuestion.count({ where: { success: false } });
+  const alertsCount = await sequelize.query(
+    `SELECT COUNT(*) AS count FROM cfo_alerts`,
+    { type: Sequelize.QueryTypes.SELECT }
+  );
 
   return {
     companiesCount,
     activeUsers: Number(activeUsers?.[0]?.count || 0),
+    dau: Number(dau?.[0]?.count || 0),
+    mau: Number(mau?.[0]?.count || 0),
     loginCounts,
     dashboardOpens: Number(dashboardOpens?.[0]?.count || 0),
     aiQuestions,
-    aiFailures
+    aiFailures,
+    alertsGenerated: Number(alertsCount?.[0]?.count || 0)
   };
 };
 

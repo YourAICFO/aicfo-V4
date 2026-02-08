@@ -10,6 +10,12 @@ const {
   MonthlyCreditorsSnapshot,
   MonthlyDebtor,
   MonthlyCreditor,
+  CurrentCashBalance,
+  CurrentDebtor,
+  CurrentCreditor,
+  CurrentLoan,
+  CurrentLiquidityMetric,
+  CFOAlert,
   AccountingTermMapping,
   sequelize
 } = require('../models');
@@ -313,7 +319,133 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
   }
 };
 
-const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastSyncedAt = null, debtors = null, creditors = null) => {
+const updateCurrentBalances = async (companyId, payload, transaction) => {
+  if (!payload) return;
+  const { cashBalances, debtors, creditors, loans } = payload;
+
+  if (Array.isArray(cashBalances)) {
+    await CurrentCashBalance.destroy({ where: { companyId }, transaction });
+    for (const row of cashBalances) {
+      await CurrentCashBalance.create({
+        companyId,
+        accountName: row.account_name,
+        balance: Number(row.balance || 0)
+      }, { transaction });
+    }
+  }
+
+  if (Array.isArray(debtors)) {
+    await CurrentDebtor.destroy({ where: { companyId }, transaction });
+    for (const row of debtors) {
+      await CurrentDebtor.create({
+        companyId,
+        debtorName: row.debtor_name,
+        balance: Number(row.balance || 0)
+      }, { transaction });
+    }
+  }
+
+  if (Array.isArray(creditors)) {
+    await CurrentCreditor.destroy({ where: { companyId }, transaction });
+    for (const row of creditors) {
+      await CurrentCreditor.create({
+        companyId,
+        creditorName: row.creditor_name,
+        balance: Number(row.balance || 0)
+      }, { transaction });
+    }
+  }
+
+  if (Array.isArray(loans)) {
+    await CurrentLoan.destroy({ where: { companyId }, transaction });
+    for (const row of loans) {
+      await CurrentLoan.create({
+        companyId,
+        loanName: row.loan_name,
+        balance: Number(row.balance || 0)
+      }, { transaction });
+    }
+  }
+};
+
+const computeLiquidityMetrics = async (companyId, transaction) => {
+  const latestClosedKey = getLatestClosedMonthKey();
+  if (!latestClosedKey) return null;
+
+  const startKey = addMonths(latestClosedKey, -2);
+  const monthKeys = listMonthKeysBetween(startKey, latestClosedKey);
+  const summaryRows = await MonthlyTrialBalanceSummary.findAll({
+    where: { companyId, month: { [Sequelize.Op.in]: monthKeys } },
+    raw: true,
+    transaction
+  });
+  const map = new Map(summaryRows.map(r => [r.month, r]));
+  const values = monthKeys.map(m => map.get(m) || {});
+  const avgRevenue = values.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0) / Math.max(values.length, 1);
+  const avgExpenses = values.reduce((sum, r) => sum + Number(r.total_expenses || 0), 0) / Math.max(values.length, 1);
+  const avgNetCashOutflow = avgRevenue - avgExpenses;
+
+  const currentCashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true, transaction });
+  const currentCash = currentCashRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+
+  let runway = null;
+  if (avgNetCashOutflow < 0) {
+    runway = Math.abs(avgNetCashOutflow) > 0 ? currentCash / Math.abs(avgNetCashOutflow) : null;
+  }
+
+  await CurrentLiquidityMetric.upsert({
+    companyId,
+    avgNetCashOutflow3m: avgNetCashOutflow,
+    cashRunwayMonths: runway
+  }, { transaction });
+
+  return { avgNetCashOutflow, runway };
+};
+
+const upsertAlerts = async (companyId, transaction) => {
+  const latestClosedKey = getLatestClosedMonthKey();
+  if (!latestClosedKey) return;
+  const prevKey = addMonths(latestClosedKey, -1);
+
+  const latest = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latestClosedKey }, raw: true, transaction });
+  const prev = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: prevKey }, raw: true, transaction });
+  const revenueGrowth = prev?.total_revenue ? (Number(latest?.total_revenue || 0) - Number(prev.total_revenue || 0)) / Number(prev.total_revenue || 1) : 0;
+  const expenseGrowth = prev?.total_expenses ? (Number(latest?.total_expenses || 0) - Number(prev.total_expenses || 0)) / Number(prev.total_expenses || 1) : 0;
+
+  const debtorsNow = await CurrentDebtor.findAll({ where: { companyId }, raw: true, transaction });
+  const creditorsNow = await CurrentCreditor.findAll({ where: { companyId }, raw: true, transaction });
+  const cashNow = await CurrentCashBalance.findAll({ where: { companyId }, raw: true, transaction });
+  const cashTotal = cashNow.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const creditorsTotal = creditorsNow.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const debtorsTotal = debtorsNow.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+
+  const topDebtorShare = (() => {
+    const sorted = [...debtorsNow].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+    const top = sorted.slice(0, 2).reduce((sum, r) => sum + Number(r.balance || 0), 0);
+    return debtorsTotal > 0 ? top / debtorsTotal : 0;
+  })();
+
+  const alerts = [];
+  if (debtorsTotal > 0 && Math.abs(revenueGrowth) < 0.02) {
+    alerts.push({ alertType: 'DEBTORS_UP_REVENUE_FLAT', severity: 'AMBER', metadata: { revenueGrowth, debtorsTotal } });
+  }
+  if (expenseGrowth > 0.1 && cashTotal < 0) {
+    alerts.push({ alertType: 'CASH_DECLINE_EXPENSES_UP', severity: 'RED', metadata: { expenseGrowth, cashTotal } });
+  }
+  if (topDebtorShare > 0.5) {
+    alerts.push({ alertType: 'DEBTOR_CONCENTRATION', severity: 'AMBER', metadata: { topDebtorShare } });
+  }
+  if (creditorsTotal > 0 && expenseGrowth < 0.02) {
+    alerts.push({ alertType: 'CREDITORS_UP_EXPENSES_FLAT', severity: 'AMBER', metadata: { creditorsTotal, expenseGrowth } });
+  }
+
+  await CFOAlert.destroy({ where: { companyId }, transaction });
+  for (const alert of alerts) {
+    await CFOAlert.create({ companyId, ...alert }, { transaction });
+  }
+};
+
+const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastSyncedAt = null, debtors = null, creditors = null, currentBalances = null) => {
   const latestClosedKey = getLatestClosedMonthKey();
   if (!latestClosedKey) return { months: 0 };
 
@@ -334,6 +466,10 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
         await upsertDebtorsCreditors(companyId, monthKey, monthDebtors, monthCreditors, transaction);
       }
     }
+
+    await updateCurrentBalances(companyId, currentBalances, transaction);
+    await computeLiquidityMetrics(companyId, transaction);
+    await upsertAlerts(companyId, transaction);
   });
 
   return { months: monthKeys.length };

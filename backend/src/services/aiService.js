@@ -19,6 +19,8 @@ const generateInsights = async (companyId) => {
 
   // Get CFO overview for runway calculation
   const overview = await dashboardService.getCFOOverview(companyId);
+  const revenueData = await dashboardService.getRevenueDashboard(companyId, '3m');
+  const expenseData = await dashboardService.getExpenseDashboard(companyId, '3m');
 
   // Runway insight
   if (overview.runway.status === 'RED') {
@@ -113,9 +115,9 @@ const generateInsights = async (companyId) => {
         companyId,
         ...insight,
         dataPoints: {
-          runway: overview.runway,
-          revenue: revenueData.summary,
-          expenses: expenseData.summary
+          runway: overview?.runway || null,
+          revenue: revenueData?.summary || null,
+          expenses: expenseData?.summary || null
         }
       }
     });
@@ -180,12 +182,12 @@ const chatWithCFO = async (companyId, message) => {
   const debtors = await debtorsService.getSummary(companyId);
   const creditors = await creditorsService.getSummary(companyId);
 
-  const safeByCategory = Array.isArray(expenses.byCategory) ? expenses.byCategory : [];
+  const safeByCategory = Array.isArray(expenses?.byCategory) ? expenses.byCategory : [];
   const context = {
-    cashBalance: overview.cashPosition.currentBalance,
-    runway: overview.runway,
-    revenue: revenue.summary,
-    expenses: expenses.summary,
+    cashBalance: Number(overview?.cashPosition?.currentBalance || 0),
+    runway: overview?.runway || { months: 0, netCashFlow: 0, status: 'UNKNOWN' },
+    revenue: revenue?.summary || { totalRevenue: 0, growthRate: 0 },
+    expenses: expenses?.summary || { totalExpenses: 0 },
     expenseCategories: safeByCategory,
     debtors,
     creditors
@@ -194,11 +196,11 @@ const chatWithCFO = async (companyId, message) => {
   // Simple response logic (in production, this would call OpenAI API)
   const responses = {
     'runway': `Based on your current cash position of ₹${context.cashBalance.toLocaleString()} ` +
-      `and average net cash flow of ₹${context.runway.netCashFlow.toLocaleString()} per month, ` +
+      `and average net cash flow of ₹${Number(context.runway.netCashFlow || 0).toLocaleString()} per month, ` +
       `your runway is approximately ${context.runway.months} months. Status: ${context.runway.status}.`,
-    'revenue': `Your total revenue for the last 3 months is ₹${context.revenue.totalRevenue.toLocaleString()} ` +
-      `with a growth rate of ${context.revenue.growthRate.toFixed(1)}%.`,
-    'expenses': `Your total expenses for the latest closed month are ₹${context.expenses.totalExpenses.toLocaleString()}. ` +
+    'revenue': `Your total revenue for the last 3 months is ₹${Number(context.revenue.totalRevenue || 0).toLocaleString()} ` +
+      `with a growth rate of ${Number(context.revenue.growthRate || 0).toFixed(1)}%.`,
+    'expenses': `Your total expenses for the latest closed month are ₹${Number(context.expenses.totalExpenses || 0).toLocaleString()}. ` +
       `Top categories: ${context.expenseCategories.slice(0, 3).map(c => c.category).join(', ') || 'Not enough data'}.`,
     'cash': `Your current cash balance is ₹${context.cashBalance.toLocaleString()}. ` +
       `Runway: ${context.runway.months} months (${context.runway.status}).`,
