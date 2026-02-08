@@ -194,7 +194,7 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Total revenue
+  // Total revenue (current period)
   const totalRevenue = await FinancialTransaction.findOne({
     where: {
       companyId,
@@ -205,17 +205,17 @@ const getRevenueDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Previous period for growth calculation
-  const prevPeriodStart = new Date(startDate);
-  prevPeriodStart.setMonth(prevPeriodStart.getMonth() - (period === '1m' ? 1 : period === '3m' ? 3 : period === '12m' ? 12 : 6));
+  // Last month revenue for growth calculation
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
   const prevRevenue = await FinancialTransaction.findOne({
     where: {
       companyId,
       type: 'REVENUE',
       date: {
-        [Sequelize.Op.gte]: prevPeriodStart,
-        [Sequelize.Op.lt]: startDate
+        [Sequelize.Op.gte]: prevMonthStart,
+        [Sequelize.Op.lt]: lastMonthStart
       }
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('amount')), 'total']],

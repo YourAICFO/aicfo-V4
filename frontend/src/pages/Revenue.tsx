@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, BadgeDollarSign, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, BadgeDollarSign, Target } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -96,19 +96,24 @@ export default function Revenue() {
             </div>
           </div>
         </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+        <div className={`card border-transparent bg-gradient-to-br ${growthRate >= 0 ? 'from-white to-emerald-50' : 'from-white to-rose-50'}`}>
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-emerald-100">
-              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            <div className={`p-3 rounded-lg ${growthRate >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+              {growthRate >= 0 ? (
+                <TrendingUp className="w-6 h-6 text-emerald-600" />
+              ) : (
+                <TrendingDown className="w-6 h-6 text-rose-600" />
+              )}
             </div>
             <div>
               <p className="text-sm text-gray-600">Growth Rate</p>
-              <p className={`text-2xl font-bold ${(data?.summary.growthRate || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <p className={`text-2xl font-bold ${(data?.summary.growthRate || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {(data?.summary.growthRate || 0) >= 0 ? '+' : ''}{data?.summary.growthRate.toFixed(1)}%
               </p>
             </div>
           </div>
-          <div className={`mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${growthRate >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${growthRate >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {growthRate >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {growthLabel}
           </div>
         </div>
