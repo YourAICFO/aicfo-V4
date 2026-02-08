@@ -25,6 +25,10 @@ const { CurrentCreditor } = require('./CurrentCreditor');
 const { CurrentLoan } = require('./CurrentLoan');
 const { CurrentLiquidityMetric } = require('./CurrentLiquidityMetric');
 const { CFOAlert } = require('./CFOAlert');
+const { CFOQuestion } = require('./CFOQuestion');
+const { CFOQuestionMetric } = require('./CFOQuestionMetric');
+const { CFOQuestionRule } = require('./CFOQuestionRule');
+const { CFOQuestionResult } = require('./CFOQuestionResult');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -106,6 +110,15 @@ CurrentLiquidityMetric.belongsTo(Company, { foreignKey: 'company_id', as: 'compa
 Company.hasMany(CFOAlert, { foreignKey: 'company_id', as: 'alerts' });
 CFOAlert.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+// CFO Question Engine
+CFOQuestion.hasMany(CFOQuestionMetric, { foreignKey: 'question_id', as: 'metrics' });
+CFOQuestion.hasMany(CFOQuestionRule, { foreignKey: 'question_id', as: 'rules' });
+CFOQuestion.hasMany(CFOQuestionResult, { foreignKey: 'question_id', as: 'results' });
+CFOQuestionMetric.belongsTo(CFOQuestion, { foreignKey: 'question_id', as: 'question' });
+CFOQuestionRule.belongsTo(CFOQuestion, { foreignKey: 'question_id', as: 'question' });
+CFOQuestionResult.belongsTo(CFOQuestion, { foreignKey: 'question_id', as: 'question' });
+Company.hasMany(CFOQuestionResult, { foreignKey: 'company_id', as: 'cfoQuestionResults' });
+
 module.exports = {
   sequelize,
   User,
@@ -133,5 +146,9 @@ module.exports = {
   CurrentCreditor,
   CurrentLoan,
   CurrentLiquidityMetric,
-  CFOAlert
+  CFOAlert,
+  CFOQuestion,
+  CFOQuestionMetric,
+  CFOQuestionRule,
+  CFOQuestionResult
 };

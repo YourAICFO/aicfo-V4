@@ -10,6 +10,7 @@ const monthlySnapshotService = require('./monthlySnapshotService');
 const debtorsService = require('./debtorsService');
 const creditorsService = require('./creditorsService');
 const adminUsageService = require('./adminUsageService');
+const cfoQuestionService = require('./cfoQuestionService');
 
 module.exports = {
   authService,
@@ -23,5 +24,6 @@ module.exports = {
   monthlySnapshotService,
   debtorsService,
   creditorsService,
-  adminUsageService
+  adminUsageService,
+  cfoQuestionService
 };

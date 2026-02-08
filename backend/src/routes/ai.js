@@ -69,7 +69,14 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
 
     const response = await aiService.chatWithCFO(req.companyId, message);
     adminUsageService.logEvent(req.companyId, req.userId, 'ai_chat').catch(() => {});
-    adminUsageService.logAIQuestion(req.companyId, req.userId, message, true).catch(() => {});
+    adminUsageService.logAIQuestion(req.companyId, req.userId, message, Boolean(response?.matched)).catch(() => {});
+    if (response?.questionCode) {
+      adminUsageService.logEvent(req.companyId, req.userId, 'ai_question_mapped', {
+        questionCode: response.questionCode
+      }).catch(() => {});
+    } else {
+      adminUsageService.logEvent(req.companyId, req.userId, 'ai_question_unmapped').catch(() => {});
+    }
     res.json({
       success: true,
       data: response

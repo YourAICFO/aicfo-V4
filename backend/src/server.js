@@ -18,6 +18,7 @@ const jobRoutes = require('./routes/jobs');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const financeRoutes = require('./routes/finance');
 const adminRoutes = require('./routes/admin');
+const cfoQuestionRoutes = require('./routes/cfoQuestions');
 
 
 const app = express();
@@ -90,6 +91,7 @@ app.use('/api/integrations', integrationRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/cfo', cfoQuestionRoutes);
 app.use('/admin', adminRoutes);
 
 /* ===============================

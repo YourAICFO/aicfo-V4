@@ -472,6 +472,13 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
     await upsertAlerts(companyId, transaction);
   });
 
+  try {
+    const { recomputeForCompany } = require('./cfoQuestionService');
+    await recomputeForCompany(companyId);
+  } catch (error) {
+    console.warn('CFO question recompute failed:', error.message);
+  }
+
   return { months: monthKeys.length };
 };
 
