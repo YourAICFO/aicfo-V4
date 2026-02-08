@@ -369,10 +369,9 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
 
   months.forEach(month => {
     const inflow = cashflowData.find(d => d.month === month && d.type === 'REVENUE');
-    const opening = cashflowData.find(d => d.month === month && d.type === 'OPENING_BALANCE');
     const outflow = cashflowData.find(d => d.month === month && d.type === 'EXPENSE');
 
-    const inflowTotal = parseFloat(inflow?.total || 0) + parseFloat(opening?.total || 0);
+    const inflowTotal = parseFloat(inflow?.total || 0);
     const outflowTotal = parseFloat(outflow?.total || 0);
 
     monthlyCashflow.push({
