@@ -199,11 +199,13 @@ const chatWithCFO = async (companyId, message) => {
   const revenue = await dashboardService.getRevenueDashboard(companyId, '3m');
   const expenses = await dashboardService.getExpenseDashboard(companyId, '3m');
 
+  const safeByCategory = Array.isArray(expenses.byCategory) ? expenses.byCategory : [];
   const context = {
     cashBalance: overview.cashPosition.currentBalance,
     runway: overview.runway,
     revenue: revenue.summary,
-    expenses: expenses.summary
+    expenses: expenses.summary,
+    expenseCategories: safeByCategory
   };
 
   // Simple response logic (in production, this would call OpenAI API)
@@ -214,7 +216,7 @@ const chatWithCFO = async (companyId, message) => {
     'revenue': `Your total revenue for the last 3 months is ₹${context.revenue.totalRevenue.toLocaleString()} ` +
       `with a growth rate of ${context.revenue.growthRate.toFixed(1)}%.`,
     'expenses': `Your total expenses for the last 3 months are ₹${context.expenses.totalExpenses.toLocaleString()}. ` +
-      `Top categories: ${context.expenses.byCategory.slice(0, 3).map(c => c.category).join(', ')}.`,
+      `Top categories: ${context.expenseCategories.slice(0, 3).map(c => c.category).join(', ') || 'Not enough data'}.`,
     'cash': `Your current cash balance is ₹${context.cashBalance.toLocaleString()}. ` +
       `Runway: ${context.runway.months} months (${context.runway.status}).`,
     'default': `I can help you with information about your cash position, runway, revenue, and expenses. ` +

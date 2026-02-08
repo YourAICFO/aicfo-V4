@@ -22,6 +22,11 @@ const getLatestClosedMonthStart = (now = new Date()) => {
   return new Date(now.getFullYear(), now.getMonth() - 1, 1);
 };
 
+const getLatestClosedMonthKey = (now = new Date()) => {
+  const latestClosedStart = getLatestClosedMonthStart(now);
+  return normalizeMonth(latestClosedStart);
+};
+
 const getClosedRange = (months = 3, now = new Date()) => {
   const latestClosedStart = getLatestClosedMonthStart(now);
   const rangeStart = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - (months - 1), 1);
@@ -86,10 +91,15 @@ const getCFOOverview = async (companyId) => {
   // Calculate averages
   const monthlyInflows = [];
   const monthlyOutflows = [];
+  const availableMonths = new Set(
+    monthlyData
+      .map((d) => normalizeMonth(d.month))
+      .filter((m) => Boolean(m))
+  );
 
   for (let i = 0; i < 3; i++) {
     const month = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - i, 1);
-    const monthStr = month.toISOString().slice(0, 7);
+    const monthStr = normalizeMonth(month) || getLatestClosedMonthKey(now);
 
     const inflow = monthlyData.find(
       d => normalizeMonth(d.month) === monthStr && d.type === 'REVENUE'
@@ -102,8 +112,9 @@ const getCFOOverview = async (companyId) => {
     monthlyOutflows.push(outflow ? parseFloat(outflow.total) : 0);
   }
 
-  const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / 3;
-  const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / 3;
+  const availableCount = Math.max(availableMonths.size, 1);
+  const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / availableCount;
+  const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / availableCount;
   const netCashFlow = avgMonthlyInflow - avgMonthlyOutflow;
   const avgNetCashFlow = netCashFlow;
 
