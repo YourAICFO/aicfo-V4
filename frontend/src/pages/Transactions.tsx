@@ -143,16 +143,21 @@ export default function Transactions() {
     .reduce((sum, t) => sum + t.amount, 0);
 
   const getMonthKey = (dateStr: string) => {
+    if (!dateStr) return null;
     const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return null;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
   const monthTotals = transactions.reduce(
     (acc, t) => {
       const key = getMonthKey(t.date);
+      if (!key) return acc;
       if (!acc[key]) acc[key] = { revenue: 0, expense: 0 };
-      if (t.type === 'REVENUE') acc[key].revenue += t.amount;
-      if (t.type === 'EXPENSE') acc[key].expense += t.amount;
+      const amount = Number(t.amount || 0);
+      if (!Number.isFinite(amount)) return acc;
+      if (t.type === 'REVENUE') acc[key].revenue += amount;
+      if (t.type === 'EXPENSE') acc[key].expense += amount;
       return acc;
     },
     {} as Record<string, { revenue: number; expense: number }>
@@ -168,6 +173,13 @@ export default function Transactions() {
 
   const revenueUp = latestRevenue >= prevRevenue;
   const expenseDown = latestExpense <= prevExpense;
+  const revenueTrendClass = revenueUp ? 'from-white to-emerald-50' : 'from-white to-rose-50';
+  const revenueIconClass = revenueUp ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600';
+  const revenueBadgeClass = revenueUp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+
+  const expenseTrendClass = expenseDown ? 'from-white to-emerald-50' : 'from-white to-rose-50';
+  const expenseIconClass = expenseDown ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600';
+  const expenseBadgeClass = expenseDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
 
   if (loading) {
     return (
@@ -219,32 +231,32 @@ export default function Transactions() {
             </div>
           </div>
         </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+        <div className={`card border-transparent bg-gradient-to-br ${revenueTrendClass}`}>
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            <div className={`p-3 rounded-lg ${revenueIconClass}`}>
+              {revenueUp ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
             </div>
             <div>
               <p className="text-sm text-gray-600">Latest Month Revenue</p>
               <p className="text-2xl font-bold">{formatCurrency(latestRevenue)}</p>
             </div>
           </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${revenueUp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${revenueBadgeClass}`}>
             {revenueUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {revenueUp ? 'Up vs last month' : 'Down vs last month'}
           </div>
         </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
+        <div className={`card border-transparent bg-gradient-to-br ${expenseTrendClass}`}>
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-rose-100 rounded-lg">
-              <TrendingDown className="w-6 h-6 text-rose-600" />
+            <div className={`p-3 rounded-lg ${expenseIconClass}`}>
+              {expenseDown ? <TrendingDown className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
             </div>
             <div>
               <p className="text-sm text-gray-600">Latest Month Expenses</p>
               <p className="text-2xl font-bold">{formatCurrency(latestExpense)}</p>
             </div>
           </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${expenseDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${expenseBadgeClass}`}>
             {expenseDown ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
             {expenseDown ? 'Down vs last month' : 'Up vs last month'}
           </div>

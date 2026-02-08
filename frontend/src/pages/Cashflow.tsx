@@ -61,18 +61,21 @@ export default function Cashflow() {
     );
   }
 
-  const lastMonth = data?.monthlyCashflow?.length
-    ? data.monthlyCashflow[data.monthlyCashflow.length - 1]
-    : null;
-  const prevMonth = data?.monthlyCashflow?.length && data.monthlyCashflow.length > 1
-    ? data.monthlyCashflow[data.monthlyCashflow.length - 2]
-    : null;
-  const netDelta = lastMonth && prevMonth ? lastMonth.net - prevMonth.net : 0;
+  const months = data?.monthlyCashflow || [];
+  const lastMonth = months.length ? months[months.length - 1] : null;
+  const prevMonth = months.length > 1 ? months[months.length - 2] : null;
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonth = months.find((m) => (m.month || '').startsWith(currentMonthKey)) || lastMonth;
+
+  const avgNetCashflow = (currentMonth?.inflow || 0) - (currentMonth?.outflow || 0);
+  const prevAvgNetCashflow = prevMonth ? (prevMonth.inflow - prevMonth.outflow) : 0;
+  const netDelta = avgNetCashflow - prevAvgNetCashflow;
   const netTrend = prevMonth
     ? netDelta >= 0
-      ? `Up ${((netDelta / Math.abs(prevMonth.net || 1)) * 100).toFixed(1)}%`
-      : `Down ${Math.abs((netDelta / Math.abs(prevMonth.net || 1)) * 100).toFixed(1)}%`
+      ? `Up ${((netDelta / Math.abs(prevAvgNetCashflow || 1)) * 100).toFixed(1)}%`
+      : `Down ${Math.abs((netDelta / Math.abs(prevAvgNetCashflow || 1)) * 100).toFixed(1)}%`
     : 'No trend';
+  const netPositive = avgNetCashflow >= 0;
 
   return (
     <div className="space-y-6">
@@ -94,19 +97,20 @@ export default function Cashflow() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
+        <div className={`card border-transparent bg-gradient-to-br ${netPositive ? 'from-white to-emerald-50' : 'from-white to-rose-50'}`}>
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Wallet className="w-6 h-6 text-blue-600" />
+            <div className={`p-3 rounded-lg ${netPositive ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+              <Wallet className={`w-6 h-6 ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`} />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Net Cashflow</p>
-              <p className={`text-2xl font-bold ${(lastMonth?.net || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {formatCurrency(lastMonth?.net || 0)}
+              <p className="text-sm text-gray-600">Avg Net Cashflow</p>
+              <p className={`text-2xl font-bold ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {formatCurrency(avgNetCashflow)}
               </p>
             </div>
           </div>
-          <div className={`mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${netDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${netDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {netDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {netTrend}
           </div>
         </div>
@@ -118,7 +122,7 @@ export default function Cashflow() {
             <div>
               <p className="text-sm text-gray-600">Latest Inflow</p>
               <p className="text-2xl font-bold text-emerald-700">
-                {formatCurrency(lastMonth?.inflow || 0)}
+                {formatCurrency(currentMonth?.inflow || 0)}
               </p>
             </div>
           </div>
@@ -131,7 +135,7 @@ export default function Cashflow() {
             <div>
               <p className="text-sm text-gray-600">Latest Outflow</p>
               <p className="text-2xl font-bold text-rose-700">
-                {formatCurrency(lastMonth?.outflow || 0)}
+                {formatCurrency(currentMonth?.outflow || 0)}
               </p>
             </div>
           </div>
