@@ -359,28 +359,33 @@ const getCashflowDashboard = async (companyId, period = '6m') => {
     raw: true
   });
 
-  // Format monthly data
-  const monthlyCashflow = [];
-  const months = Array.from(new Set(cashflowData.map(d => d.month))).sort((a, b) => {
-    const da = new Date(a).getTime();
-    const db = new Date(b).getTime();
-    return da - db;
+  // Format monthly data (normalize month key to avoid Date object identity issues)
+  const monthlyMap = {};
+  cashflowData.forEach((row) => {
+    const monthKey = new Date(row.month).toISOString().slice(0, 7);
+    if (!monthlyMap[monthKey]) {
+      monthlyMap[monthKey] = { inflow: 0, outflow: 0 };
+    }
+    if (row.type === 'REVENUE') {
+      monthlyMap[monthKey].inflow += parseFloat(row.total || 0);
+    }
+    if (row.type === 'EXPENSE') {
+      monthlyMap[monthKey].outflow += parseFloat(row.total || 0);
+    }
   });
 
-  months.forEach(month => {
-    const inflow = cashflowData.find(d => d.month === month && d.type === 'REVENUE');
-    const outflow = cashflowData.find(d => d.month === month && d.type === 'EXPENSE');
-
-    const inflowTotal = parseFloat(inflow?.total || 0);
-    const outflowTotal = parseFloat(outflow?.total || 0);
-
-    monthlyCashflow.push({
-      month,
-      inflow: inflowTotal,
-      outflow: outflowTotal,
-      net: inflowTotal - outflowTotal
+  const monthlyCashflow = Object.keys(monthlyMap)
+    .sort()
+    .map((monthKey) => {
+      const inflowTotal = monthlyMap[monthKey].inflow;
+      const outflowTotal = monthlyMap[monthKey].outflow;
+      return {
+        month: `${monthKey}-01`,
+        inflow: inflowTotal,
+        outflow: outflowTotal,
+        net: inflowTotal - outflowTotal
+      };
     });
-  });
 
   // Get cash balance history
   const cashHistory = await CashBalance.findAll({
