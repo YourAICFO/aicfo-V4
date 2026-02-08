@@ -1,7 +1,9 @@
 const { Sequelize } = require('sequelize');
 const { FinancialTransaction, Subscription, CashBalance } = require('../models');
+const { assertTrialOrActive } = require('./subscriptionService');
 
 const createTransaction = async (companyId, transactionData) => {
+  await assertTrialOrActive(companyId);
   // Check subscription limits
   const subscription = await Subscription.findOne({ where: { companyId } });
 
@@ -81,6 +83,7 @@ const getTransactionById = async (transactionId, companyId) => {
 };
 
 const updateTransaction = async (transactionId, companyId, updateData) => {
+  await assertTrialOrActive(companyId);
   const transaction = await FinancialTransaction.findOne({
     where: { id: transactionId, companyId }
   });
@@ -108,6 +111,7 @@ const updateTransaction = async (transactionId, companyId, updateData) => {
 };
 
 const deleteTransaction = async (transactionId, companyId) => {
+  await assertTrialOrActive(companyId);
   const transaction = await FinancialTransaction.findOne({
     where: { id: transactionId, companyId }
   });

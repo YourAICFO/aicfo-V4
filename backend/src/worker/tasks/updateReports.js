@@ -1,5 +1,6 @@
 const { Sequelize } = require('sequelize');
 const { FinancialTransaction, FinancialReport, sequelize } = require('../../models');
+const { assertTrialOrActive } = require('../../services/subscriptionService');
 
 const buildReportData = async (companyId, periodStart, periodEnd, type) => {
   const baseWhere = {
@@ -58,6 +59,7 @@ const buildReportData = async (companyId, periodStart, periodEnd, type) => {
 };
 
 const updateReports = async ({ companyId, periodStart, periodEnd }) => {
+  await assertTrialOrActive(companyId);
   const types = ['P_AND_L', 'CASH_FLOW', 'BALANCE_SHEET'];
 
   return sequelize.transaction(async (t) => {

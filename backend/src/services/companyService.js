@@ -2,9 +2,16 @@ const { Company, Subscription, FinancialTransaction, CashBalance, Integration, A
 const { createTrialSubscription } = require('./subscriptionService');
 
 const createCompany = async (userId, companyData) => {
+  const now = new Date();
+  const trialEnd = new Date(now);
+  trialEnd.setDate(trialEnd.getDate() + 30);
+
   const company = await Company.create({
     ...companyData,
-    ownerId: userId
+    ownerId: userId,
+    trialStartDate: now,
+    trialEndDate: trialEnd,
+    subscriptionStatus: 'trial'
   });
 
   // Create trial subscription

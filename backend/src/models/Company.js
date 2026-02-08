@@ -62,6 +62,21 @@ const Company = sequelize.define('Company', {
     type: DataTypes.INTEGER,
     defaultValue: 4,
     field: 'financial_year_start'
+  },
+  trialStartDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'trial_start_date'
+  },
+  trialEndDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'trial_end_date'
+  },
+  subscriptionStatus: {
+    type: DataTypes.ENUM('trial', 'active', 'expired'),
+    allowNull: true,
+    field: 'subscription_status'
   }
 }, {
   tableName: 'companies',

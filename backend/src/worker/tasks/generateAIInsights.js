@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 const { Sequelize } = require('sequelize');
 const { AIInsight } = require('../../models');
 const { dashboardService } = require('../../services/dashboardService');
+const { assertTrialOrActive } = require('../../services/subscriptionService');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -18,6 +19,7 @@ ${JSON.stringify(context, null, 2)}
 };
 
 const generateAIInsights = async ({ companyId }) => {
+  await assertTrialOrActive(companyId);
   const overview = await dashboardService.getCFOOverview(companyId);
   const revenue = await dashboardService.getRevenueDashboard(companyId, '3m');
   const expenses = await dashboardService.getExpenseDashboard(companyId, '3m');

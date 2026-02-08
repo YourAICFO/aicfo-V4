@@ -1,7 +1,9 @@
 const { Sequelize } = require('sequelize');
 const { FinancialTransaction, sequelize } = require('../../models');
+const { assertTrialOrActive } = require('../../services/subscriptionService');
 
 const batchRecalc = async ({ companyId, periodStart, periodEnd }) => {
+  await assertTrialOrActive(companyId);
   return sequelize.transaction(async (t) => {
     const totals = await FinancialTransaction.findAll({
       where: {

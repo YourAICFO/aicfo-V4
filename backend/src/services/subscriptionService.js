@@ -47,7 +47,7 @@ const ensureSubscription = async (companyId) => {
   if (existing) {
     const updates = {};
     if (!existing.subscriptionStatus) {
-      updates.subscriptionStatus = existing.planType && existing.planType !== 'FREE' ? 'active' : 'trial';
+      updates.subscriptionStatus = existing.planType && existing.planType !== 'FREE' ? 'active' : 'expired';
     }
 
     if (updates.subscriptionStatus === 'trial' || existing.subscriptionStatus === 'trial') {
@@ -60,6 +60,11 @@ const ensureSubscription = async (companyId) => {
       if (existing.accountLocked === null || existing.accountLocked === undefined) {
         updates.accountLocked = false;
       }
+    }
+
+    if ((existing.planType && existing.planType !== 'FREE') && existing.subscriptionStatus !== 'active') {
+      updates.subscriptionStatus = 'active';
+      updates.accountLocked = false;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -95,11 +100,20 @@ const checkAccess = async (companyId) => {
   if (updated.accountLocked || updated.subscriptionStatus === 'expired') {
     return {
       allowed: false,
-      reason: 'Your trial has expired. Please subscribe to continue.'
+      reason: 'Your free trial has expired. Please upgrade.'
     };
   }
 
   return { allowed: true };
+};
+
+const assertTrialOrActive = async (companyId) => {
+  const subscription = await ensureSubscription(companyId);
+  const updated = await lockExpiredTrialIfNeeded(subscription);
+  if (updated.accountLocked || updated.subscriptionStatus === 'expired') {
+    throw new Error('Your free trial has expired. Please upgrade.');
+  }
+  return updated;
 };
 
 const getStatus = async (companyId) => {
@@ -142,5 +156,6 @@ module.exports = {
   ensureSubscription,
   checkAccess,
   getStatus,
-  lockExpiredTrials
+  lockExpiredTrials,
+  assertTrialOrActive
 };
