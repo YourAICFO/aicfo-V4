@@ -65,10 +65,10 @@ export default function Login() {
           </div>
           <button
             type="button"
-            onClick={() => navigate(isAuthenticated ? '/dashboard' : '/')}
+            onClick={() => navigate('/')}
             className="text-sm text-slate-200 hover:text-white"
           >
-            {isAuthenticated ? 'Return to dashboard' : 'Return to home'}
+            Return to home
           </button>
         </div>
 

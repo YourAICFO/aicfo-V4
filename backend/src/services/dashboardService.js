@@ -3,7 +3,7 @@ const { FinancialTransaction, CashBalance, AIInsight } = require('../models');
 
 const getCFOOverview = async (companyId) => {
   const now = new Date();
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // Get current cash balance
@@ -11,8 +11,16 @@ const getCFOOverview = async (companyId) => {
     where: { companyId },
     order: [['date', 'DESC']]
   });
+  const latestBank = await CashBalance.findOne({
+    where: {
+      companyId,
+      bankName: { [Sequelize.Op.ne]: null }
+    },
+    order: [['date', 'DESC']]
+  });
 
   let currentCash = latestCash ? parseFloat(latestCash.amount) : 0;
+  let bankBalance = latestBank ? parseFloat(latestBank.amount) : 0;
   if (!latestCash) {
     const latestOpening = await FinancialTransaction.findOne({
       where: { companyId, type: 'OPENING_BALANCE' },
@@ -20,12 +28,15 @@ const getCFOOverview = async (companyId) => {
     });
     currentCash = latestOpening ? parseFloat(latestOpening.amount) : 0;
   }
+  if (!latestBank) {
+    bankBalance = 0;
+  }
 
   // Get monthly inflows and outflows for last 6 months
   const monthlyData = await FinancialTransaction.findAll({
     where: {
       companyId,
-      date: { [Sequelize.Op.gte]: sixMonthsAgo }
+      date: { [Sequelize.Op.gte]: threeMonthsAgo }
     },
     attributes: [
       [Sequelize.fn('DATE_TRUNC', 'month', Sequelize.col('date')), 'month'],
@@ -40,7 +51,7 @@ const getCFOOverview = async (companyId) => {
   const monthlyInflows = [];
   const monthlyOutflows = [];
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 3; i++) {
     const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthStr = month.toISOString().slice(0, 7);
 
@@ -55,19 +66,24 @@ const getCFOOverview = async (companyId) => {
     monthlyOutflows.push(outflow ? parseFloat(outflow.total) : 0);
   }
 
-  const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / 6;
-  const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / 6;
+  const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / 3;
+  const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / 3;
   const netCashFlow = avgMonthlyInflow - avgMonthlyOutflow;
 
   // Calculate runway
   let runwayMonths = 0;
   let runwayStatus = 'RED';
 
-  if (netCashFlow <= 0) {
+  const cashBase = currentCash + bankBalance;
+  const runwayDenominator = avgMonthlyOutflow > 0 && avgMonthlyInflow > 0
+    ? (avgMonthlyInflow / avgMonthlyOutflow)
+    : 0;
+
+  if (runwayDenominator <= 0) {
     runwayMonths = 0;
     runwayStatus = 'RED';
   } else {
-    runwayMonths = currentCash / netCashFlow;
+    runwayMonths = cashBase / runwayDenominator;
     if (runwayMonths >= 6) {
       runwayStatus = 'GREEN';
     } else if (runwayMonths >= 3) {
@@ -92,6 +108,7 @@ const getCFOOverview = async (companyId) => {
   return {
     cashPosition: {
       currentBalance: currentCash,
+      bankBalance,
       currency: 'INR'
     },
     runway: {

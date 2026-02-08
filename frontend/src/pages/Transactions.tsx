@@ -226,7 +226,7 @@ export default function Transactions() {
             className="border-none bg-transparent focus:ring-0"
           >
             <option value="">All Types</option>
-            <option value="OPENING_BALANCE">Opening Balance</option>
+            <option value="OPENING_BALANCE">Current Cash / Bank Balance</option>
             <option value="REVENUE">Revenue</option>
             <option value="EXPENSE">Expense</option>
           </select>
@@ -338,7 +338,7 @@ export default function Transactions() {
                       className="input"
                       required
                     >
-                      <option value="OPENING_BALANCE">Opening Balance</option>
+                      <option value="OPENING_BALANCE">Current Cash / Bank Balance</option>
                       <option value="REVENUE">Revenue</option>
                       <option value="EXPENSE">Expense</option>
                     </select>
