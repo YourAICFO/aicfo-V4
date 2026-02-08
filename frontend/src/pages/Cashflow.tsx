@@ -64,11 +64,14 @@ export default function Cashflow() {
   const months = data?.monthlyCashflow || [];
   const lastMonth = months.length ? months[months.length - 1] : null;
   const prevMonth = months.length > 1 ? months[months.length - 2] : null;
-  const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentMonth = months.find((m) => (m.month || '').startsWith(currentMonthKey)) || lastMonth;
 
-  const avgNetCashflow = (currentMonth?.inflow || 0) - (currentMonth?.outflow || 0);
-  const prevAvgNetCashflow = prevMonth ? (prevMonth.inflow - prevMonth.outflow) : 0;
+  const latestInflow = Number(lastMonth?.inflow || 0);
+  const latestOutflow = Number(lastMonth?.outflow || 0);
+  const prevInflow = Number(prevMonth?.inflow || 0);
+  const prevOutflow = Number(prevMonth?.outflow || 0);
+
+  const avgNetCashflow = latestInflow - latestOutflow;
+  const prevAvgNetCashflow = prevInflow - prevOutflow;
   const netDelta = avgNetCashflow - prevAvgNetCashflow;
   const netTrend = prevMonth
     ? netDelta >= 0
@@ -76,6 +79,22 @@ export default function Cashflow() {
       : `Down ${Math.abs((netDelta / Math.abs(prevAvgNetCashflow || 1)) * 100).toFixed(1)}%`
     : 'No trend';
   const netPositive = avgNetCashflow >= 0;
+
+  const inflowDelta = latestInflow - prevInflow;
+  const inflowTrend = prevMonth
+    ? inflowDelta >= 0
+      ? `Up ${((inflowDelta / Math.abs(prevInflow || 1)) * 100).toFixed(1)}%`
+      : `Down ${Math.abs((inflowDelta / Math.abs(prevInflow || 1)) * 100).toFixed(1)}%`
+    : 'No trend';
+  const inflowUp = inflowDelta >= 0;
+
+  const outflowDelta = latestOutflow - prevOutflow;
+  const outflowTrend = prevMonth
+    ? outflowDelta >= 0
+      ? `Up ${((outflowDelta / Math.abs(prevOutflow || 1)) * 100).toFixed(1)}%`
+      : `Down ${Math.abs((outflowDelta / Math.abs(prevOutflow || 1)) * 100).toFixed(1)}%`
+    : 'No trend';
+  const outflowDown = outflowDelta <= 0;
 
   return (
     <div className="space-y-6">
@@ -116,28 +135,44 @@ export default function Cashflow() {
         </div>
         <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            <div className={`p-3 rounded-lg ${inflowUp ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+              {inflowUp ? (
+                <TrendingUp className="w-6 h-6 text-emerald-600" />
+              ) : (
+                <TrendingDown className="w-6 h-6 text-rose-600" />
+              )}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Inflow</p>
+              <p className="text-sm text-gray-600">Latest Month Revenue</p>
               <p className="text-2xl font-bold text-emerald-700">
-                {formatCurrency(currentMonth?.inflow || 0)}
+                {formatCurrency(latestInflow)}
               </p>
             </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${inflowUp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {inflowUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {inflowTrend}
           </div>
         </div>
         <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-rose-100 rounded-lg">
-              <TrendingDown className="w-6 h-6 text-rose-600" />
+            <div className={`p-3 rounded-lg ${outflowDown ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+              {outflowDown ? (
+                <TrendingDown className="w-6 h-6 text-emerald-600" />
+              ) : (
+                <TrendingUp className="w-6 h-6 text-rose-600" />
+              )}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Latest Outflow</p>
+              <p className="text-sm text-gray-600">Latest Month Expenses</p>
               <p className="text-2xl font-bold text-rose-700">
-                {formatCurrency(currentMonth?.outflow || 0)}
+                {formatCurrency(latestOutflow)}
               </p>
             </div>
+          </div>
+          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${outflowDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {outflowDown ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+            {outflowTrend}
           </div>
         </div>
       </div>
