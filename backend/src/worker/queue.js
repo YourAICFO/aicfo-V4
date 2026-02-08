@@ -39,7 +39,6 @@ const enqueueJob = async (name, data, options = {}) => {
 
 module.exports = {
   queue,
-  scheduler,
   events,
   enqueueJob,
   connection,
