@@ -16,9 +16,11 @@ const {
   CurrentLoan,
   CurrentLiquidityMetric,
   CFOAlert,
+  CFOMetric,
   AccountingTermMapping,
   sequelize
 } = require('../models');
+const debtorsService = require('./debtorsService');
 
 const normalizeMonth = (value) => {
   if (!value) return null;
@@ -136,6 +138,98 @@ const computeAveragesForEntity = async (Model, companyId, nameField, nameValue, 
     avg6m: avg(6),
     avg12m: avg(12)
   };
+};
+
+const upsertMetric = async (companyId, metricKey, metricValue, timeScope, transaction) => {
+  await CFOMetric.upsert({
+    companyId,
+    metricKey,
+    metricValue: metricValue === null || metricValue === undefined ? null : metricValue,
+    metricText: metricValue === null || metricValue === undefined ? null : String(metricValue),
+    timeScope: timeScope || 'live',
+    updatedAt: new Date()
+  }, { transaction });
+};
+
+const computeCfoMetrics = async (companyId, transaction) => {
+  const latestClosedKey = getLatestClosedMonthKey();
+  const currentCashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true, transaction });
+  const currentDebtors = await CurrentDebtor.findAll({ where: { companyId }, raw: true, transaction });
+  const currentCreditors = await CurrentCreditor.findAll({ where: { companyId }, raw: true, transaction });
+  const currentLoans = await CurrentLoan.findAll({ where: { companyId }, raw: true, transaction });
+
+  const cashBalance = currentCashRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const debtorsBalance = currentDebtors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const creditorsBalance = currentCreditors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const loansBalance = currentLoans.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+
+  await upsertMetric(companyId, 'cash_balance_live', cashBalance, 'live', transaction);
+  await upsertMetric(companyId, 'debtors_balance_live', debtorsBalance, 'live', transaction);
+  await upsertMetric(companyId, 'creditors_balance_live', creditorsBalance, 'live', transaction);
+  await upsertMetric(companyId, 'loans_balance_live', loansBalance, 'live', transaction);
+
+  const liquidity = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true, transaction });
+  await upsertMetric(companyId, 'cash_runway_months', Number(liquidity?.cash_runway_months || 0), 'live', transaction);
+  await upsertMetric(companyId, 'avg_net_cash_outflow_3m', Number(liquidity?.avg_net_cash_outflow_3m || 0), '3m', transaction);
+
+  if (latestClosedKey) {
+    const latestSummary = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: latestClosedKey },
+      raw: true,
+      transaction
+    });
+    await upsertMetric(companyId, 'revenue_last_closed', Number(latestSummary?.total_revenue || 0), 'last_closed_month', transaction);
+    await upsertMetric(companyId, 'expenses_last_closed', Number(latestSummary?.total_expenses || 0), 'last_closed_month', transaction);
+    await upsertMetric(companyId, 'net_profit_last_closed', Number(latestSummary?.net_profit || 0), 'last_closed_month', transaction);
+
+    const recentKeys = listMonthKeysBetween(addMonths(latestClosedKey, -2), latestClosedKey);
+    const prevKeys = listMonthKeysBetween(addMonths(latestClosedKey, -5), addMonths(latestClosedKey, -3));
+
+    const recentRows = await MonthlyTrialBalanceSummary.findAll({
+      where: { companyId, month: { [Sequelize.Op.in]: recentKeys } },
+      raw: true,
+      transaction
+    });
+    const prevRows = await MonthlyTrialBalanceSummary.findAll({
+      where: { companyId, month: { [Sequelize.Op.in]: prevKeys } },
+      raw: true,
+      transaction
+    });
+    const recentRevenueAvg = recentRows.length
+      ? recentRows.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0) / recentRows.length
+      : 0;
+    const prevRevenueAvg = prevRows.length
+      ? prevRows.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0) / prevRows.length
+      : 0;
+    const revenueGrowth3m = prevRevenueAvg === 0 ? 0 : (recentRevenueAvg - prevRevenueAvg) / prevRevenueAvg;
+
+    const recentExpenseAvg = recentRows.length
+      ? recentRows.reduce((sum, r) => sum + Number(r.total_expenses || 0), 0) / recentRows.length
+      : 0;
+    const prevExpenseAvg = prevRows.length
+      ? prevRows.reduce((sum, r) => sum + Number(r.total_expenses || 0), 0) / prevRows.length
+      : 0;
+    const expenseGrowth3m = prevExpenseAvg === 0 ? 0 : (recentExpenseAvg - prevExpenseAvg) / prevExpenseAvg;
+
+    await upsertMetric(companyId, 'revenue_growth_3m', revenueGrowth3m, '3m', transaction);
+    await upsertMetric(companyId, 'expense_growth_3m', expenseGrowth3m, '3m', transaction);
+  }
+
+  const top5 = currentDebtors
+    .slice(0, 5)
+    .reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const concentrationRatio = debtorsBalance > 0 ? top5 / debtorsBalance : 0;
+  await upsertMetric(companyId, 'debtors_concentration_ratio', concentrationRatio, 'live', transaction);
+
+  const cashPressure = creditorsBalance > cashBalance;
+  await upsertMetric(companyId, 'creditors_cash_pressure', cashPressure ? 1 : 0, 'live', transaction);
+
+  try {
+    const debtorsSummary = await debtorsService.getSummary(companyId);
+    await upsertMetric(companyId, 'debtors_revenue_divergence', debtorsSummary?.divergenceFlag ? 1 : 0, 'last_closed_month', transaction);
+  } catch (error) {
+    await upsertMetric(companyId, 'debtors_revenue_divergence', 0, 'last_closed_month', transaction);
+  }
 };
 
 const upsertDebtorsCreditors = async (companyId, monthKey, debtors, creditors, transaction) => {
@@ -469,12 +563,15 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
 
     await updateCurrentBalances(companyId, currentBalances, transaction);
     await computeLiquidityMetrics(companyId, transaction);
+    await computeCfoMetrics(companyId, transaction);
     await upsertAlerts(companyId, transaction);
   });
 
   try {
     const { recomputeForCompany } = require('./cfoQuestionService');
     await recomputeForCompany(companyId);
+    const { generateInsights } = require('./aiService');
+    await generateInsights(companyId);
   } catch (error) {
     console.warn('CFO question recompute failed:', error.message);
   }

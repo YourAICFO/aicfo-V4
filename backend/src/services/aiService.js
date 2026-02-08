@@ -4,6 +4,14 @@ const dashboardService = require('./dashboardService');
 const debtorsService = require('./debtorsService');
 const creditorsService = require('./creditorsService');
 const cfoQuestionService = require('./cfoQuestionService');
+let OpenAI;
+if (process.env.OPENAI_API_KEY) {
+  try {
+    OpenAI = require('openai');
+  } catch (error) {
+    OpenAI = null;
+  }
+}
 
 const SYSTEM_PROMPT = `You are a conservative CFO and Chartered Accountant advising Indian SMEs.
 Use only the provided company data.
@@ -51,6 +59,27 @@ const generateInsights = async (companyId) => {
   }
 
   return insights;
+};
+
+const rewriteMessageIfEnabled = async (message, context) => {
+  if (!process.env.OPENAI_API_KEY || process.env.AI_REWRITE_ENABLED !== 'true' || !OpenAI) {
+    return message;
+  }
+  try {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: 'Rewrite the CFO answer in a clear, professional tone. Do not add or change any numbers. Do not add new facts.' },
+        { role: 'user', content: `Answer: ${message}\nContext (do not compute): ${JSON.stringify(context || {})}` }
+      ]
+    });
+    const content = response?.choices?.[0]?.message?.content?.trim();
+    return content || message;
+  } catch (error) {
+    return message;
+  }
 };
 
 const getInsights = async (companyId) => {
@@ -113,9 +142,14 @@ const chatWithCFO = async (companyId, message) => {
     };
   }
   const result = await cfoQuestionService.answerQuestion(companyId, code);
+  const rewritten = await rewriteMessageIfEnabled(result.message, {
+    code: result.code,
+    severity: result.severity,
+    metrics: result.metrics
+  });
 
   return {
-    message: result.message,
+    message: rewritten,
     matched: true,
     questionCode: result.code,
     severity: result.severity,

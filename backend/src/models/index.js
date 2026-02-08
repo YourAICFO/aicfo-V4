@@ -25,6 +25,7 @@ const { CurrentCreditor } = require('./CurrentCreditor');
 const { CurrentLoan } = require('./CurrentLoan');
 const { CurrentLiquidityMetric } = require('./CurrentLiquidityMetric');
 const { CFOAlert } = require('./CFOAlert');
+const { CFOMetric } = require('./CFOMetric');
 const { CFOQuestion } = require('./CFOQuestion');
 const { CFOQuestionMetric } = require('./CFOQuestionMetric');
 const { CFOQuestionRule } = require('./CFOQuestionRule');
@@ -109,6 +110,8 @@ CurrentLiquidityMetric.belongsTo(Company, { foreignKey: 'company_id', as: 'compa
 
 Company.hasMany(CFOAlert, { foreignKey: 'company_id', as: 'alerts' });
 CFOAlert.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+Company.hasMany(CFOMetric, { foreignKey: 'company_id', as: 'cfoMetrics' });
+CFOMetric.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
 // CFO Question Engine
 CFOQuestion.hasMany(CFOQuestionMetric, { foreignKey: 'question_id', as: 'metrics' });
@@ -147,6 +150,7 @@ module.exports = {
   CurrentLoan,
   CurrentLiquidityMetric,
   CFOAlert,
+  CFOMetric,
   CFOQuestion,
   CFOQuestionMetric,
   CFOQuestionRule,
