@@ -8,6 +8,13 @@ const { Integration } = require('./Integration');
 const { AIInsight } = require('./AIInsight');
 const { FinancialReport } = require('./FinancialReport');
 const { Notification } = require('./Notification');
+const { AccountingMonth } = require('./AccountingMonth');
+const { MonthlyTrialBalanceSummary } = require('./MonthlyTrialBalanceSummary');
+const { MonthlyRevenueBreakdown } = require('./MonthlyRevenueBreakdown');
+const { MonthlyExpenseBreakdown } = require('./MonthlyExpenseBreakdown');
+const { MonthlyDebtorsSnapshot } = require('./MonthlyDebtorsSnapshot');
+const { MonthlyCreditorsSnapshot } = require('./MonthlyCreditorsSnapshot');
+const { AccountingTermMapping } = require('./AccountingTermMapping');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -41,6 +48,30 @@ FinancialReport.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 Company.hasMany(Notification, { foreignKey: 'company_id', as: 'notifications' });
 Notification.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+// Company - AccountingMonth (One-to-Many)
+Company.hasMany(AccountingMonth, { foreignKey: 'company_id', as: 'accountingMonths' });
+AccountingMonth.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - MonthlyTrialBalanceSummary (One-to-Many)
+Company.hasMany(MonthlyTrialBalanceSummary, { foreignKey: 'company_id', as: 'monthlySummaries' });
+MonthlyTrialBalanceSummary.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - MonthlyRevenueBreakdown (One-to-Many)
+Company.hasMany(MonthlyRevenueBreakdown, { foreignKey: 'company_id', as: 'monthlyRevenue' });
+MonthlyRevenueBreakdown.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - MonthlyExpenseBreakdown (One-to-Many)
+Company.hasMany(MonthlyExpenseBreakdown, { foreignKey: 'company_id', as: 'monthlyExpenses' });
+MonthlyExpenseBreakdown.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - MonthlyDebtorsSnapshot (One-to-Many)
+Company.hasMany(MonthlyDebtorsSnapshot, { foreignKey: 'company_id', as: 'monthlyDebtors' });
+MonthlyDebtorsSnapshot.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+// Company - MonthlyCreditorsSnapshot (One-to-Many)
+Company.hasMany(MonthlyCreditorsSnapshot, { foreignKey: 'company_id', as: 'monthlyCreditors' });
+MonthlyCreditorsSnapshot.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
   sequelize,
   User,
@@ -51,5 +82,12 @@ module.exports = {
   Integration,
   AIInsight,
   FinancialReport,
-  Notification
+  Notification,
+  AccountingMonth,
+  MonthlyTrialBalanceSummary,
+  MonthlyRevenueBreakdown,
+  MonthlyExpenseBreakdown,
+  MonthlyDebtorsSnapshot,
+  MonthlyCreditorsSnapshot,
+  AccountingTermMapping
 };

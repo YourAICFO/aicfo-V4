@@ -6,6 +6,7 @@ const { generateAIInsights } = require('./tasks/generateAIInsights');
 const { updateReports } = require('./tasks/updateReports');
 const { batchRecalc } = require('./tasks/batchRecalc');
 const { sendNotifications } = require('./tasks/sendNotifications');
+const { generateMonthlySnapshots } = require('./tasks/generateMonthlySnapshots');
 
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '4', 10);
 
@@ -13,7 +14,8 @@ const handlers = {
   generateAIInsights,
   updateReports,
   batchRecalc,
-  sendNotifications
+  sendNotifications,
+  generateMonthlySnapshots
 };
 
 const worker = new Worker(

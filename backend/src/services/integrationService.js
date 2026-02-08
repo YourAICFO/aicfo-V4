@@ -1,4 +1,6 @@
 const { Integration, Subscription, FinancialTransaction } = require('../models');
+const { enqueueJob } = require('../worker/queue');
+const { normalizeMonth } = require('./monthlySnapshotService');
 
 const enforceIntegrationLimit = async (companyId, subscription) => {
   if (!subscription) return;
@@ -159,7 +161,12 @@ const syncIntegration = async (integrationId, companyId) => {
     // In production, this would call the actual API
     const mockTransactions = generateMockTransactions(integration.type);
 
+    let amendedMonthKey = null;
     for (const tx of mockTransactions) {
+      const txMonth = normalizeMonth(tx.date);
+      if (txMonth && (!amendedMonthKey || txMonth < amendedMonthKey)) {
+        amendedMonthKey = txMonth;
+      }
       await FinancialTransaction.findOrCreate({
         where: {
           companyId,
@@ -172,6 +179,11 @@ const syncIntegration = async (integrationId, companyId) => {
         }
       });
     }
+
+    await enqueueJob('generateMonthlySnapshots', {
+      companyId,
+      amendedMonth: amendedMonthKey
+    });
 
     await integration.update({
       status: 'CONNECTED',
