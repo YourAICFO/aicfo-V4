@@ -31,6 +31,24 @@ const getCFOOverview = async (companyId) => {
   if (!latestBank) {
     bankBalance = 0;
   }
+  if (!latestCash && currentCash === 0) {
+    const totals = await FinancialTransaction.findAll({
+      where: { companyId },
+      attributes: [
+        'type',
+        [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+      ],
+      group: ['type'],
+      raw: true
+    });
+    const revenueTotal = totals.find(t => t.type === 'REVENUE');
+    const expenseTotal = totals.find(t => t.type === 'EXPENSE');
+    const openingTotal = totals.find(t => t.type === 'OPENING_BALANCE');
+    const revenue = parseFloat(revenueTotal?.total || 0);
+    const expenses = parseFloat(expenseTotal?.total || 0);
+    const opening = parseFloat(openingTotal?.total || 0);
+    currentCash = opening + revenue - expenses;
+  }
 
   // Get monthly inflows and outflows for last 6 months
   const monthlyData = await FinancialTransaction.findAll({
