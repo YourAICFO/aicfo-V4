@@ -140,13 +140,54 @@ const computeAveragesForEntity = async (Model, companyId, nameField, nameValue, 
   };
 };
 
-const upsertMetric = async (companyId, metricKey, metricValue, timeScope, transaction) => {
+const computeYoYGrowth = (currentValue, lastYearValue) => {
+  if (lastYearValue === null || lastYearValue === undefined) return null;
+  const prev = Number(lastYearValue);
+  if (!Number.isFinite(prev) || prev === 0) return null;
+  const curr = Number(currentValue || 0);
+  return (curr - prev) / Math.abs(prev);
+};
+
+const getRetentionWindow = (latestClosedKey) => {
+  if (!latestClosedKey) return { oldestKeepKey: null, openMonthKey: null, keys: [] };
+  const openMonthKey = addMonths(latestClosedKey, 1);
+  const oldestKeepKey = addMonths(latestClosedKey, -23);
+  const keys = listMonthKeysBetween(oldestKeepKey, openMonthKey);
+  return { oldestKeepKey, openMonthKey, keys };
+};
+
+const trimOldSnapshots = async (companyId, latestClosedKey, transaction) => {
+  const { oldestKeepKey } = getRetentionWindow(latestClosedKey);
+  if (!oldestKeepKey) return;
+  const whereOld = { companyId, month: { [Sequelize.Op.lt]: oldestKeepKey } };
+  await MonthlyTrialBalanceSummary.destroy({ where: whereOld, transaction });
+  await MonthlyRevenueBreakdown.destroy({ where: whereOld, transaction });
+  await MonthlyExpenseBreakdown.destroy({ where: whereOld, transaction });
+  await MonthlyDebtorsSnapshot.destroy({ where: whereOld, transaction });
+  await MonthlyCreditorsSnapshot.destroy({ where: whereOld, transaction });
+  await MonthlyDebtor.destroy({ where: whereOld, transaction });
+  await MonthlyCreditor.destroy({ where: whereOld, transaction });
+  await AccountingMonth.destroy({ where: whereOld, transaction });
+  await CFOMetric.destroy({
+    where: {
+      companyId,
+      month: { [Sequelize.Op.lt]: oldestKeepKey }
+    },
+    transaction
+  });
+};
+
+const upsertMetric = async (companyId, metricKey, metricValue, timeScope, transaction, opts = {}) => {
   await CFOMetric.upsert({
     companyId,
     metricKey,
     metricValue: metricValue === null || metricValue === undefined ? null : metricValue,
     metricText: metricValue === null || metricValue === undefined ? null : String(metricValue),
     timeScope: timeScope || 'live',
+    month: opts.month || null,
+    changePct: opts.changePct ?? null,
+    severity: opts.severity || null,
+    computedAt: new Date(),
     updatedAt: new Date()
   }, { transaction });
 };
@@ -169,8 +210,8 @@ const computeCfoMetrics = async (companyId, transaction) => {
   await upsertMetric(companyId, 'loans_balance_live', loansBalance, 'live', transaction);
 
   const liquidity = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true, transaction });
-  await upsertMetric(companyId, 'cash_runway_months', Number(liquidity?.cash_runway_months || 0), 'live', transaction);
-  await upsertMetric(companyId, 'avg_net_cash_outflow_3m', Number(liquidity?.avg_net_cash_outflow_3m || 0), '3m', transaction);
+  await upsertMetric(companyId, 'cash_runway_months', Number(liquidity?.cash_runway_months || 0), 'live', transaction, { month: latestClosedKey });
+  await upsertMetric(companyId, 'avg_net_cash_outflow_3m', Number(liquidity?.avg_net_cash_outflow_3m || 0), '3m', transaction, { month: latestClosedKey });
 
   if (latestClosedKey) {
     const latestSummary = await MonthlyTrialBalanceSummary.findOne({
@@ -178,9 +219,9 @@ const computeCfoMetrics = async (companyId, transaction) => {
       raw: true,
       transaction
     });
-    await upsertMetric(companyId, 'revenue_last_closed', Number(latestSummary?.total_revenue || 0), 'last_closed_month', transaction);
-    await upsertMetric(companyId, 'expenses_last_closed', Number(latestSummary?.total_expenses || 0), 'last_closed_month', transaction);
-    await upsertMetric(companyId, 'net_profit_last_closed', Number(latestSummary?.net_profit || 0), 'last_closed_month', transaction);
+    await upsertMetric(companyId, 'revenue_last_closed', Number(latestSummary?.total_revenue || 0), 'last_closed_month', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'expenses_last_closed', Number(latestSummary?.total_expenses || 0), 'last_closed_month', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'net_profit_last_closed', Number(latestSummary?.net_profit || 0), 'last_closed_month', transaction, { month: latestClosedKey });
 
     const recentKeys = listMonthKeysBetween(addMonths(latestClosedKey, -2), latestClosedKey);
     const prevKeys = listMonthKeysBetween(addMonths(latestClosedKey, -5), addMonths(latestClosedKey, -3));
@@ -211,24 +252,70 @@ const computeCfoMetrics = async (companyId, transaction) => {
       : 0;
     const expenseGrowth3m = prevExpenseAvg === 0 ? 0 : (recentExpenseAvg - prevExpenseAvg) / prevExpenseAvg;
 
-    await upsertMetric(companyId, 'revenue_growth_3m', revenueGrowth3m, '3m', transaction);
-    await upsertMetric(companyId, 'expense_growth_3m', expenseGrowth3m, '3m', transaction);
+    await upsertMetric(companyId, 'revenue_growth_3m', revenueGrowth3m, '3m', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'expense_growth_3m', expenseGrowth3m, '3m', transaction, { month: latestClosedKey });
+
+    const lastYearKey = addMonths(latestClosedKey, -12);
+    const lastYearSummary = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: lastYearKey },
+      raw: true,
+      transaction
+    });
+    if (!lastYearSummary) {
+      console.warn(`YoY metrics: no prior year month ${lastYearKey} for company ${companyId}`);
+    }
+    const revYoY = computeYoYGrowth(latestSummary?.total_revenue || 0, lastYearSummary?.total_revenue);
+    const expYoY = computeYoYGrowth(latestSummary?.total_expenses || 0, lastYearSummary?.total_expenses);
+    const profitYoY = computeYoYGrowth(latestSummary?.net_profit || 0, lastYearSummary?.net_profit);
+    const currentMargin = Number(latestSummary?.total_revenue || 0) > 0
+      ? Number(latestSummary?.net_profit || 0) / Number(latestSummary?.total_revenue || 0)
+      : null;
+    const lastYearMargin = Number(lastYearSummary?.total_revenue || 0) > 0
+      ? Number(lastYearSummary?.net_profit || 0) / Number(lastYearSummary?.total_revenue || 0)
+      : null;
+    const marginYoY = computeYoYGrowth(currentMargin, lastYearMargin);
+
+    await upsertMetric(companyId, 'revenue_yoy_growth_pct', revYoY, 'yoy', transaction, { month: latestClosedKey, changePct: revYoY !== null ? revYoY * 100 : null });
+    await upsertMetric(companyId, 'expense_yoy_growth_pct', expYoY, 'yoy', transaction, { month: latestClosedKey, changePct: expYoY !== null ? expYoY * 100 : null });
+    await upsertMetric(companyId, 'net_profit_yoy_growth_pct', profitYoY, 'yoy', transaction, { month: latestClosedKey, changePct: profitYoY !== null ? profitYoY * 100 : null });
+    await upsertMetric(companyId, 'gross_margin_yoy_growth_pct', marginYoY, 'yoy', transaction, { month: latestClosedKey, changePct: marginYoY !== null ? marginYoY * 100 : null });
+
+    const lastYearCash = Number(lastYearSummary?.cash_and_bank_balance || 0);
+    const cashYoYChange = lastYearSummary ? cashBalance - lastYearCash : null;
+    await upsertMetric(companyId, 'cash_balance_yoy_change', cashYoYChange, 'yoy', transaction, { month: latestClosedKey });
+
+    const lastYearDebtorsTotal = await MonthlyDebtor.findOne({
+      where: { companyId, month: lastYearKey },
+      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
+      raw: true,
+      transaction
+    });
+    const lastYearCreditorsTotal = await MonthlyCreditor.findOne({
+      where: { companyId, month: lastYearKey },
+      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
+      raw: true,
+      transaction
+    });
+    const debtorsYoY = lastYearDebtorsTotal ? debtorsBalance - Number(lastYearDebtorsTotal.total || 0) : null;
+    const creditorsYoY = lastYearCreditorsTotal ? creditorsBalance - Number(lastYearCreditorsTotal.total || 0) : null;
+    await upsertMetric(companyId, 'debtor_balance_yoy_change', debtorsYoY, 'yoy', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'creditor_balance_yoy_change', creditorsYoY, 'yoy', transaction, { month: latestClosedKey });
   }
 
   const top5 = currentDebtors
     .slice(0, 5)
     .reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const concentrationRatio = debtorsBalance > 0 ? top5 / debtorsBalance : 0;
-  await upsertMetric(companyId, 'debtors_concentration_ratio', concentrationRatio, 'live', transaction);
+  await upsertMetric(companyId, 'debtors_concentration_ratio', concentrationRatio, 'live', transaction, { month: latestClosedKey });
 
   const cashPressure = creditorsBalance > cashBalance;
-  await upsertMetric(companyId, 'creditors_cash_pressure', cashPressure ? 1 : 0, 'live', transaction);
+  await upsertMetric(companyId, 'creditors_cash_pressure', cashPressure ? 1 : 0, 'live', transaction, { month: latestClosedKey });
 
   try {
     const debtorsSummary = await debtorsService.getSummary(companyId);
-    await upsertMetric(companyId, 'debtors_revenue_divergence', debtorsSummary?.divergenceFlag ? 1 : 0, 'last_closed_month', transaction);
+    await upsertMetric(companyId, 'debtors_revenue_divergence', debtorsSummary?.divergenceFlag ? 1 : 0, 'last_closed_month', transaction, { month: latestClosedKey });
   } catch (error) {
-    await upsertMetric(companyId, 'debtors_revenue_divergence', 0, 'last_closed_month', transaction);
+    await upsertMetric(companyId, 'debtors_revenue_divergence', 0, 'last_closed_month', transaction, { month: latestClosedKey });
   }
 };
 
@@ -565,6 +652,7 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
     await computeLiquidityMetrics(companyId, transaction);
     await computeCfoMetrics(companyId, transaction);
     await upsertAlerts(companyId, transaction);
+    await trimOldSnapshots(companyId, latestClosedKey, transaction);
   });
 
   try {
@@ -583,5 +671,7 @@ module.exports = {
   normalizeMonth,
   getLatestClosedMonthKey,
   listMonthKeysBetween,
-  recomputeSnapshots
+  recomputeSnapshots,
+  computeYoYGrowth,
+  getRetentionWindow
 };

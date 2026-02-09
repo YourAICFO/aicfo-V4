@@ -27,11 +27,30 @@ const CFOMetric = sequelize.define('CFOMetric', {
     allowNull: true,
     field: 'metric_text'
   },
+  month: {
+    type: DataTypes.STRING(7),
+    allowNull: true
+  },
+  changePct: {
+    type: DataTypes.DECIMAL(12, 4),
+    allowNull: true,
+    field: 'change_pct'
+  },
+  severity: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   timeScope: {
     type: DataTypes.TEXT,
     allowNull: false,
     defaultValue: 'live',
     field: 'time_scope'
+  },
+  computedAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'computed_at',
+    defaultValue: DataTypes.NOW
   },
   updatedAt: {
     type: DataTypes.DATE,

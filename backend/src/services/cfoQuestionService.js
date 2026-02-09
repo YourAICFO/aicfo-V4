@@ -221,6 +221,19 @@ const getMetricValue = async (companyId, metricKey) => {
       const summary = await debtorsService.getSummary(companyId);
       return Boolean(summary?.divergenceFlag);
     }
+    case 'revenue_yoy_growth_pct':
+    case 'expense_yoy_growth_pct':
+    case 'net_profit_yoy_growth_pct':
+    case 'gross_margin_yoy_growth_pct': {
+      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'yoy' }, raw: true });
+      return cached && cached.metric_value !== null ? Number(cached.metric_value) : null;
+    }
+    case 'cash_balance_yoy_change':
+    case 'debtor_balance_yoy_change':
+    case 'creditor_balance_yoy_change': {
+      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'yoy' }, raw: true });
+      return cached && cached.metric_value !== null ? Number(cached.metric_value) : null;
+    }
     default:
       return null;
   }
@@ -232,6 +245,10 @@ const getMetricsForQuestion = async (companyId, questionId) => {
     raw: true
   });
   const result = {};
+  const latestClosedKey = getLatestClosedMonthKey();
+  const lastYearKey = latestClosedKey ? addMonths(latestClosedKey, -12) : null;
+  result.month = latestClosedKey || null;
+  result.month_last_year = lastYearKey || null;
   for (const metric of metrics) {
     result[metric.metric_key] = await getMetricValue(companyId, metric.metric_key);
   }
@@ -328,6 +345,13 @@ const mapQuestionCode = async (message) => {
   if (text.includes('expense') || text.includes('cost')) return 'EXPENSE_GROWTH_3M';
   if (text.includes('debtor') || text.includes('receivable')) return 'DEBTORS_CONCENTRATION';
   if (text.includes('creditor') || text.includes('payable')) return 'CREDITORS_PRESSURE';
+  if (text.includes('yoy') || text.includes('year over year') || text.includes('last year')) {
+    if (text.includes('revenue') || text.includes('sales')) return 'REVENUE_YOY_TREND';
+    if (text.includes('expense') || text.includes('cost')) return 'EXPENSE_YOY_TREND';
+    if (text.includes('profit') || text.includes('margin')) return 'PROFIT_YOY_TREND';
+    if (text.includes('debtor') || text.includes('receivable')) return 'DEBTOR_YOY_TREND';
+    if (text.includes('creditor') || text.includes('payable')) return 'CREDITOR_YOY_TREND';
+  }
   return null;
 };
 
