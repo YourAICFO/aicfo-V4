@@ -187,7 +187,6 @@ const getCFOOverview = async (companyId) => {
     where: { companyId, isRead: false, isDismissed: false }
   });
 
-  const latestClosedKey = normalizeMonth(latestClosedStart);
   const latestSummary = await MonthlyTrialBalanceSummary.findOne({
     where: { companyId, month: latestClosedKey },
     raw: true
