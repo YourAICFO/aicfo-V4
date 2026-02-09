@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { companyApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 export default function CreateCompany() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { setSelectedCompany } = useAuthStore();
 
   const [name, setName] = useState('');
   const [industry, setIndustry] = useState('');
@@ -17,11 +20,16 @@ export default function CreateCompany() {
     setLoading(true);
 
     try {
-      await companyApi.create({
+      const response = await companyApi.create({
         name,
         industry,
         currency,
       });
+
+      const companyId = response.data?.data?.id;
+      if (companyId) {
+        setSelectedCompany(companyId);
+      }
 
       navigate('/dashboard');
     } catch (err: any) {
@@ -35,6 +43,12 @@ export default function CreateCompany() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="card w-full max-w-md">
         <h2 className="text-2xl font-semibold mb-6">Create Company</h2>
+
+        {(location.state as any)?.message && (
+          <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            {(location.state as any)?.message}
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">

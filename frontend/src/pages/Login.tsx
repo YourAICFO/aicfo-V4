@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ShieldCheck, Sparkles, LineChart } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { authApi } from '../services/api';
+import { authApi, companyApi } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setAuth, isAuthenticated } = useAuthStore();
+  const { setAuth, isAuthenticated, setSelectedCompany } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,6 +40,18 @@ export default function Login() {
           localStorage.getItem("auth-storage")
         );
       }, 500);
+
+      const companiesResponse = await companyApi.getAll();
+      const companies = companiesResponse.data?.data || [];
+
+      if (!companies.length) {
+        navigate('/create-company', { state: { message: 'Please create or select a company first.' } });
+        return;
+      }
+
+      if (!useAuthStore.getState().selectedCompanyId) {
+        setSelectedCompany(companies[0].id);
+      }
 
       navigate('/dashboard');
     } catch (err: any) {
