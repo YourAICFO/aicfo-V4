@@ -809,6 +809,8 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
     await recomputeForCompany(companyId);
     const { generateInsights } = require('./aiService');
     await generateInsights(companyId);
+    const partyBalanceService = require('./partyBalanceService');
+    await partyBalanceService.upsertLatestFromSnapshot(companyId);
   } catch (error) {
     console.warn('CFO question recompute failed:', error.message);
   }

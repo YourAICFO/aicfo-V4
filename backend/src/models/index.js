@@ -30,6 +30,7 @@ const { CFOQuestion } = require('./CFOQuestion');
 const { CFOQuestionMetric } = require('./CFOQuestionMetric');
 const { CFOQuestionRule } = require('./CFOQuestionRule');
 const { CFOQuestionResult } = require('./CFOQuestionResult');
+const { PartyBalanceLatest } = require('./PartyBalanceLatest');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -112,6 +113,8 @@ Company.hasMany(CFOAlert, { foreignKey: 'company_id', as: 'alerts' });
 CFOAlert.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 Company.hasMany(CFOMetric, { foreignKey: 'company_id', as: 'cfoMetrics' });
 CFOMetric.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+Company.hasMany(PartyBalanceLatest, { foreignKey: 'company_id', as: 'partyBalancesLatest' });
+PartyBalanceLatest.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
 // CFO Question Engine
 CFOQuestion.hasMany(CFOQuestionMetric, { foreignKey: 'question_id', as: 'metrics' });
@@ -154,5 +157,6 @@ module.exports = {
   CFOQuestion,
   CFOQuestionMetric,
   CFOQuestionRule,
-  CFOQuestionResult
+  CFOQuestionResult,
+  PartyBalanceLatest
 };

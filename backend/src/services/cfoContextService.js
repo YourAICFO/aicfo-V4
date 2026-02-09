@@ -13,6 +13,7 @@ const {
   MonthlyCreditor
 } = require('../models');
 const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const partyBalanceService = require('./partyBalanceService');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
@@ -125,6 +126,8 @@ const buildContext = async (companyId) => {
 
   const topDebtors = await getTopParties(CurrentDebtor, companyId);
   const topCreditors = await getTopParties(CurrentCreditor, companyId);
+  const debtorsSummary = await partyBalanceService.getSummary(companyId, 'debtor');
+  const creditorsSummary = await partyBalanceService.getSummary(companyId, 'creditor');
 
   const cashLatest = await getCashLatest(companyId);
   const runwayMonths = await getMetricValue(companyId, 'cash_runway_months', 'live', latestClosed);
@@ -172,7 +175,9 @@ const buildContext = async (companyId) => {
     runway_months: runwayMonths,
     receivable_days: receivableDays,
     payable_days: payableDays,
-    alerts
+    alerts,
+    debtors_summary: debtorsSummary,
+    creditors_summary: creditorsSummary
   };
 
   cache.set(companyId, { timestamp: Date.now(), data });

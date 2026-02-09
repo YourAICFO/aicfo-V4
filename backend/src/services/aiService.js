@@ -97,6 +97,10 @@ const generateInsights = async (companyId) => {
     ? await cfoContextService.buildContext(companyId)
     : null;
   const deterministicAlerts = buildDeterministicAlerts(context);
+  let partySummaries = null;
+  if (context?.debtors_summary && context?.creditors_summary) {
+    partySummaries = { debtors: context.debtors_summary, creditors: context.creditors_summary };
+  }
 
   // Save insights to database
   for (const insight of insights) {
@@ -145,6 +149,106 @@ const generateInsights = async (companyId) => {
         dataPoints: {}
       }
     });
+  }
+
+  if (partySummaries) {
+    const debtorsTotal = Number(partySummaries.debtors.total || 0);
+    const creditorsTotal = Number(partySummaries.creditors.total || 0);
+    const topDebtor = partySummaries.debtors.top10?.[0];
+    const debtorsChange = Number(partySummaries.debtors.changeVsPrev || 0);
+    const creditorsChange = Number(partySummaries.creditors.changeVsPrev || 0);
+
+    if (debtorsTotal > 0 && topDebtor) {
+      const share = (topDebtor.balance / debtorsTotal) * 100;
+      if (share > 25) {
+        await AIInsight.findOrCreate({
+          where: {
+            companyId,
+            type: 'DEBTORS',
+            riskLevel: 'AMBER',
+            title: 'Receivables Concentration Risk',
+            created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+          },
+          defaults: {
+            companyId,
+            type: 'DEBTORS',
+            riskLevel: 'AMBER',
+            title: 'Receivables Concentration Risk',
+            content: `Receivables concentration risk: ${topDebtor.name} is ${share.toFixed(1)}% of debtors.`,
+            explanation: 'High concentration can increase collection risk.',
+            recommendations: ['Diversify receivables', 'Monitor top debtor exposure'],
+            dataPoints: {}
+          }
+        });
+      }
+    }
+
+    if (debtorsChange > 0.1) {
+      await AIInsight.findOrCreate({
+        where: {
+          companyId,
+          type: 'DEBTORS',
+          riskLevel: 'AMBER',
+          title: 'Receivables Jumped Since Last Update',
+          created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        },
+        defaults: {
+          companyId,
+          type: 'DEBTORS',
+          riskLevel: 'AMBER',
+          title: 'Receivables Jumped Since Last Update',
+          content: `Receivables increased by ${(debtorsChange * 100).toFixed(1)}% since last update.`,
+          explanation: 'Collections may be slowing or new credit extended.',
+          recommendations: ['Review ageing', 'Tighten credit terms'],
+          dataPoints: {}
+        }
+      });
+    }
+
+    if (creditorsChange > 0.1) {
+      await AIInsight.findOrCreate({
+        where: {
+          companyId,
+          type: 'CREDITORS',
+          riskLevel: 'AMBER',
+          title: 'Payables Increased Since Last Update',
+          created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        },
+        defaults: {
+          companyId,
+          type: 'CREDITORS',
+          riskLevel: 'AMBER',
+          title: 'Payables Increased Since Last Update',
+          content: `Payables increased by ${(creditorsChange * 100).toFixed(1)}% since last update.`,
+          explanation: 'Payment pressure may be rising.',
+          recommendations: ['Review payment schedule', 'Prioritize critical vendors'],
+          dataPoints: {}
+        }
+      });
+    }
+
+    const cashLatest = context?.cash_latest ?? 0;
+    if (cashLatest > 0 && creditorsTotal > cashLatest) {
+      await AIInsight.findOrCreate({
+        where: {
+          companyId,
+          type: 'CASH',
+          riskLevel: 'AMBER',
+          title: 'Payment Pressure Risk',
+          created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        },
+        defaults: {
+          companyId,
+          type: 'CASH',
+          riskLevel: 'AMBER',
+          title: 'Payment Pressure Risk',
+          content: 'Cash is low relative to payables; plan disbursements carefully.',
+          explanation: 'Current cash balance is lower than total payables.',
+          recommendations: ['Stagger vendor payments', 'Forecast short-term cash'],
+          dataPoints: {}
+        }
+      });
+    }
   }
 
   return insights;

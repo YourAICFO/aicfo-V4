@@ -20,6 +20,7 @@ const financeRoutes = require('./routes/finance');
 const adminRoutes = require('./routes/admin');
 const cfoQuestionRoutes = require('./routes/cfoQuestions');
 const adminMetricsRoutes = require('./routes/adminMetrics');
+const partyRoutes = require('./routes/party');
 
 
 const app = express();
@@ -93,6 +94,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/cfo', cfoQuestionRoutes);
+app.use('/api/party', partyRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/admin', adminRoutes);
 
