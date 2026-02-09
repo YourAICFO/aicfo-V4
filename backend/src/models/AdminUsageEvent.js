@@ -25,10 +25,18 @@ const AdminUsageEvent = sequelize.define('AdminUsageEvent', {
   metadata: {
     type: DataTypes.JSONB,
     defaultValue: {}
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'createdAt',
+    defaultValue: DataTypes.NOW
   }
 }, {
   tableName: 'admin_usage_events',
-  timestamps: false
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: false
 });
 
 module.exports = { AdminUsageEvent };

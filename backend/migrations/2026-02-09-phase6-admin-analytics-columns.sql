@@ -20,4 +20,18 @@ BEGIN
   ) THEN
     ALTER TABLE admin_ai_questions ADD COLUMN metrics_used_json JSONB DEFAULT '{}'::jsonb;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='admin_ai_questions' AND column_name='createdAt'
+  ) THEN
+    ALTER TABLE admin_ai_questions ADD COLUMN "createdAt" TIMESTAMP NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='admin_usage_events' AND column_name='createdAt'
+  ) THEN
+    ALTER TABLE admin_usage_events ADD COLUMN "createdAt" TIMESTAMP NOT NULL DEFAULT NOW();
+  END IF;
 END $$;

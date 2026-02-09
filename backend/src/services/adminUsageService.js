@@ -47,23 +47,23 @@ const getUsageSummary = async () => {
   const activeUsers = await sequelize.query(
     `SELECT COUNT(DISTINCT user_id) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '30 days'`,
+     WHERE "createdAt" >= NOW() - INTERVAL '30 days'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const dau = await sequelize.query(
     `SELECT COUNT(DISTINCT user_id) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '1 day'`,
+     WHERE "createdAt" >= NOW() - INTERVAL '1 day'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const mau = await sequelize.query(
     `SELECT COUNT(DISTINCT user_id) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '30 days'`,
+     WHERE "createdAt" >= NOW() - INTERVAL '30 days'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const loginCounts = await sequelize.query(
-    `SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*) AS count
+    `SELECT DATE_TRUNC('month', "createdAt") AS month, COUNT(*) AS count
      FROM admin_usage_events
      WHERE event_type = 'login'
      GROUP BY month
@@ -112,7 +112,7 @@ const getCompaniesActivity = async () => {
   const rows = await sequelize.query(
     `SELECT c.id, c.name,
             COUNT(e.id) AS events,
-            MAX(e.created_at) AS last_seen
+            MAX(e."createdAt") AS last_seen
      FROM companies c
      LEFT JOIN admin_usage_events e ON e.company_id = c.id
      GROUP BY c.id, c.name
@@ -127,7 +127,7 @@ const getMetricsSummary = async () => {
   const companiesActive = await sequelize.query(
     `SELECT COUNT(DISTINCT company_id) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '30 days' AND company_id IS NOT NULL`,
+     WHERE "createdAt" >= NOW() - INTERVAL '30 days' AND company_id IS NOT NULL`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const usersTotal = await User.count();
@@ -135,7 +135,7 @@ const getMetricsSummary = async () => {
   const usageCounts = await sequelize.query(
     `SELECT event_type, COUNT(*) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '30 days'
+     WHERE "createdAt" >= NOW() - INTERVAL '30 days'
      GROUP BY event_type`,
     { type: Sequelize.QueryTypes.SELECT }
   );
@@ -150,7 +150,7 @@ const getMetricsSummary = async () => {
         SUM(CASE WHEN success = true THEN 1 ELSE 0 END) AS success,
         SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS failure
      FROM admin_ai_questions
-     WHERE created_at >= NOW() - INTERVAL '30 days'`,
+     WHERE "createdAt" >= NOW() - INTERVAL '30 days'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const total = Number(aiTotals?.[0]?.total || 0);
@@ -179,9 +179,9 @@ const getMetricsSummary = async () => {
 
 const getUsageByMonth = async (months = 12) => {
   const rows = await sequelize.query(
-    `SELECT DATE_TRUNC('month', created_at) AS month, event_type, COUNT(*) AS count
+    `SELECT DATE_TRUNC('month', "createdAt") AS month, event_type, COUNT(*) AS count
      FROM admin_usage_events
-     WHERE created_at >= NOW() - INTERVAL '${months} months'
+     WHERE "createdAt" >= NOW() - INTERVAL '${months} months'
      GROUP BY month, event_type
      ORDER BY month`,
     { type: Sequelize.QueryTypes.SELECT }
@@ -204,7 +204,7 @@ const getAIAnalytics = async (months = 12) => {
   const topQuestions = await sequelize.query(
     `SELECT COALESCE(detected_question_key, question) AS key, COUNT(*) AS count
      FROM admin_ai_questions
-     WHERE created_at >= NOW() - INTERVAL '${months} months'
+     WHERE "createdAt" >= NOW() - INTERVAL '${months} months'
      GROUP BY key
      ORDER BY count DESC
      LIMIT 20`,
@@ -213,7 +213,7 @@ const getAIAnalytics = async (months = 12) => {
   const failedQuestions = await sequelize.query(
     `SELECT COALESCE(detected_question_key, question) AS key, COUNT(*) AS count
      FROM admin_ai_questions
-     WHERE success = false AND created_at >= NOW() - INTERVAL '${months} months'
+     WHERE success = false AND "createdAt" >= NOW() - INTERVAL '${months} months'
      GROUP BY key
      ORDER BY count DESC
      LIMIT 20`,
@@ -222,7 +222,7 @@ const getAIAnalytics = async (months = 12) => {
   const failureReasons = await sequelize.query(
     `SELECT failure_reason, COUNT(*) AS count
      FROM admin_ai_questions
-     WHERE success = false AND created_at >= NOW() - INTERVAL '${months} months'
+     WHERE success = false AND "createdAt" >= NOW() - INTERVAL '${months} months'
      GROUP BY failure_reason
      ORDER BY count DESC
      LIMIT 10`,
@@ -234,7 +234,7 @@ const getAIAnalytics = async (months = 12) => {
         SUM(CASE WHEN success = true THEN 1 ELSE 0 END) AS success,
         SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS failure
      FROM admin_ai_questions
-     WHERE created_at >= NOW() - INTERVAL '${months} months'`,
+     WHERE "createdAt" >= NOW() - INTERVAL '${months} months'`,
     { type: Sequelize.QueryTypes.SELECT }
   );
   const total = Number(totals?.[0]?.total || 0);
@@ -252,12 +252,12 @@ const getAIAnalytics = async (months = 12) => {
 const getCustomerMetrics = async () => {
   const rows = await sequelize.query(
     `SELECT c.id AS company_id, c.name AS company_name,
-            MAX(e.created_at) AS last_seen_at,
-            SUM(CASE WHEN e.event_type = 'dashboard_open' AND e.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS dashboard_opens_30d,
-            SUM(CASE WHEN e.event_type = 'ai_chat' AND e.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_chats_30d,
-            SUM(CASE WHEN e.event_type = 'ai_insight' AND e.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_insights_30d,
-            SUM(CASE WHEN e.event_type = 'cfo_question' AND e.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS cfo_questions_30d,
-            SUM(CASE WHEN q.success = false AND q.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_failures_30d
+            MAX(e."createdAt") AS last_seen_at,
+            SUM(CASE WHEN e.event_type = 'dashboard_open' AND e."createdAt" >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS dashboard_opens_30d,
+            SUM(CASE WHEN e.event_type = 'ai_chat' AND e."createdAt" >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_chats_30d,
+            SUM(CASE WHEN e.event_type = 'ai_insight' AND e."createdAt" >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_insights_30d,
+            SUM(CASE WHEN e.event_type = 'cfo_question' AND e."createdAt" >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS cfo_questions_30d,
+            SUM(CASE WHEN q.success = false AND q."createdAt" >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) AS ai_failures_30d
      FROM companies c
      LEFT JOIN admin_usage_events e ON e.company_id = c.id
      LEFT JOIN admin_ai_questions q ON q.company_id = c.id

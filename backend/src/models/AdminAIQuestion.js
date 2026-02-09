@@ -37,6 +37,12 @@ const AdminAIQuestion = sequelize.define('AdminAIQuestion', {
     field: 'metrics_used_json',
     defaultValue: {}
   },
+  createdAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'createdAt',
+    defaultValue: DataTypes.NOW
+  },
   success: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
@@ -44,7 +50,9 @@ const AdminAIQuestion = sequelize.define('AdminAIQuestion', {
   }
 }, {
   tableName: 'admin_ai_questions',
-  timestamps: false
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: false
 });
 
 module.exports = { AdminAIQuestion };
