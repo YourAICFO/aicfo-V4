@@ -21,6 +21,22 @@ const AdminAIQuestion = sequelize.define('AdminAIQuestion', {
     type: DataTypes.TEXT,
     allowNull: false
   },
+  detectedQuestionKey: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'detected_question_key'
+  },
+  failureReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'failure_reason'
+  },
+  metricsUsedJson: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'metrics_used_json',
+    defaultValue: {}
+  },
   success: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

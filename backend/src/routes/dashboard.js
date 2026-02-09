@@ -8,7 +8,12 @@ const { dashboardService, adminUsageService } = require('../services');
 router.get('/overview', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const data = await dashboardService.getCFOOverview(req.companyId);
-    adminUsageService.logEvent(req.companyId, req.userId, 'dashboard_open').catch(() => {});
+    adminUsageService.logUsageEvent({
+      companyId: req.companyId,
+      userId: req.userId,
+      eventType: 'dashboard_open',
+      eventName: 'dashboard_overview'
+    });
     res.json({
       success: true,
       data

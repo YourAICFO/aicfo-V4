@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { cfoQuestionService } = require('../services');
+const { cfoQuestionService, adminUsageService } = require('../services');
 
 // GET /api/cfo/questions
 router.get('/questions', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
@@ -19,9 +19,26 @@ router.get('/questions', authenticate, requireCompany, checkSubscriptionAccess, 
 router.get('/questions/:code', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const result = await cfoQuestionService.answerQuestion(req.companyId, req.params.code);
+    adminUsageService.logUsageEvent({
+      companyId: req.companyId,
+      userId: req.userId,
+      eventType: 'cfo_question',
+      eventName: 'cfo_question',
+      metadata: { questionKey: req.params.code }
+    });
+    const missingMetrics = typeof result?.message === 'string' && result.message.includes('Not enough data');
+    adminUsageService.logAIQuestion(req.companyId, req.userId, req.params.code, !missingMetrics, {
+      detectedQuestionKey: result?.code || req.params.code,
+      failureReason: missingMetrics ? 'missing_metrics' : null,
+      metricsUsedJson: result?.metrics || {}
+    });
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Answer CFO question error:', error);
+    adminUsageService.logAIQuestion(req.companyId, req.userId, req.params.code, false, {
+      detectedQuestionKey: req.params.code,
+      failureReason: error.message
+    });
     res.status(400).json({ success: false, error: error.message });
   }
 });
