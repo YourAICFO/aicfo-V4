@@ -100,71 +100,67 @@ const getSummariesForMonths = async (companyId, months) => {
   return months.map(m => map.get(m)).filter(Boolean);
 };
 
-const getMetricValue = async (companyId, metricKey) => {
+const getMetricValue = async (companyId, metricKey, timeScope = null) => {
+  const cached = await CFOMetric.findOne({
+    where: {
+      companyId,
+      metricKey,
+      ...(timeScope ? { timeScope } : {})
+    },
+    raw: true
+  });
+  if (cached) {
+    if (cached.metric_value !== null && cached.metric_value !== undefined) {
+      return Number(cached.metric_value);
+    }
+    if (cached.metric_text !== null && cached.metric_text !== undefined) {
+      return cached.metric_text;
+    }
+  }
   switch (metricKey) {
     case 'cash_balance_live': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const rows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
       return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
     }
     case 'debtors_balance_live': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const rows = await CurrentDebtor.findAll({ where: { companyId }, raw: true });
       return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
     }
     case 'creditors_balance_live': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const rows = await CurrentCreditor.findAll({ where: { companyId }, raw: true });
       return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
     }
     case 'loans_balance_live': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const rows = await CurrentLoan.findAll({ where: { companyId }, raw: true });
       return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
     }
     case 'cash_runway_months': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const metric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
       return metric ? Number(metric.cash_runway_months || 0) : 0;
     }
     case 'avg_net_cash_outflow_3m': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: '3m' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const metric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
       return metric ? Number(metric.avg_net_cash_outflow_3m || 0) : 0;
     }
     case 'revenue_last_closed': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'last_closed_month' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const latest = getLatestClosedMonthKey();
       if (!latest) return 0;
       const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
       return row ? Number(row.total_revenue || 0) : 0;
     }
     case 'expenses_last_closed': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'last_closed_month' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const latest = getLatestClosedMonthKey();
       if (!latest) return 0;
       const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
       return row ? Number(row.total_expenses || 0) : 0;
     }
     case 'net_profit_last_closed': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'last_closed_month' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const latest = getLatestClosedMonthKey();
       if (!latest) return 0;
       const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
       return row ? Number(row.net_profit || 0) : 0;
     }
     case 'revenue_growth_3m': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: '3m' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const latest = getLatestClosedMonthKey();
       if (!latest) return 0;
       const recentMonths = getLatestClosedMonths(3);
@@ -181,8 +177,6 @@ const getMetricValue = async (companyId, metricKey) => {
       return (recentAvg - prevAvg) / prevAvg;
     }
     case 'expense_growth_3m': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: '3m' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const latest = getLatestClosedMonthKey();
       if (!latest) return 0;
       const recentMonths = getLatestClosedMonths(3);
@@ -199,16 +193,12 @@ const getMetricValue = async (companyId, metricKey) => {
       return (recentAvg - prevAvg) / prevAvg;
     }
     case 'debtors_concentration_ratio': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value);
       const rows = await CurrentDebtor.findAll({ where: { companyId }, order: [['balance', 'DESC']], raw: true });
       const total = rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
       const top5 = rows.slice(0, 5).reduce((sum, r) => sum + Number(r.balance || 0), 0);
       return total > 0 ? top5 / total : 0;
     }
     case 'creditors_cash_pressure': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'live' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value) > 0;
       const creditors = await CurrentCreditor.findAll({ where: { companyId }, raw: true });
       const cashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
       const totalCreditors = creditors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
@@ -216,8 +206,6 @@ const getMetricValue = async (companyId, metricKey) => {
       return totalCreditors > totalCash;
     }
     case 'debtors_revenue_divergence': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'last_closed_month' }, raw: true });
-      if (cached && cached.metric_value !== null) return Number(cached.metric_value) > 0;
       const summary = await debtorsService.getSummary(companyId);
       return Boolean(summary?.divergenceFlag);
     }
@@ -231,7 +219,6 @@ const getMetricValue = async (companyId, metricKey) => {
     case 'cash_balance_yoy_change':
     case 'debtor_balance_yoy_change':
     case 'creditor_balance_yoy_change': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'yoy' }, raw: true });
       return cached && cached.metric_value !== null ? Number(cached.metric_value) : null;
     }
     default:
@@ -250,7 +237,7 @@ const getMetricsForQuestion = async (companyId, questionId) => {
   result.month = latestClosedKey || null;
   result.month_last_year = lastYearKey || null;
   for (const metric of metrics) {
-    result[metric.metric_key] = await getMetricValue(companyId, metric.metric_key);
+    result[metric.metric_key] = await getMetricValue(companyId, metric.metric_key, metric.time_scope);
   }
   return result;
 };
