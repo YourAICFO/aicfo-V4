@@ -163,7 +163,7 @@ const startServer = async () => {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      await sequelize.sync({ alter: true });
+      await sequelize.sync({ alter: false });
       console.log('Database models synchronized.');
     }
 
