@@ -1,13 +1,13 @@
 const { Queue, QueueEvents } = require('bullmq');
-const IORedis = require('ioredis');
 const { logger } = require('./logger');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = process.env.REDIS_URL;
+if (!REDIS_URL) {
+  throw new Error('REDIS_URL is required for BullMQ connection');
+}
 const QUEUE_NAME = process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs';
 
-const connection = new IORedis(REDIS_URL, {
-  maxRetriesPerRequest: null
-});
+const connection = { url: REDIS_URL };
 
 const queue = new Queue(QUEUE_NAME, {
   connection,
