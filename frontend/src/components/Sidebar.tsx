@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -26,14 +27,30 @@ const menuItems = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export default function Sidebar() {
-  return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-50">
+type SidebarProps = {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+};
+
+export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onMobileClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [mobileOpen, onMobileClose]);
+
+  const sidebarContent = (
+    <>
       <div className="p-6">
         <h1 className="text-2xl font-bold text-primary-700">AI CFO</h1>
         <p className="text-sm text-gray-500 mt-1">Financial Intelligence</p>
       </div>
-      
+
       <nav className="px-4 pb-6">
         <ul className="space-y-1">
           {menuItems.map((item) => (
@@ -55,6 +72,27 @@ export default function Sidebar() {
           ))}
         </ul>
       </nav>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-50 hidden md:block">
+        {sidebarContent}
+      </aside>
+
+      {mobileOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-30 md:hidden"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+          <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 z-40 md:hidden">
+            {sidebarContent}
+          </aside>
+        </>
+      )}
+    </>
   );
 }
