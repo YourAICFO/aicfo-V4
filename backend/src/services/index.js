@@ -11,6 +11,7 @@ const debtorsService = require('./debtorsService');
 const creditorsService = require('./creditorsService');
 const adminUsageService = require('./adminUsageService');
 const cfoQuestionService = require('./cfoQuestionService');
+const cfoContextService = require('./cfoContextService');
 
 module.exports = {
   authService,
@@ -25,5 +26,6 @@ module.exports = {
   debtorsService,
   creditorsService,
   adminUsageService,
-  cfoQuestionService
+  cfoQuestionService,
+  cfoContextService
 };

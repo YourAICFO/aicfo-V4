@@ -332,6 +332,22 @@ const mapQuestionCode = async (message) => {
   if (text.includes('expense') || text.includes('cost')) return 'EXPENSE_GROWTH_3M';
   if (text.includes('debtor') || text.includes('receivable')) return 'DEBTORS_CONCENTRATION';
   if (text.includes('creditor') || text.includes('payable')) return 'CREDITORS_PRESSURE';
+  if (text.includes('working capital')) return 'WORKING_CAPITAL_Q';
+  if (text.includes('cash conversion')) return 'CASH_CONVERSION_Q';
+  if (text.includes('volatility')) return 'REV_VOLATILITY';
+  if (text.includes('stagnation') || text.includes('flat revenue')) return 'REV_STAGNATION';
+  if (text.includes('net margin')) return 'MARGIN_LATEST';
+  if (text.includes('margin change')) return 'MARGIN_MOM';
+  if (text.includes('avg revenue')) return 'REV_AVG_3M';
+  if (text.includes('avg expense')) return 'EXP_AVG_3M';
+  if (text.includes('avg profit')) return 'PROFIT_AVG_3M';
+  if (text.includes('cash balance')) return 'CASH_BALANCE_LIVE';
+  if (text.includes('cashflow') || text.includes('cash flow')) return 'NET_CASHFLOW_3M';
+  if (text.includes('runway change')) return 'RUNWAY_CHANGE';
+  if (text.includes('debtor days')) return 'DEBTOR_DAYS_Q';
+  if (text.includes('creditor days')) return 'CREDITOR_DAYS_Q';
+  if (text.includes('expense vs revenue') || text.includes('margin pressure')) return 'EXP_VS_REV_GROWTH';
+  if (text.includes('is the business safe') || text.includes('financially safe')) return 'BUSINESS_SAFETY_Q';
   if (text.includes('yoy') || text.includes('year over year') || text.includes('last year')) {
     if (text.includes('revenue') || text.includes('sales')) return 'REVENUE_YOY_TREND';
     if (text.includes('expense') || text.includes('cost')) return 'EXPENSE_YOY_TREND';

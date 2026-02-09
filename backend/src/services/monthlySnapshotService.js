@@ -228,6 +228,13 @@ const computeCfoMetrics = async (companyId, transaction) => {
   const liquidity = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true, transaction });
   await upsertMetric(companyId, 'cash_runway_months', Number(liquidity?.cash_runway_months || 0), 'live', transaction, { month: latestClosedKey });
   await upsertMetric(companyId, 'avg_net_cash_outflow_3m', Number(liquidity?.avg_net_cash_outflow_3m || 0), '3m', transaction, { month: latestClosedKey });
+  const prevRunway = latestClosedKey ? await CFOMetric.findOne({
+    where: { companyId, metricKey: 'cash_runway_months', month: addMonths(latestClosedKey, -1) },
+    raw: true,
+    transaction
+  }) : null;
+  const runwayChange = prevRunway ? Number(liquidity?.cash_runway_months || 0) - Number(prevRunway.metric_value || 0) : null;
+  await upsertMetric(companyId, 'cash_runway_change_mom', runwayChange, 'mom', transaction, { month: latestClosedKey });
 
   if (latestClosedKey) {
     const latestSummary = await MonthlyTrialBalanceSummary.findOne({
@@ -316,6 +323,7 @@ const computeCfoMetrics = async (companyId, transaction) => {
 
     await upsertMetric(companyId, 'revenue_growth_3m', revenueGrowth3m, '3m', transaction, { month: latestClosedKey });
     await upsertMetric(companyId, 'expense_growth_3m', expenseGrowth3m, '3m', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'expense_vs_revenue_growth_gap', expenseGrowth3m - revenueGrowth3m, '3m', transaction, { month: latestClosedKey });
     await upsertMetric(companyId, 'revenue_avg_3m', recentRevenueAvg, '3m', transaction, { month: latestClosedKey });
     await upsertMetric(companyId, 'revenue_avg_6m', sixRevenueAvg, '6m', transaction, { month: latestClosedKey });
     await upsertMetric(companyId, 'revenue_avg_12m', twelveRevenueAvg, '12m', transaction, { month: latestClosedKey });
@@ -433,9 +441,22 @@ const computeCfoMetrics = async (companyId, transaction) => {
     const cashConversion = debtorDays !== null && creditorDays !== null ? debtorDays - creditorDays : null;
     await upsertMetric(companyId, 'cash_conversion_cycle', cashConversion, '3m', transaction, { month: latestClosedKey });
 
-    const debtorsMom = prevSummary ? lastClosedDebtorTotal - Number(lastYearDebtorsTotal?.total || 0) : null;
+    const prevClosedKey = addMonths(latestClosedKey, -1);
+    const prevDebtors = await MonthlyDebtor.findOne({
+      where: { companyId, month: prevClosedKey },
+      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
+      raw: true,
+      transaction
+    });
+    const prevCreditors = await MonthlyCreditor.findOne({
+      where: { companyId, month: prevClosedKey },
+      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
+      raw: true,
+      transaction
+    });
+    const debtorsMom = prevDebtors ? lastClosedDebtorTotal - Number(prevDebtors.total || 0) : null;
     await upsertMetric(companyId, 'debtor_balance_mom_change', debtorsMom, 'mom', transaction, { month: latestClosedKey });
-    const creditorsMom = prevSummary ? lastClosedCreditorTotal - Number(lastYearCreditorsTotal?.total || 0) : null;
+    const creditorsMom = prevCreditors ? lastClosedCreditorTotal - Number(prevCreditors.total || 0) : null;
     await upsertMetric(companyId, 'creditor_balance_mom_change', creditorsMom, 'mom', transaction, { month: latestClosedKey });
   }
 
