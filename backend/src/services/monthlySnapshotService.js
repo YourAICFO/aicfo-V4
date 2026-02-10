@@ -23,6 +23,8 @@ const {
 } = require('../models');
 const { normalizeAccountHead } = require('./accountHeadNormalizer');
 const { mapLedgersToCFOTotals, upsertLedgerClassifications } = require('./cfoAccountMappingService');
+const { validateChartOfAccountsPayload } = require('./coaPayloadValidator');
+const { logUsageEvent } = require('./adminUsageService');
 
 const { normalizeMonth, listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 const addMonths = getMonthKeyOffset;
@@ -765,6 +767,74 @@ const upsertAlerts = async (companyId, transaction) => {
   }
 };
 
+const toDateOnlyString = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+};
+
+const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transaction) => {
+  const validation = validateChartOfAccountsPayload(payload);
+  if (!validation.ok) {
+    logUsageEvent({
+      companyId,
+      userId: null,
+      eventType: validation.error.includes('missing') ? 'coa_payload_missing' : 'coa_payload_invalid',
+      eventName: 'ledger_monthly_balances_not_written',
+      metadata: { reason: validation.error, monthKey }
+    });
+    console.warn('COA payload invalid:', validation.error);
+    return { written: 0, counts: { debtors: 0, creditors: 0, cash_bank: 0 } };
+  }
+
+  const { chartOfAccounts, asOfDate } = validation;
+  const { totals, counts, classifications } = mapLedgersToCFOTotals(chartOfAccounts.ledgers, chartOfAccounts.groups);
+  await upsertLedgerClassifications(companyId, classifications);
+
+  const asOf = toDateOnlyString(asOfDate || new Date());
+  let written = 0;
+  const writtenCounts = { debtors: 0, creditors: 0, cash_bank: 0 };
+
+  for (const row of classifications) {
+    if (!row.ledgerGuid) continue;
+    if (!['debtors', 'creditors', 'cash_bank'].includes(row.category)) continue;
+
+    await LedgerMonthlyBalance.upsert({
+      companyId,
+      monthKey,
+      ledgerGuid: row.ledgerGuid,
+      ledgerName: row.ledgerName || 'Unknown',
+      parentGroup: row.parentGroup || null,
+      cfoCategory: row.category,
+      balance: Number(row.balance || 0),
+      asOfDate: asOf
+    }, { transaction });
+    written += 1;
+    writtenCounts[row.category] += 1;
+  }
+
+  console.info({
+    companyId,
+    monthKey,
+    revenueLedgers: counts.revenue,
+    expenseLedgers: counts.expenses,
+    debtorLedgers: counts.debtors,
+    creditorLedgers: counts.creditors,
+    cashBankLedgers: counts.cash_bank
+  }, 'CFO mapping completed');
+
+  console.info({
+    companyId,
+    monthKey,
+    writtenDebtors: writtenCounts.debtors,
+    writtenCreditors: writtenCounts.creditors,
+    writtenCashBank: writtenCounts.cash_bank
+  }, 'ledger_monthly_balances written');
+
+  return { written, counts: writtenCounts, totals };
+};
+
 const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastSyncedAt = null, debtors = null, creditors = null, currentBalances = null, chartOfAccounts = null) => {
   const latestClosedKey = getLatestClosedMonthKey();
   if (!latestClosedKey) return { months: 0 };
@@ -801,43 +871,17 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
       const ledgerSnapshot = ledgersByMonth
         ? (ledgersByMonth[monthKey] || (ledgersByMonth.month === monthKey ? ledgersByMonth : null))
         : null;
-      if (ledgerSnapshot && Array.isArray(ledgerSnapshot.ledgers) && Array.isArray(ledgerSnapshot.groups)) {
-        const { totals, counts, classifications } = mapLedgersToCFOTotals(ledgerSnapshot.ledgers, ledgerSnapshot.groups);
-        await upsertLedgerClassifications(companyId, classifications);
-
-        console.info({
-          companyId,
-          revenueLedgers: counts.revenue,
-          expenseLedgers: counts.expenses,
-          debtorLedgers: counts.debtors,
-          creditorLedgers: counts.creditors,
-          cashBankLedgers: counts.cash_bank
-        }, 'CFO mapping completed');
-
-        const asOfDate = ledgerSnapshot.asOfDate || ledgerSnapshot.as_of_date || ledgerSnapshot.date || null;
-        for (const row of classifications) {
-          if (!row.ledgerGuid) continue;
-          await LedgerMonthlyBalance.upsert({
-            companyId,
-            monthKey: monthKey,
-            ledgerGuid: row.ledgerGuid,
-            ledgerName: row.ledgerName || 'Unknown',
-            parentGroup: row.parentGroup || null,
-            cfoCategory: row.category,
-            balance: Number(row.balance || 0),
-            asOfDate: asOfDate
-          }, { transaction });
-        }
-
-        if (monthKey <= latestClosedKey) {
-          const revenueTotal = Number(totals.revenue || 0);
-          const expenseTotal = Number(totals.expenses || 0);
+      if (ledgerSnapshot) {
+        const writeResult = await writeLedgerMonthlyBalances(companyId, monthKey, ledgerSnapshot, transaction);
+        if (monthKey <= latestClosedKey && writeResult && writeResult.totals) {
+          const revenueTotal = Number(writeResult.totals.revenue || 0);
+          const expenseTotal = Number(writeResult.totals.expenses || 0);
           await MonthlyTrialBalanceSummary.update({
             totalRevenue: revenueTotal,
             totalExpenses: expenseTotal,
             netProfit: revenueTotal - expenseTotal,
             netCashflow: revenueTotal - expenseTotal,
-            cashAndBankBalance: Number(totals.cash_bank || 0)
+            cashAndBankBalance: Number(writeResult.totals.cash_bank || 0)
           }, {
             where: { companyId, month: monthKey },
             transaction
@@ -851,33 +895,8 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
       const currentLedgerSnapshot = ledgersByMonth
         ? (ledgersByMonth[currentMonthKey] || (ledgersByMonth.month === currentMonthKey ? ledgersByMonth : null))
         : null;
-      if (currentLedgerSnapshot && Array.isArray(currentLedgerSnapshot.ledgers) && Array.isArray(currentLedgerSnapshot.groups)) {
-        const { counts, classifications } = mapLedgersToCFOTotals(currentLedgerSnapshot.ledgers, currentLedgerSnapshot.groups);
-        await upsertLedgerClassifications(companyId, classifications);
-
-        console.info({
-          companyId,
-          revenueLedgers: counts.revenue,
-          expenseLedgers: counts.expenses,
-          debtorLedgers: counts.debtors,
-          creditorLedgers: counts.creditors,
-          cashBankLedgers: counts.cash_bank
-        }, 'CFO mapping completed');
-
-        const asOfDate = currentLedgerSnapshot.asOfDate || currentLedgerSnapshot.as_of_date || currentLedgerSnapshot.date || null;
-        for (const row of classifications) {
-          if (!row.ledgerGuid) continue;
-          await LedgerMonthlyBalance.upsert({
-            companyId,
-            monthKey: currentMonthKey,
-            ledgerGuid: row.ledgerGuid,
-            ledgerName: row.ledgerName || 'Unknown',
-            parentGroup: row.parentGroup || null,
-            cfoCategory: row.category,
-            balance: Number(row.balance || 0),
-            asOfDate: asOfDate
-          }, { transaction });
-        }
+      if (currentLedgerSnapshot) {
+        await writeLedgerMonthlyBalances(companyId, currentMonthKey, currentLedgerSnapshot, transaction);
       }
     }
 

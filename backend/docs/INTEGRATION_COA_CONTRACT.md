@@ -1,0 +1,54 @@
+# Integration Chart of Accounts (COA) Contract
+
+This contract defines the payload required to write `ledger_monthly_balances` safely.
+
+## Expected JSON
+
+```json
+{
+  "chartOfAccounts": {
+    "groups": [
+      {
+        "name": "Sales Accounts",
+        "parent": "Income",
+        "reservedName": "",
+        "guid": "group-guid-1",
+        "type": "Group"
+      }
+    ],
+    "ledgers": [
+      {
+        "name": "ABC Ltd",
+        "parent": "Sundry Debtors",
+        "guid": "ledger-guid-1",
+        "type": "Ledger",
+        "closingBalance": 12345.67
+      }
+    ]
+  },
+  "asOfDate": "2026-02-10"
+}
+```
+
+## Rules
+
+- `chartOfAccounts` is required.
+- `chartOfAccounts.groups` must be an array (can be empty).
+- `chartOfAccounts.ledgers` must be a non-empty array.
+- Every ledger must include:
+  - `name`
+  - `parent`
+  - `guid`
+- Ledger balance can be provided as:
+  - `closingBalance`
+  - `balance`
+  - `closing_balance`
+
+## Notes
+
+- Only ledger nodes are aggregated (groups are for classification only).
+- The system only writes `ledger_monthly_balances` for categories:
+  - `debtors`
+  - `creditors`
+  - `cash_bank`
+- If the payload is missing or invalid, the system will skip writes and log an admin usage event.
