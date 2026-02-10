@@ -25,6 +25,21 @@ const MonthlyDebtor = sequelize.define('MonthlyDebtor', {
     allowNull: false,
     field: 'debtor_name'
   },
+  rawHeadName: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    field: 'raw_head_name'
+  },
+  canonicalType: {
+    type: DataTypes.STRING(64),
+    allowNull: true,
+    field: 'canonical_type'
+  },
+  canonicalSubtype: {
+    type: DataTypes.STRING(128),
+    allowNull: true,
+    field: 'canonical_subtype'
+  },
   closingBalance: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false,

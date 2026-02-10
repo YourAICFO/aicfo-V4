@@ -31,6 +31,7 @@ const { CFOQuestionMetric } = require('./CFOQuestionMetric');
 const { CFOQuestionRule } = require('./CFOQuestionRule');
 const { CFOQuestionResult } = require('./CFOQuestionResult');
 const { PartyBalanceLatest } = require('./PartyBalanceLatest');
+const { AccountHeadDictionary } = require('./AccountHeadDictionary');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -154,6 +155,7 @@ module.exports = {
   CurrentLiquidityMetric,
   CFOAlert,
   CFOMetric,
+  AccountHeadDictionary,
   CFOQuestion,
   CFOQuestionMetric,
   CFOQuestionRule,

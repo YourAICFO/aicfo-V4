@@ -21,6 +21,7 @@ const {
   sequelize
 } = require('../models');
 const debtorsService = require('./debtorsService');
+const { normalizeAccountHead } = require('./accountHeadNormalizer');
 
 const normalizeMonth = (value) => {
   if (!value) return null;
@@ -480,6 +481,7 @@ const upsertDebtorsCreditors = async (companyId, monthKey, debtors, creditors, t
     for (const debtor of debtors) {
       const name = debtor.debtor_name;
       await resolveTermMapping('INTEGRATION', name, 'ASSET', transaction);
+      const normalized = await normalizeAccountHead(name);
       const closing = Number(debtor.closing_balance || 0);
       const prev = await MonthlyDebtor.findOne({
         where: { companyId, debtorName: name, month: addMonths(monthKey, -1) },
@@ -494,6 +496,9 @@ const upsertDebtorsCreditors = async (companyId, monthKey, debtors, creditors, t
         companyId,
         month: monthKey,
         debtorName: name,
+        rawHeadName: name,
+        canonicalType: normalized.canonicalType,
+        canonicalSubtype: normalized.canonicalSubtype,
         closingBalance: closing,
         totalDebtorsBalance: total,
         percentageOfTotal: total > 0 ? closing / total : 0,
@@ -518,6 +523,7 @@ const upsertDebtorsCreditors = async (companyId, monthKey, debtors, creditors, t
     for (const creditor of creditors) {
       const name = creditor.creditor_name;
       await resolveTermMapping('INTEGRATION', name, 'LIABILITY', transaction);
+      const normalized = await normalizeAccountHead(name);
       const closing = Number(creditor.closing_balance || 0);
       const prev = await MonthlyCreditor.findOne({
         where: { companyId, creditorName: name, month: addMonths(monthKey, -1) },
@@ -532,6 +538,9 @@ const upsertDebtorsCreditors = async (companyId, monthKey, debtors, creditors, t
         companyId,
         month: monthKey,
         creditorName: name,
+        rawHeadName: name,
+        canonicalType: normalized.canonicalType,
+        canonicalSubtype: normalized.canonicalSubtype,
         closingBalance: closing,
         totalCreditorsBalance: total,
         percentageOfTotal: total > 0 ? closing / total : 0,
@@ -613,10 +622,15 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
 
   for (const row of revenueByName) {
     const term = await resolveTermMapping('INTEGRATION', row.category || 'Revenue', 'REVENUE', transaction);
+    const rawName = row.category || term.normalizedTerm;
+    const normalized = await normalizeAccountHead(rawName);
     await MonthlyRevenueBreakdown.create({
       companyId,
       month: monthKey,
-      revenueName: row.category || term.normalizedTerm,
+      revenueName: rawName,
+      rawHeadName: rawName,
+      canonicalType: normalized.canonicalType,
+      canonicalSubtype: normalized.canonicalSubtype,
       normalizedRevenueCategory: term.normalizedTerm,
       amount: parseFloat(row.total || 0)
     }, { transaction });
@@ -639,10 +653,15 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
 
   for (const row of expenseByName) {
     const term = await resolveTermMapping('INTEGRATION', row.category || 'Expense', 'EXPENSE', transaction);
+    const rawName = row.category || term.normalizedTerm;
+    const normalized = await normalizeAccountHead(rawName);
     await MonthlyExpenseBreakdown.create({
       companyId,
       month: monthKey,
-      expenseName: row.category || term.normalizedTerm,
+      expenseName: rawName,
+      rawHeadName: rawName,
+      canonicalType: normalized.canonicalType,
+      canonicalSubtype: normalized.canonicalSubtype,
       normalizedExpenseCategory: term.normalizedTerm,
       amount: parseFloat(row.total || 0)
     }, { transaction });
