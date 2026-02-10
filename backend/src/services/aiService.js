@@ -3,6 +3,7 @@ const { AIInsight } = require('../models');
 const dashboardService = require('./dashboardService');
 const debtorsService = require('./debtorsService');
 const creditorsService = require('./creditorsService');
+const { getDebtorsSummary, getCreditorsSummary } = require('./debtorCreditorService');
 const cfoQuestionService = require('./cfoQuestionService');
 const cfoContextService = require('./cfoContextService');
 let OpenAI;
@@ -249,6 +250,57 @@ const generateInsights = async (companyId) => {
         }
       });
     }
+  }
+
+  try {
+    const debtorsSummary = await getDebtorsSummary(companyId);
+    const creditorsSummary = await getCreditorsSummary(companyId);
+
+    if (debtorsSummary?.risk?.level === 'high') {
+      await AIInsight.findOrCreate({
+        where: {
+          companyId,
+          type: 'DEBTORS',
+          riskLevel: 'AMBER',
+          title: 'Receivables Concentration Risk',
+          created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        },
+        defaults: {
+          companyId,
+          type: 'DEBTORS',
+          riskLevel: 'AMBER',
+          title: 'Receivables Concentration Risk',
+          content: 'Receivables are concentrated among a few counterparties.',
+          explanation: 'High concentration can increase collection risk.',
+          recommendations: ['Diversify receivables', 'Monitor top debtor exposure'],
+          dataPoints: {}
+        }
+      });
+    }
+
+    if (creditorsSummary?.changeVsPrevClosed?.direction === 'up' && Math.abs(creditorsSummary.changeVsPrevClosed.amount || 0) > 0) {
+      await AIInsight.findOrCreate({
+        where: {
+          companyId,
+          type: 'CREDITORS',
+          riskLevel: 'AMBER',
+          title: 'Payables Increased vs Last Closed Month',
+          created_at: { [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        },
+        defaults: {
+          companyId,
+          type: 'CREDITORS',
+          riskLevel: 'AMBER',
+          title: 'Payables Increased vs Last Closed Month',
+          content: 'Creditors have increased compared to the last closed month.',
+          explanation: 'Rising payables can signal payment pressure.',
+          recommendations: ['Review payables schedule', 'Align with cash collections'],
+          dataPoints: {}
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Debtors/Creditors insights skipped:', error.message);
   }
 
   return insights;

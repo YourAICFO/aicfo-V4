@@ -148,7 +148,8 @@ const mapLedgersToCFOTotals = (ledgers = [], groups = []) => {
       ledgerName: ledger.name || ledger.ledgerName || ledger.ledger_name,
       ledgerGuid: ledger.guid || ledger.ledgerGuid || ledger.ledger_guid || ledger.id || ledger.ledgerId || ledger.name || ledger.ledgerName,
       parentGroup: ledger.groupName || ledger.parentGroup || ledger.parent_group || ledger.group || ledger.group_name,
-      category
+      category,
+      balance
     });
   }
 
@@ -176,5 +177,6 @@ module.exports = {
   buildGroupIndex,
   classifyLedger,
   mapLedgersToCFOTotals,
-  upsertLedgerClassifications
+  upsertLedgerClassifications,
+  isLedgerNode
 };

@@ -125,6 +125,15 @@ export const financeApi = {
   getCreditorsTrends: () => api.get('/finance/creditors/trends'),
 };
 
+// Debtors/Creditors (ledger-based)
+export const debtorsApi = {
+  getSummary: () => api.get('/debtors/summary'),
+};
+
+export const creditorsApi = {
+  getSummary: () => api.get('/creditors/summary'),
+};
+
 // Admin API
 export const adminApi = {
   getUsageSummary: () => api.get('/admin/usage/summary'),

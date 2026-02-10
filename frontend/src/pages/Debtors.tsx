@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, Users } from 'lucide-react';
-import { financeApi } from '../services/api';
+import { TrendingUp, TrendingDown, Users, AlertTriangle } from 'lucide-react';
+import { debtorsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
 export default function Debtors() {
   const [summary, setSummary] = useState<any>(null);
-  const [top, setTop] = useState<any[]>([]);
-  const [trends, setTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
 
@@ -18,14 +16,8 @@ export default function Debtors() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [summaryRes, topRes, trendsRes] = await Promise.all([
-        financeApi.getDebtorsSummary(),
-        financeApi.getDebtorsTop(),
-        financeApi.getDebtorsTrends()
-      ]);
+      const summaryRes = await debtorsApi.getSummary();
       setSummary(summaryRes.data.data);
-      setTop(topRes.data.data || []);
-      setTrends(trendsRes.data.data?.months || []);
     } catch (error) {
       console.error('Failed to load debtors data:', error);
     } finally {
@@ -49,7 +41,17 @@ export default function Debtors() {
     );
   }
 
-  const growthUp = (summary?.debtorGrowth || 0) >= 0;
+  const changeAmount = summary?.changeVsPrevClosed?.amount || 0;
+  const changePct = summary?.changeVsPrevClosed?.pct;
+  const growthUp = changeAmount >= 0;
+  const top10 = summary?.top10 || [];
+  const riskLevel = summary?.risk?.level || 'low';
+  const riskLabel = riskLevel === 'high' ? 'High Risk' : riskLevel === 'medium' ? 'Medium Risk' : 'Low Risk';
+  const riskClasses = riskLevel === 'high'
+    ? 'bg-rose-100 text-rose-700'
+    : riskLevel === 'medium'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-emerald-100 text-emerald-700';
 
   return (
     <div className="space-y-6">
@@ -58,7 +60,7 @@ export default function Debtors() {
         <p className="text-gray-600">Receivables intelligence based on monthly snapshots</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-lg bg-blue-100">
@@ -76,10 +78,11 @@ export default function Debtors() {
               {growthUp ? <TrendingUp className="w-6 h-6 text-emerald-600" /> : <TrendingDown className="w-6 h-6 text-rose-600" />}
             </div>
             <div>
-              <p className="text-sm text-gray-600">MoM Debtors Growth</p>
+              <p className="text-sm text-gray-600">Change vs Last Closed</p>
               <p className={`text-2xl font-bold ${growthUp ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {(summary?.debtorGrowth || 0) >= 0 ? '+' : ''}{((summary?.debtorGrowth || 0) * 100).toFixed(1)}%
+                {changePct === null || changePct === undefined ? '—' : `${growthUp ? '+' : ''}${changePct.toFixed(1)}%`}
               </p>
+              <p className="text-xs text-gray-500 mt-1">{formatCurrency(changeAmount)}</p>
             </div>
           </div>
         </div>
@@ -89,8 +92,24 @@ export default function Debtors() {
               <Users className="w-6 h-6 text-slate-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Concentration (Top 5)</p>
-              <p className="text-2xl font-bold">{((summary?.concentrationRatio || 0) * 100).toFixed(0)}%</p>
+              <p className="text-sm text-gray-600">Concentration</p>
+              <p className="text-2xl font-bold">
+                {summary?.concentration?.top1Pct?.toFixed?.(0) ?? 0}% / {summary?.concentration?.top5Pct?.toFixed?.(0) ?? 0}%
+              </p>
+              <p className="text-xs text-gray-500">Top 1 / Top 5</p>
+            </div>
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-amber-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-amber-100">
+              <AlertTriangle className="w-6 h-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Risk</p>
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${riskClasses}`}>
+                {riskLabel}
+              </span>
             </div>
           </div>
         </div>
@@ -108,16 +127,16 @@ export default function Debtors() {
               </tr>
             </thead>
             <tbody>
-              {top.length === 0 ? (
+              {top10.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="text-center py-8 text-gray-500">No data</td>
                 </tr>
               ) : (
-                top.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100">
-                    <td className="py-3 px-4">{row.debtor_name || row.debtorName}</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(row.closing_balance || row.closingBalance)}</td>
-                    <td className="py-3 px-4 text-right">{((row.percentage_of_total || row.percentageOfTotal || 0) * 100).toFixed(1)}%</td>
+                top10.map((row) => (
+                  <tr key={row.guid || row.name} className="border-b border-gray-100">
+                    <td className="py-3 px-4">{row.name}</td>
+                    <td className="py-3 px-4 text-right">{formatCurrency(row.balance)}</td>
+                    <td className="py-3 px-4 text-right">{(row.sharePct || 0).toFixed(1)}%</td>
                   </tr>
                 ))
               )}
@@ -129,9 +148,9 @@ export default function Debtors() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-2">AI Insights</h2>
         <p className="text-sm text-gray-600">
-          {summary?.divergenceFlag
-            ? 'Debtors are growing faster than revenue. Tighten collections.'
-            : 'No debtor risks detected based on the latest closed month.'}
+          {riskLevel === 'high'
+            ? 'Receivables are highly concentrated. Monitor top counterparties closely.'
+            : 'Debtors look stable based on the latest balance snapshot.'}
         </p>
       </div>
     </div>
