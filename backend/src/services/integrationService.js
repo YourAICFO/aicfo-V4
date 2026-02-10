@@ -182,12 +182,14 @@ const syncIntegration = async (integrationId, companyId) => {
 
     const snapshotPayload = integration.config?.monthlySnapshot || null;
     const currentBalances = integration.config?.currentBalances || null;
+    const chartOfAccounts = integration.config?.chartOfAccounts || null;
     await enqueueJob('generateMonthlySnapshots', {
       companyId,
       amendedMonth: snapshotPayload?.month || amendedMonthKey,
       debtors: snapshotPayload?.debtors || null,
       creditors: snapshotPayload?.creditors || null,
-      currentBalances
+      currentBalances,
+      chartOfAccounts
     });
 
     await integration.update({

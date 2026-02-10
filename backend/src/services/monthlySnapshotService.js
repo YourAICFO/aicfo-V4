@@ -22,6 +22,7 @@ const {
 } = require('../models');
 const debtorsService = require('./debtorsService');
 const { normalizeAccountHead } = require('./accountHeadNormalizer');
+const { mapLedgersToCFOTotals, upsertLedgerClassifications } = require('./cfoAccountMappingService');
 
 const normalizeMonth = (value) => {
   if (!value) return null;
@@ -794,7 +795,7 @@ const upsertAlerts = async (companyId, transaction) => {
   }
 };
 
-const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastSyncedAt = null, debtors = null, creditors = null, currentBalances = null) => {
+const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastSyncedAt = null, debtors = null, creditors = null, currentBalances = null, chartOfAccounts = null) => {
   const latestClosedKey = getLatestClosedMonthKey();
   if (!latestClosedKey) return { months: 0 };
 
@@ -814,6 +815,7 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
 
   const debtorsByMonth = Array.isArray(debtors) ? { [amendedMonthKey]: debtors } : debtors;
   const creditorsByMonth = Array.isArray(creditors) ? { [amendedMonthKey]: creditors } : creditors;
+  const ledgersByMonth = Array.isArray(chartOfAccounts) ? { [amendedMonthKey]: chartOfAccounts } : chartOfAccounts;
 
   await sequelize.transaction(async (transaction) => {
     for (const monthKey of monthKeys) {
@@ -824,6 +826,38 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
       const monthCreditors = creditorsByMonth ? creditorsByMonth[monthKey] : null;
       if (monthDebtors || monthCreditors) {
         await upsertDebtorsCreditors(companyId, monthKey, monthDebtors, monthCreditors, transaction);
+      }
+
+      const ledgerSnapshot = ledgersByMonth
+        ? (ledgersByMonth[monthKey] || (ledgersByMonth.month === monthKey ? ledgersByMonth : null))
+        : null;
+      if (ledgerSnapshot && Array.isArray(ledgerSnapshot.ledgers) && Array.isArray(ledgerSnapshot.groups)) {
+        const { totals, counts, classifications } = mapLedgersToCFOTotals(ledgerSnapshot.ledgers, ledgerSnapshot.groups);
+        await upsertLedgerClassifications(companyId, classifications);
+
+        console.info({
+          companyId,
+          revenueLedgers: counts.revenue,
+          expenseLedgers: counts.expenses,
+          debtorLedgers: counts.debtors,
+          creditorLedgers: counts.creditors,
+          cashBankLedgers: counts.cash_bank
+        }, 'CFO mapping completed');
+
+        if (monthKey <= latestClosedKey) {
+          const revenueTotal = Number(totals.revenue || 0);
+          const expenseTotal = Number(totals.expenses || 0);
+          await MonthlyTrialBalanceSummary.update({
+            totalRevenue: revenueTotal,
+            totalExpenses: expenseTotal,
+            netProfit: revenueTotal - expenseTotal,
+            netCashflow: revenueTotal - expenseTotal,
+            cashAndBankBalance: Number(totals.cash_bank || 0)
+          }, {
+            where: { companyId, month: monthKey },
+            transaction
+          });
+        }
       }
     }
 
