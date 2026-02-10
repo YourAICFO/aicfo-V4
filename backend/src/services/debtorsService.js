@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const { MonthlyDebtor, MonthlyTrialBalanceSummary, CurrentDebtor } = require('../models');
-const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
+const { listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 
 const getLatestMonthKey = () => getLatestClosedMonthKey();
 
@@ -49,7 +50,7 @@ const getSummary = async (companyId) => {
     raw: true
   });
   const prevRevenueRow = await MonthlyTrialBalanceSummary.findOne({
-    where: { companyId, month: addMonths(latestMonth, -1) },
+    where: { companyId, month: getMonthKeyOffset(latestMonth, -1) },
     raw: true
   });
 
@@ -58,7 +59,7 @@ const getSummary = async (companyId) => {
   const revenueGrowth = prevRevenue > 0 ? (revenue - prevRevenue) / prevRevenue : 0;
 
   const prevTotalRow = await MonthlyDebtor.findOne({
-    where: { companyId, month: addMonths(latestMonth, -1) },
+    where: { companyId, month: getMonthKeyOffset(latestMonth, -1) },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
     raw: true
   });
@@ -92,16 +93,10 @@ const getTop = async (companyId) => {
 const getTrends = async (companyId) => {
   const latestMonth = getLatestMonthKey();
   if (!latestMonth) return { months: [] };
-  const startKey = addMonths(latestMonth, -11);
+  const startKey = getMonthKeyOffset(latestMonth, -11);
   const months = listMonthKeysBetween(startKey, latestMonth);
   const totals = await getTotalByMonth(companyId, months);
   return { months: totals };
-};
-
-const addMonths = (monthKey, delta) => {
-  const [year, month] = monthKey.split('-').map(Number);
-  const d = new Date(year, month - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
 module.exports = {

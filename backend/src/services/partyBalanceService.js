@@ -4,7 +4,7 @@ const {
   MonthlyCreditorsSnapshot,
   PartyBalanceLatest
 } = require('../models');
-const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
 
 const monthEndDate = (monthKey) => {
   if (!monthKey) return null;

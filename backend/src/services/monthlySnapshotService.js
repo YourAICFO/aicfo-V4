@@ -21,47 +21,15 @@ const {
   AccountingTermMapping,
   sequelize
 } = require('../models');
-const debtorsService = require('./debtorsService');
 const { normalizeAccountHead } = require('./accountHeadNormalizer');
 const { mapLedgersToCFOTotals, upsertLedgerClassifications } = require('./cfoAccountMappingService');
 
-const normalizeMonth = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 7);
-  }
-  if (typeof value === 'number') {
-    const asDate = new Date(value);
-    return Number.isNaN(asDate.getTime()) ? null : asDate.toISOString().slice(0, 7);
-  }
-  if (typeof value === 'string') {
-    if (/^\d{4}-\d{2}$/.test(value)) return value;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 7);
-  }
-  return null;
-};
+const { normalizeMonth, listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
+const addMonths = getMonthKeyOffset;
 
 const getLatestClosedMonthKey = (now = new Date()) => {
   const latestClosedStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return normalizeMonth(latestClosedStart);
-};
-
-const addMonths = (monthKey, delta) => {
-  const [year, month] = monthKey.split('-').map(Number);
-  const d = new Date(year, month - 1 + delta, 1);
-  return normalizeMonth(d);
-};
-
-const listMonthKeysBetween = (startKey, endKey) => {
-  const keys = [];
-  if (!startKey || !endKey) return keys;
-  let cursor = startKey;
-  while (cursor && cursor <= endKey) {
-    keys.push(cursor);
-    cursor = addMonths(cursor, 1);
-  }
-  return keys;
 };
 
 const ensureAccountingMonth = async (companyId, monthKey, isClosed, sourceLastSyncedAt, transaction) => {
@@ -464,7 +432,8 @@ const computeCfoMetrics = async (companyId, transaction) => {
   }
 
   try {
-    const debtorsSummary = await debtorsService.getSummary(companyId);
+    const { getSummary } = require('./debtorsService');
+    const debtorsSummary = await getSummary(companyId);
     await upsertMetric(companyId, 'debtors_revenue_divergence', debtorsSummary?.divergenceFlag ? 1 : 0, 'last_closed_month', transaction, { month: latestClosedKey });
   } catch (error) {
     await upsertMetric(companyId, 'debtors_revenue_divergence', 0, 'last_closed_month', transaction, { month: latestClosedKey });

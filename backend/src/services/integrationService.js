@@ -1,6 +1,6 @@
 const { Integration, Subscription, FinancialTransaction } = require('../models');
 const { enqueueJob } = require('../worker/queue');
-const { normalizeMonth } = require('./monthlySnapshotService');
+const { normalizeMonth } = require('../utils/monthKeyUtils');
 
 const enforceIntegrationLimit = async (companyId, subscription) => {
   if (!subscription) return;

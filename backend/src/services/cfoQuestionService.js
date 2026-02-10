@@ -12,7 +12,8 @@ const {
   CurrentLoan,
   CurrentLiquidityMetric
 } = require('../models');
-const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
+const { listMonthKeysBetween } = require('../utils/monthKeyUtils');
 const debtorsService = require('./debtorsService');
 const creditorsService = require('./creditorsService');
 

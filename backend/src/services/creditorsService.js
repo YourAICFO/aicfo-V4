@@ -1,14 +1,9 @@
 const { Sequelize } = require('sequelize');
 const { MonthlyCreditor, MonthlyTrialBalanceSummary, CurrentCreditor, CurrentCashBalance } = require('../models');
-const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
+const { listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 
 const getLatestMonthKey = () => getLatestClosedMonthKey();
-
-const addMonths = (monthKey, delta) => {
-  const [year, month] = monthKey.split('-').map(Number);
-  const d = new Date(year, month - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 
 const getTotalByMonth = async (companyId, months) => {
   const rows = await MonthlyCreditor.findAll({
@@ -70,7 +65,7 @@ const getTop = async (companyId) => {
 const getTrends = async (companyId) => {
   const latestMonth = getLatestMonthKey();
   if (!latestMonth) return { months: [] };
-  const startKey = addMonths(latestMonth, -11);
+  const startKey = getMonthKeyOffset(latestMonth, -11);
   const months = listMonthKeysBetween(startKey, latestMonth);
   const totals = await getTotalByMonth(companyId, months);
   return { months: totals };

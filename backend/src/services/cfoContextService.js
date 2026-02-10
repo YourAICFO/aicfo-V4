@@ -12,7 +12,8 @@ const {
   MonthlyDebtor,
   MonthlyCreditor
 } = require('../models');
-const { getLatestClosedMonthKey, listMonthKeysBetween } = require('./monthlySnapshotService');
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
+const { listMonthKeysBetween } = require('../utils/monthKeyUtils');
 const partyBalanceService = require('./partyBalanceService');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;

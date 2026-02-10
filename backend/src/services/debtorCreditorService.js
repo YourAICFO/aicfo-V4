@@ -1,8 +1,7 @@
 const { Sequelize } = require('sequelize');
 const { LedgerMonthlyBalance, sequelize } = require('../models');
-const { getLatestClosedMonthKey, normalizeMonth } = require('./monthlySnapshotService');
-
-const getCurrentMonthKey = () => normalizeMonth(new Date());
+const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
+const { getCurrentMonthKey } = require('../utils/monthKeyUtils');
 
 const computeConcentration = (rows, totalBalance) => {
   const sorted = [...rows].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
