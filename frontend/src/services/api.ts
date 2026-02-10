@@ -70,6 +70,12 @@ export const dashboardApi = {
   getCashflow: (period?: string) => api.get('/dashboard/cashflow', { params: { period } }),
 };
 
+// Sync Status API
+export const syncApi = {
+  getStatus: () => api.get('/sync/status'),
+  getValidation: (month: string) => api.get('/sync/validation', { params: { month } }),
+};
+
 // Transaction API
 export const transactionApi = {
   getAll: (params?: { type?: string; limit?: number; offset?: number }) =>

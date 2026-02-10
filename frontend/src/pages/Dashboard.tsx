@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { dashboardApi } from '../services/api';
+import { dashboardApi, syncApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { useSubscriptionStore } from '../store/subscriptionStore';
@@ -34,17 +34,42 @@ interface OverviewData {
 export default function Dashboard() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'processing' | 'ready' | 'failed'>('syncing');
+  const [lastSyncCompletedAt, setLastSyncCompletedAt] = useState<string | null>(null);
+  const [lastSnapshotMonth, setLastSnapshotMonth] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const { isTrial, trialEndsInDays } = useSubscriptionStore();
 
   useEffect(() => {
     if (!selectedCompanyId) return;
-    loadData();
+    loadSyncStatus();
   }, [selectedCompanyId]);
+
+  const loadSyncStatus = async () => {
+    try {
+      setLoading(true);
+      const response = await syncApi.getStatus();
+      const status = response?.data?.data?.status || 'syncing';
+      setSyncStatus(status);
+      setLastSyncCompletedAt(response?.data?.data?.last_sync_completed_at || null);
+      setLastSnapshotMonth(response?.data?.data?.last_snapshot_month || null);
+      setSyncError(response?.data?.data?.error_message || null);
+
+      if (status === 'ready') {
+        await loadData();
+      } else {
+        setData(null);
+      }
+    } catch (error) {
+      console.error('Failed to load sync status:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
-      setLoading(true);
       const response = await dashboardApi.getOverview();
 
       if (response?.data?.data) {
@@ -52,8 +77,6 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to load overview:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -159,6 +182,29 @@ export default function Dashboard() {
                 {trialEndsInDays <= 7 ? 'Your trial ends soon. Upgrade anytime to keep full access.' : 'Enjoy full access during your trial.'}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {syncStatus !== 'ready' && (
+        <div className="card border-amber-200 bg-amber-50">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                Data is syncing / processing.
+              </p>
+              <p className="text-xs text-amber-700">
+                Last sync: {lastSyncCompletedAt ? new Date(lastSyncCompletedAt).toLocaleString() : '—'}
+                {lastSnapshotMonth ? ` · Latest closed month: ${lastSnapshotMonth}` : ''}
+              </p>
+              {syncStatus === 'failed' && syncError && (
+                <p className="mt-1 text-xs text-red-700">{syncError}</p>
+              )}
+              <p className="mt-1 text-xs text-amber-700">Please refresh after a few minutes.</p>
+            </div>
+            <button className="btn-primary px-4 py-2" onClick={loadSyncStatus}>
+              Refresh
+            </button>
           </div>
         </div>
       )}

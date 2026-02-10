@@ -801,6 +801,17 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
   const startKey = amendedMonthKey || addMonths(latestClosedKey, -2);
   const monthKeys = listMonthKeysBetween(startKey, latestClosedKey);
 
+  try {
+    const { updateSyncStatus } = require('./snapshotValidator');
+    await updateSyncStatus(companyId, {
+      status: 'processing',
+      lastSnapshotMonth: latestClosedKey,
+      lastSyncStartedAt: new Date()
+    });
+  } catch (error) {
+    console.warn('Sync status update failed:', error.message);
+  }
+
   const debtorsByMonth = Array.isArray(debtors) ? { [amendedMonthKey]: debtors } : debtors;
   const creditorsByMonth = Array.isArray(creditors) ? { [amendedMonthKey]: creditors } : creditors;
 
@@ -832,6 +843,38 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
     await partyBalanceService.upsertLatestFromSnapshot(companyId);
   } catch (error) {
     console.warn('CFO question recompute failed:', error.message);
+  }
+
+  try {
+    const {
+      validateCompanySnapshot,
+      updateSyncStatus,
+      getLatestBalanceAsOfDate
+    } = require('./snapshotValidator');
+    let latestResult = null;
+    for (const monthKey of monthKeys) {
+      latestResult = await validateCompanySnapshot(companyId, monthKey);
+    }
+    const balanceAsOf = await getLatestBalanceAsOfDate(companyId);
+    const finalStatus = latestResult?.status === 'invalid' ? 'failed' : 'ready';
+    await updateSyncStatus(companyId, {
+      status: finalStatus,
+      lastSnapshotMonth: latestClosedKey,
+      lastBalanceAsOfDate: balanceAsOf,
+      lastSyncCompletedAt: new Date()
+    });
+  } catch (error) {
+    try {
+      const { updateSyncStatus } = require('./snapshotValidator');
+      await updateSyncStatus(companyId, {
+        status: 'failed',
+        lastSnapshotMonth: latestClosedKey,
+        errorMessage: error.message,
+        lastSyncCompletedAt: new Date()
+      });
+    } catch (innerError) {
+      console.warn('Snapshot validation failed:', innerError.message);
+    }
   }
 
   return { months: monthKeys.length };
