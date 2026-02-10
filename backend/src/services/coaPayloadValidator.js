@@ -36,7 +36,7 @@ const validateChartOfAccountsPayload = (payloadOrChartOfAccounts) => {
     }
   }
 
-  return { ok: true, chartOfAccounts: { groups, ledgers }, asOfDate };
+  return { ok: true, chartOfAccounts: { ...chartOfAccounts, groups, ledgers }, asOfDate };
 };
 
 module.exports = { validateChartOfAccountsPayload };

@@ -793,6 +793,25 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
   await upsertLedgerClassifications(companyId, classifications);
 
   const asOf = toDateOnlyString(asOfDate || new Date());
+  const currentMonthKey = normalizeMonth(new Date());
+  const isCurrentMonth = monthKey === currentMonthKey;
+  const balanceMap = new Map();
+  const balances = chartOfAccounts.balances || {};
+  const closedEntry = Array.isArray(balances.closedMonths)
+    ? balances.closedMonths.find((entry) => entry.monthKey === monthKey)
+    : null;
+  const items = monthKey === balances.current?.monthKey
+    ? balances.current?.items
+    : closedEntry?.items;
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      if (!item) continue;
+      const guid = item.ledgerGuid || item.guid || item.id;
+      if (!guid) continue;
+      const value = Number(item.balance || item.closingBalance || item.closing_balance || 0);
+      balanceMap.set(guid, Number.isFinite(value) ? value : 0);
+    }
+  }
   let written = 0;
   const writtenCounts = { debtors: 0, creditors: 0, cash_bank: 0 };
 
@@ -807,7 +826,7 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
       ledgerName: row.ledgerName || 'Unknown',
       parentGroup: row.parentGroup || null,
       cfoCategory: row.category,
-      balance: Number(row.balance || 0),
+      balance: balanceMap.has(row.ledgerGuid) ? balanceMap.get(row.ledgerGuid) : Number(row.balance || 0),
       asOfDate: asOf
     }, { transaction });
     written += 1;
@@ -817,6 +836,8 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
   console.info({
     companyId,
     monthKey,
+    ledgers_parsed: chartOfAccounts.ledgers.length,
+    ledgers_classified: classifications.length,
     revenueLedgers: counts.revenue,
     expenseLedgers: counts.expenses,
     debtorLedgers: counts.debtors,
@@ -827,6 +848,8 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
   console.info({
     companyId,
     monthKey,
+    balances_written_current_month: isCurrentMonth ? written : 0,
+    balances_written_closed_months: isCurrentMonth ? 0 : written,
     writtenDebtors: writtenCounts.debtors,
     writtenCreditors: writtenCounts.creditors,
     writtenCashBank: writtenCounts.cash_bank

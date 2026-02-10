@@ -1,6 +1,7 @@
 const { Integration, Subscription, FinancialTransaction } = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { normalizeMonth } = require('../utils/monthKeyUtils');
+const { normalizeCoaPayload } = require('./tallyCoaAdapter');
 
 const enforceIntegrationLimit = async (companyId, subscription) => {
   if (!subscription) return;
@@ -182,14 +183,16 @@ const syncIntegration = async (integrationId, companyId) => {
 
     const snapshotPayload = integration.config?.monthlySnapshot || null;
     const currentBalances = integration.config?.currentBalances || null;
-    const chartOfAccounts = integration.config?.chartOfAccounts || null;
+    const rawCoa = integration.config?.tallyCoaRaw || integration.config?.coaRaw || integration.config?.tallyMaster || integration.config?.chartOfAccounts || null;
+    const normalizedCoa = rawCoa ? normalizeCoaPayload(rawCoa, companyId) : null;
+    const chartOfAccounts = normalizedCoa?.chartOfAccounts || integration.config?.chartOfAccounts || null;
     await enqueueJob('generateMonthlySnapshots', {
       companyId,
       amendedMonth: snapshotPayload?.month || amendedMonthKey,
       debtors: snapshotPayload?.debtors || null,
       creditors: snapshotPayload?.creditors || null,
       currentBalances,
-      chartOfAccounts
+      chartOfAccounts: chartOfAccounts ? { ...chartOfAccounts, asOfDate: normalizedCoa?.asOfDate } : null
     });
 
     await integration.update({
