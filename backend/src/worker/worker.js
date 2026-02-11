@@ -1,4 +1,9 @@
 require('dotenv').config();
+console.log("WORKER_BOOT_V=2026-02-11-redis-debug-2");
+if (process.env.DISABLE_WORKER === "true") {
+  console.log("WORKER_DISABLED=true; exiting 0");
+  process.exit(0);
+}
 const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const { logger } = require('./logger');
@@ -45,6 +50,10 @@ const startWorker = async () => {
   const target = getRedisTarget();
   const { url: _redisUrl, ...redisOptions } = connection;
   const redis = new IORedis(process.env.REDIS_URL, redisOptions);
+  let lastRedisError = null;
+  redis.on('error', (clientErr) => {
+    lastRedisError = clientErr;
+  });
 
   logger.info(
     { event: 'redis_connect_attempt', host: target.host, port: target.port, tls: target.tls },
@@ -55,20 +64,28 @@ const startWorker = async () => {
     const pong = await pingRedis(redis);
     logger.info({ event: 'redis_ping_ok', response: pong, host: target.host, port: target.port, tls: target.tls }, 'Redis ping succeeded');
   } catch (err) {
-    const firstStackLine = typeof err?.stack === 'string' ? err.stack.split('\n')[0] : null;
+    const effectiveErr = lastRedisError || err;
+    console.error("REDIS_PING_FAILED", {
+      code: err?.code,
+      errno: err?.errno,
+      syscall: err?.syscall,
+      message: err?.message,
+      stack: err?.stack ? err.stack.split("\n").slice(0,2).join(" | ") : null,
+    });
+    const firstStackLine = typeof effectiveErr?.stack === 'string' ? effectiveErr.stack.split('\n')[0] : null;
     logger.error(
       {
         event: 'redis_ping_failed',
         host: target.host,
         port: target.port,
         tls: target.tls,
-        code: err?.code || null,
-        errno: err?.errno || null,
-        syscall: err?.syscall || null,
-        message: err?.message || 'unknown',
+        code: effectiveErr?.code || null,
+        errno: effectiveErr?.errno || null,
+        syscall: effectiveErr?.syscall || null,
+        message: effectiveErr?.message || 'unknown',
         stack: firstStackLine
       },
-      'Redis ping failed; worker exiting'
+      `Redis ping failed; worker exiting (host=${target.host || 'unknown'} port=${target.port || 'unknown'} tls=${target.tls ? 'true' : 'false'} code=${effectiveErr?.code || 'n/a'} errno=${effectiveErr?.errno || 'n/a'} syscall=${effectiveErr?.syscall || 'n/a'} message=${effectiveErr?.message || 'unknown'})`
     );
     process.exit(1);
   } finally {
