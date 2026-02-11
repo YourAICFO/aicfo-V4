@@ -1,5 +1,6 @@
 const { Queue, QueueEvents } = require('bullmq');
 const { logger } = require('./logger');
+const { logError } = require('../utils/logger');
 
 const REDIS_URL = process.env.REDIS_URL;
 if (!REDIS_URL) {
@@ -30,6 +31,11 @@ events.on('completed', ({ jobId }) => {
 
 events.on('failed', ({ jobId, failedReason }) => {
   logger.error({ jobId, failedReason }, 'Job failed');
+  logError({
+    service: 'ai-cfo-worker',
+    run_id: `job-${jobId}`,
+    event: 'worker_job_failed'
+  }, 'Queue event job failed', new Error(String(failedReason || 'unknown failure')));
 });
 
 const enqueueJob = async (name, data, options = {}) => {

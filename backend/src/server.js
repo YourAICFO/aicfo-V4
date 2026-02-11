@@ -1,10 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
+const pinoHttp = require('pino-http');
 require('dotenv').config();
 
 const { sequelize } = require('./models');
+const { logger, logError } = require('./utils/logger');
+const { requestContext } = require('./middleware/requestContext');
+const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./utils/sentry');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -29,6 +32,7 @@ const devToolsRoutes = require('./routes/devTools');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+initSentry({ serviceName: 'ai-cfo-api' });
 
 /* ===============================
    Security middleware
@@ -61,11 +65,20 @@ app.use(
 );
 
 /* ===============================
-   Logging
+   Request context + logging
 ================================ */
+app.use(requestContext);
 app.use(
-  morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev')
+  pinoHttp({
+    logger,
+    customProps: (req) => ({
+      run_id: req.run_id,
+      user_id: req.user?.id || null,
+      company_id: req.company?.id || req.companyId || null
+    })
+  })
 );
+app.use(sentryRequestHandler);
 
 /* ===============================
    Body parsing
@@ -131,12 +144,25 @@ app.use((req, res) => {
 /* ===============================
    Global error handler
 ================================ */
+app.use(sentryErrorHandler);
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+  const runId = req.run_id || null;
+  if (req.log) {
+    req.log.error({ err, run_id: runId }, 'Unhandled error');
+  } else {
+    logger.error({ err, run_id: runId }, 'Unhandled error');
+  }
+  logError({
+    run_id: runId,
+    company_id: req.company?.id || req.companyId || null,
+    event: 'api_unhandled_error',
+    service: 'ai-cfo-api'
+  }, 'Unhandled API error', err);
 
   res.status(500).json({
     success: false,
     error: 'Internal server error',
+    run_id: runId,
     ...(process.env.NODE_ENV !== 'production' && {
       message: err.message,
       stack: err.stack,
@@ -150,7 +176,7 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     await sequelize.authenticate();
-    console.log('Database connection established successfully.');
+    logger.info('Database connection established successfully.');
 
     if (sequelize.getDialect() === 'postgres') {
       try {
@@ -168,21 +194,21 @@ const startServer = async () => {
           END $$;
         `);
       } catch (error) {
-        console.warn('Failed to ensure OPENING_BALANCE enum value:', error.message);
+        logger.warn({ err: error }, 'Failed to ensure OPENING_BALANCE enum value');
       }
     }
 
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync({ alter: false });
-      console.log('Database models synchronized.');
+      logger.info('Database models synchronized.');
     }
 
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info({ port: PORT }, 'Server running');
+      logger.info({ environment: process.env.NODE_ENV || 'development' }, 'Environment');
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 };
@@ -191,13 +217,13 @@ const startServer = async () => {
    Graceful shutdown
 ================================ */
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
+  logger.info('SIGTERM received, shutting down gracefully');
   await sequelize.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
+  logger.info('SIGINT received, shutting down gracefully');
   await sequelize.close();
   process.exit(0);
 });

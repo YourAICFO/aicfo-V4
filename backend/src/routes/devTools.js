@@ -1,6 +1,9 @@
 const express = require('express');
+const fs = require('fs');
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { requireAdminEmail } = require('../middleware/requireAdminEmail');
+const { z, validate, ValidationError } = require('../utils/validation');
+const { parseDateStrict } = require('../utils/dates');
 const { sequelize, LedgerMonthlyBalance } = require('../models');
 const { mapLedgersToCFOTotals, upsertLedgerClassifications } = require('../services/cfoAccountMappingService');
 const { getLatestClosedMonthKey } = require('../services/monthlySnapshotService');
@@ -8,6 +11,9 @@ const { normalizeMonth } = require('../utils/monthKeyUtils');
 const { logUsageEvent } = require('../services/adminUsageService');
 
 const router = express.Router();
+const mockSyncSchema = z.object({
+  asOfDate: z.string().optional()
+});
 
 const buildMockPayload = () => {
   const groups = [
@@ -39,9 +45,22 @@ router.post('/mock-coa-sync', authenticate, requireCompany, requireAdminEmail, a
   }
 
   const companyId = req.company.id;
+  let asOfOverride = null;
+  try {
+    const parsed = validate(mockSyncSchema, req.body || {});
+    if (parsed.asOfDate) {
+      asOfOverride = parseDateStrict(parsed.asOfDate).toISOString().slice(0, 10);
+    }
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return res.status(400).json({ success: false, error: 'Invalid payload', issues: error.issues, run_id: req.run_id || null });
+    }
+    return res.status(400).json({ success: false, error: 'Invalid payload', run_id: req.run_id || null });
+  }
+
   const currentMonthKey = normalizeMonth(new Date());
   const latestClosedMonthKey = getLatestClosedMonthKey();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = asOfOverride || new Date().toISOString().slice(0, 10);
 
   const { groups, ledgers } = buildMockPayload();
   const { classifications } = mapLedgersToCFOTotals(ledgers, groups);
@@ -100,8 +119,23 @@ router.post('/mock-coa-sync', authenticate, requireCompany, requireAdminEmail, a
       }
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: 'Mock COA sync failed' });
+    return res.status(500).json({ success: false, error: 'Mock COA sync failed', run_id: req.run_id || null });
   }
+});
+
+router.get('/doctor-last', authenticate, requireCompany, requireAdminEmail, (req, res) => {
+  if (process.env.NODE_ENV === 'production' && process.env.DEV_MOCK_ENABLED !== 'true') {
+    return res.status(403).json({ success: false, error: 'Disabled in production', run_id: req.run_id || null });
+  }
+
+  const candidates = ['/tmp/doctor_report.txt', require('path').join(__dirname, '..', 'doctor_report.txt')];
+  const filePath = candidates.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    return res.status(404).json({ success: false, error: 'Doctor report not found', run_id: req.run_id || null });
+  }
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  return res.json({ success: true, file: filePath, report: content, run_id: req.run_id || null });
 });
 
 module.exports = router;

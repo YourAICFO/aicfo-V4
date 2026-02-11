@@ -34,6 +34,8 @@ const { PartyBalanceLatest } = require('./PartyBalanceLatest');
 const { AccountHeadDictionary } = require('./AccountHeadDictionary');
 const { CFOLedgerClassification } = require('./CFOLedgerClassification');
 const { LedgerMonthlyBalance } = require('./LedgerMonthlyBalance');
+const { AppLog } = require('./AppLog');
+const { AuditLog } = require('./AuditLog');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -160,6 +162,8 @@ module.exports = {
   AccountHeadDictionary,
   CFOLedgerClassification,
   LedgerMonthlyBalance,
+  AppLog,
+  AuditLog,
   CFOQuestion,
   CFOQuestionMetric,
   CFOQuestionRule,
