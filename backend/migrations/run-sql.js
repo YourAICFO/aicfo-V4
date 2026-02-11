@@ -1,7 +1,28 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { sequelize } = require('../src/models');
+const { Sequelize, QueryTypes } = require('sequelize');
+
+if (!process.env.DATABASE_URL) {
+  console.error('Migration runner failed: DATABASE_URL is required');
+  process.exit(1);
+}
+
+console.log('MIGRATE_MODE: db-only');
+
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: 'postgres',
+  logging: false,
+  dialectOptions:
+    process.env.NODE_ENV === 'production'
+      ? {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false
+          }
+        }
+      : {}
+});
 
 const ensureSchemaMigrations = async () => {
   await sequelize.query(`
@@ -16,7 +37,7 @@ const ensureSchemaMigrations = async () => {
 const getAppliedMigrations = async () => {
   const rows = await sequelize.query(
     'SELECT filename FROM schema_migrations ORDER BY filename ASC',
-    { type: sequelize.QueryTypes.SELECT }
+    { type: QueryTypes.SELECT }
   );
   return new Set(rows.map((r) => r.filename));
 };
@@ -58,9 +79,15 @@ const run = async () => {
     }
 
     console.log(`Migrations complete. applied=${appliedCount} skipped=${skippedCount}`);
+    await sequelize.close();
     process.exit(0);
   } catch (error) {
     console.error('Migration runner failed:', error.message);
+    try {
+      await sequelize.close();
+    } catch (_) {
+      // ignore close errors
+    }
     process.exit(1);
   }
 };
