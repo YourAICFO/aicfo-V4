@@ -55,6 +55,7 @@ const startWorker = async () => {
     const pong = await pingRedis(redis);
     logger.info({ event: 'redis_ping_ok', response: pong, host: target.host, port: target.port, tls: target.tls }, 'Redis ping succeeded');
   } catch (err) {
+    const firstStackLine = typeof err?.stack === 'string' ? err.stack.split('\n')[0] : null;
     logger.error(
       {
         event: 'redis_ping_failed',
@@ -62,7 +63,10 @@ const startWorker = async () => {
         port: target.port,
         tls: target.tls,
         code: err?.code || null,
-        error: err?.message || 'unknown'
+        errno: err?.errno || null,
+        syscall: err?.syscall || null,
+        message: err?.message || 'unknown',
+        stack: firstStackLine
       },
       'Redis ping failed; worker exiting'
     );
