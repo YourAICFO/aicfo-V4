@@ -3,12 +3,36 @@ const { logger } = require('./logger');
 const { logError } = require('../utils/logger');
 
 const REDIS_URL = process.env.REDIS_URL;
-if (!REDIS_URL) {
-  throw new Error('REDIS_URL is required for BullMQ connection');
-}
 const QUEUE_NAME = process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs';
 
-const connection = { url: REDIS_URL };
+const connection = {
+  url: REDIS_URL,
+  maxRetriesPerRequest: null,
+  enableReadyCheck: true,
+  connectTimeout: 10000,
+  retryStrategy: (times) => Math.min(times * 200, 2000)
+};
+
+const getRedisTarget = () => {
+  if (!REDIS_URL) {
+    return { host: null, port: null, tls: false };
+  }
+  try {
+    const parsed = new URL(REDIS_URL);
+    return {
+      host: parsed.hostname || null,
+      port: parsed.port ? Number(parsed.port) : null,
+      tls: parsed.protocol === 'rediss:'
+    };
+  } catch (_) {
+    return { host: null, port: null, tls: false };
+  }
+};
+
+if (!REDIS_URL) {
+  logger.error({ event: 'redis_url_missing' }, 'REDIS_URL is required for BullMQ connection');
+  throw new Error('REDIS_URL is required for BullMQ connection');
+}
 
 const queue = new Queue(QUEUE_NAME, {
   connection,
@@ -48,5 +72,6 @@ module.exports = {
   events,
   enqueueJob,
   connection,
-  QUEUE_NAME
+  QUEUE_NAME,
+  getRedisTarget
 };
