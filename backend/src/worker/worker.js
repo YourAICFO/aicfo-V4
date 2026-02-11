@@ -26,14 +26,11 @@ const handlers = {
   generateMonthlySnapshots
 };
 
-const pingRedis = async (redisClient) => {
-  const timeoutMs = 10000;
-  const pingPromise = redisClient.ping();
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`Redis ping timed out after ${timeoutMs}ms`)), timeoutMs);
-  });
-  return Promise.race([pingPromise, timeoutPromise]);
-};
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`PING_TIMEOUT_${ms}ms`)), ms))
+  ]);
 
 const startWorker = async () => {
   if (process.env.DISABLE_WORKER === 'true') {
@@ -49,7 +46,7 @@ const startWorker = async () => {
   const { connection, QUEUE_NAME, getRedisTarget } = require('./queue');
   const target = getRedisTarget();
   const { url: _redisUrl, ...redisOptions } = connection;
-  const redis = new IORedis(process.env.REDIS_URL, redisOptions);
+  const redis = new IORedis(process.env.REDIS_URL, { ...redisOptions, lazyConnect: true });
   let lastRedisError = null;
   redis.on('error', (clientErr) => {
     lastRedisError = clientErr;
@@ -61,16 +58,20 @@ const startWorker = async () => {
   );
 
   try {
-    const pong = await pingRedis(redis);
+    await redis.connect();
+    const pong = await withTimeout(redis.ping(), 10000);
+    console.log("REDIS_PING_OK", pong);
     logger.info({ event: 'redis_ping_ok', response: pong, host: target.host, port: target.port, tls: target.tls }, 'Redis ping succeeded');
+    await redis.quit();
   } catch (err) {
     const effectiveErr = lastRedisError || err;
     console.error("REDIS_PING_FAILED", {
-      code: err?.code,
-      errno: err?.errno,
-      syscall: err?.syscall,
-      message: err?.message,
-      stack: err?.stack ? err.stack.split("\n").slice(0,2).join(" | ") : null,
+      name: effectiveErr?.name,
+      code: effectiveErr?.code,
+      errno: effectiveErr?.errno,
+      syscall: effectiveErr?.syscall,
+      message: effectiveErr?.message,
+      stack: effectiveErr?.stack ? effectiveErr.stack.split("\n").slice(0,2).join(" | ") : null,
     });
     const firstStackLine = typeof effectiveErr?.stack === 'string' ? effectiveErr.stack.split('\n')[0] : null;
     logger.error(
@@ -87,13 +88,8 @@ const startWorker = async () => {
       },
       `Redis ping failed; worker exiting (host=${target.host || 'unknown'} port=${target.port || 'unknown'} tls=${target.tls ? 'true' : 'false'} code=${effectiveErr?.code || 'n/a'} errno=${effectiveErr?.errno || 'n/a'} syscall=${effectiveErr?.syscall || 'n/a'} message=${effectiveErr?.message || 'unknown'})`
     );
+    try { redis.disconnect(); } catch {}
     process.exit(1);
-  } finally {
-    try {
-      await redis.quit();
-    } catch (_) {
-      redis.disconnect();
-    }
   }
 
   const worker = new Worker(
