@@ -41,16 +41,28 @@ CREATE INDEX IF NOT EXISTS cfo_question_rules_question_id_idx ON cfo_question_ru
 CREATE UNIQUE INDEX IF NOT EXISTS cfo_question_metrics_unique_idx ON cfo_question_metrics(question_id, metric_key, time_scope);
 CREATE UNIQUE INDEX IF NOT EXISTS cfo_question_rules_unique_idx ON cfo_question_rules(question_id, severity, insight_template);
 
+-- Compatibility guards for existing installs where timestamp columns may exist without defaults
+ALTER TABLE cfo_questions
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW();
+
+ALTER TABLE cfo_questions
+  ALTER COLUMN created_at SET DEFAULT NOW(),
+  ALTER COLUMN updated_at SET DEFAULT NOW();
+
+UPDATE cfo_questions SET created_at = NOW() WHERE created_at IS NULL;
+UPDATE cfo_questions SET updated_at = NOW() WHERE updated_at IS NULL;
+
 -- Seed core questions
-INSERT INTO cfo_questions (code, title, category, description)
+INSERT INTO cfo_questions (code, title, category, description, created_at, updated_at)
 VALUES
-  ('CASH_RUNWAY_STATUS', 'Is my cash runway healthy?', 'cash', 'Assess runway based on live cash and 3M net cashflow'),
-  ('PROFITABILITY_STATUS', 'Is profitability improving?', 'profitability', 'Evaluate latest closed month net profit'),
-  ('REVENUE_GROWTH_3M', 'Is revenue growing over 3 months?', 'growth', '3M revenue trend vs prior 3M'),
-  ('EXPENSE_GROWTH_3M', 'Are expenses rising too fast?', 'risk', '3M expense trend vs prior 3M'),
-  ('DEBTORS_CONCENTRATION', 'Is debtor concentration risky?', 'debtors', 'Top debtor concentration risk'),
-  ('CREDITORS_PRESSURE', 'Are creditors creating cash pressure?', 'creditors', 'Payables vs current cash'),
-  ('DEBTORS_VS_REVENUE', 'Are debtors rising faster than revenue?', 'debtors', 'Receivables growth vs revenue growth')
+  ('CASH_RUNWAY_STATUS', 'Is my cash runway healthy?', 'cash', 'Assess runway based on live cash and 3M net cashflow', NOW(), NOW()),
+  ('PROFITABILITY_STATUS', 'Is profitability improving?', 'profitability', 'Evaluate latest closed month net profit', NOW(), NOW()),
+  ('REVENUE_GROWTH_3M', 'Is revenue growing over 3 months?', 'growth', '3M revenue trend vs prior 3M', NOW(), NOW()),
+  ('EXPENSE_GROWTH_3M', 'Are expenses rising too fast?', 'risk', '3M expense trend vs prior 3M', NOW(), NOW()),
+  ('DEBTORS_CONCENTRATION', 'Is debtor concentration risky?', 'debtors', 'Top debtor concentration risk', NOW(), NOW()),
+  ('CREDITORS_PRESSURE', 'Are creditors creating cash pressure?', 'creditors', 'Payables vs current cash', NOW(), NOW()),
+  ('DEBTORS_VS_REVENUE', 'Are debtors rising faster than revenue?', 'debtors', 'Receivables growth vs revenue growth', NOW(), NOW())
 ON CONFLICT (code) DO NOTHING;
 
 -- Metrics mapping
