@@ -24,6 +24,7 @@ const partyRoutes = require('./routes/party');
 const syncStatusRoutes = require('./routes/syncStatus');
 const debtorsRoutes = require('./routes/debtors');
 const creditorsRoutes = require('./routes/creditors');
+const devToolsRoutes = require('./routes/devTools');
 
 
 const app = express();
@@ -101,6 +102,7 @@ app.use('/api/party', partyRoutes);
 app.use('/api/sync', syncStatusRoutes);
 app.use('/api/debtors', debtorsRoutes);
 app.use('/api/creditors', creditorsRoutes);
+app.use('/api/dev', devToolsRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/admin', adminRoutes);
 
