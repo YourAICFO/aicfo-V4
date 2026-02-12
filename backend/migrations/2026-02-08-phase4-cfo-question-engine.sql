@@ -53,6 +53,22 @@ ALTER TABLE cfo_questions
 UPDATE cfo_questions SET created_at = NOW() WHERE created_at IS NULL;
 UPDATE cfo_questions SET updated_at = NOW() WHERE updated_at IS NULL;
 
+ALTER TABLE cfo_question_metrics
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE cfo_question_metrics
+  ALTER COLUMN created_at SET DEFAULT NOW();
+
+UPDATE cfo_question_metrics SET created_at = NOW() WHERE created_at IS NULL;
+
+ALTER TABLE cfo_question_rules
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE cfo_question_rules
+  ALTER COLUMN created_at SET DEFAULT NOW();
+
+UPDATE cfo_question_rules SET created_at = NOW() WHERE created_at IS NULL;
+
 -- Seed core questions
 INSERT INTO cfo_questions (code, title, category, description, created_at, updated_at)
 VALUES
@@ -66,104 +82,104 @@ VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- Metrics mapping
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'cash_runway_months', 'live' FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'cash_runway_months', 'live', NOW() FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'cash_balance_live', 'live' FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'cash_balance_live', 'live', NOW() FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'avg_net_cash_outflow_3m', '3m' FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'net_profit_last_closed', 'last_closed_month' FROM cfo_questions WHERE code = 'PROFITABILITY_STATUS'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'avg_net_cash_outflow_3m', '3m', NOW() FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'revenue_growth_3m', '3m' FROM cfo_questions WHERE code = 'REVENUE_GROWTH_3M'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'net_profit_last_closed', 'last_closed_month', NOW() FROM cfo_questions WHERE code = 'PROFITABILITY_STATUS'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'expense_growth_3m', '3m' FROM cfo_questions WHERE code = 'EXPENSE_GROWTH_3M'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'revenue_growth_3m', '3m', NOW() FROM cfo_questions WHERE code = 'REVENUE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'debtors_concentration_ratio', 'live' FROM cfo_questions WHERE code = 'DEBTORS_CONCENTRATION'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'expense_growth_3m', '3m', NOW() FROM cfo_questions WHERE code = 'EXPENSE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'creditors_cash_pressure', 'live' FROM cfo_questions WHERE code = 'CREDITORS_PRESSURE'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'debtors_concentration_ratio', 'live', NOW() FROM cfo_questions WHERE code = 'DEBTORS_CONCENTRATION'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope)
-SELECT id, 'debtors_revenue_divergence', 'last_closed_month' FROM cfo_questions WHERE code = 'DEBTORS_VS_REVENUE'
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'creditors_cash_pressure', 'live', NOW() FROM cfo_questions WHERE code = 'CREDITORS_PRESSURE'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO cfo_question_metrics (question_id, metric_key, time_scope, created_at)
+SELECT id, 'debtors_revenue_divergence', 'last_closed_month', NOW() FROM cfo_questions WHERE code = 'DEBTORS_VS_REVENUE'
 ON CONFLICT DO NOTHING;
 
 -- Rules
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"cash_runway_months":{"lt":3}}', 'critical', 'Your cash runway is {{cash_runway_months}} months, which is critically low. Current cash is ₹{{cash_balance_live}} and average net cash outflow is ₹{{avg_net_cash_outflow_3m}}.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"cash_runway_months":{"lt":3}}', 'critical', 'Your cash runway is {{cash_runway_months}} months, which is critically low. Current cash is ₹{{cash_balance_live}} and average net cash outflow is ₹{{avg_net_cash_outflow_3m}}.', NOW()
 FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"cash_runway_months":{"lt":6}}', 'warning', 'Your cash runway is {{cash_runway_months}} months, which needs attention. Current cash is ₹{{cash_balance_live}} and average net cash outflow is ₹{{avg_net_cash_outflow_3m}}.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"cash_runway_months":{"lt":6}}', 'warning', 'Your cash runway is {{cash_runway_months}} months, which needs attention. Current cash is ₹{{cash_balance_live}} and average net cash outflow is ₹{{avg_net_cash_outflow_3m}}.', NOW()
 FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"cash_runway_months":{"gte":6}}', 'good', 'Your cash runway is {{cash_runway_months}} months, which is healthy. Current cash is ₹{{cash_balance_live}}.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"cash_runway_months":{"gte":6}}', 'good', 'Your cash runway is {{cash_runway_months}} months, which is healthy. Current cash is ₹{{cash_balance_live}}.', NOW()
 FROM cfo_questions WHERE code = 'CASH_RUNWAY_STATUS'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"net_profit_last_closed":{"lt":0}}', 'warning', 'Your latest closed month shows a net loss of ₹{{net_profit_last_closed}}. Review expenses and pricing.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"net_profit_last_closed":{"lt":0}}', 'warning', 'Your latest closed month shows a net loss of ₹{{net_profit_last_closed}}. Review expenses and pricing.', NOW()
 FROM cfo_questions WHERE code = 'PROFITABILITY_STATUS'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"net_profit_last_closed":{"gte":0}}', 'good', 'Your latest closed month shows a net profit of ₹{{net_profit_last_closed}}.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"net_profit_last_closed":{"gte":0}}', 'good', 'Your latest closed month shows a net profit of ₹{{net_profit_last_closed}}.', NOW()
 FROM cfo_questions WHERE code = 'PROFITABILITY_STATUS'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"revenue_growth_3m":{"lt":0}}', 'warning', 'Revenue is declining over the last 3 closed months ({{revenue_growth_3m}}%).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"revenue_growth_3m":{"lt":0}}', 'warning', 'Revenue is declining over the last 3 closed months ({{revenue_growth_3m}}%).', NOW()
 FROM cfo_questions WHERE code = 'REVENUE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"revenue_growth_3m":{"gte":0}}', 'good', 'Revenue is growing over the last 3 closed months ({{revenue_growth_3m}}%).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"revenue_growth_3m":{"gte":0}}', 'good', 'Revenue is growing over the last 3 closed months ({{revenue_growth_3m}}%).', NOW()
 FROM cfo_questions WHERE code = 'REVENUE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"expense_growth_3m":{"gt":0.15}}', 'warning', 'Expenses are rising faster than expected over the last 3 closed months ({{expense_growth_3m}}%).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"expense_growth_3m":{"gt":0.15}}', 'warning', 'Expenses are rising faster than expected over the last 3 closed months ({{expense_growth_3m}}%).', NOW()
 FROM cfo_questions WHERE code = 'EXPENSE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"expense_growth_3m":{"lte":0.15}}', 'good', 'Expense growth is within acceptable limits ({{expense_growth_3m}}%).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"expense_growth_3m":{"lte":0.15}}', 'good', 'Expense growth is within acceptable limits ({{expense_growth_3m}}%).', NOW()
 FROM cfo_questions WHERE code = 'EXPENSE_GROWTH_3M'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"debtors_concentration_ratio":{"gt":0.5}}', 'warning', 'More than 50% of receivables are concentrated in top debtors ({{debtors_concentration_ratio}}).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"debtors_concentration_ratio":{"gt":0.5}}', 'warning', 'More than 50% of receivables are concentrated in top debtors ({{debtors_concentration_ratio}}).', NOW()
 FROM cfo_questions WHERE code = 'DEBTORS_CONCENTRATION'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"debtors_concentration_ratio":{"lte":0.5}}', 'good', 'Receivables concentration is within a healthy range ({{debtors_concentration_ratio}}).'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"debtors_concentration_ratio":{"lte":0.5}}', 'good', 'Receivables concentration is within a healthy range ({{debtors_concentration_ratio}}).', NOW()
 FROM cfo_questions WHERE code = 'DEBTORS_CONCENTRATION'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"creditors_cash_pressure":{"eq":true}}', 'warning', 'Creditors outstanding exceed current cash balance, creating near-term pressure.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"creditors_cash_pressure":{"eq":true}}', 'warning', 'Creditors outstanding exceed current cash balance, creating near-term pressure.', NOW()
 FROM cfo_questions WHERE code = 'CREDITORS_PRESSURE'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"creditors_cash_pressure":{"eq":false}}', 'good', 'Current cash appears sufficient relative to creditors outstanding.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"creditors_cash_pressure":{"eq":false}}', 'good', 'Current cash appears sufficient relative to creditors outstanding.', NOW()
 FROM cfo_questions WHERE code = 'CREDITORS_PRESSURE'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"debtors_revenue_divergence":{"eq":true}}', 'warning', 'Debtors are rising faster than revenue. This can strain cash collections.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"debtors_revenue_divergence":{"eq":true}}', 'warning', 'Debtors are rising faster than revenue. This can strain cash collections.', NOW()
 FROM cfo_questions WHERE code = 'DEBTORS_VS_REVENUE'
 ON CONFLICT DO NOTHING;
-INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template)
-SELECT id, '{"debtors_revenue_divergence":{"eq":false}}', 'good', 'Debtors growth is aligned with revenue growth.'
+INSERT INTO cfo_question_rules (question_id, condition, severity, insight_template, created_at)
+SELECT id, '{"debtors_revenue_divergence":{"eq":false}}', 'good', 'Debtors growth is aligned with revenue growth.', NOW()
 FROM cfo_questions WHERE code = 'DEBTORS_VS_REVENUE'
 ON CONFLICT DO NOTHING;
