@@ -19,6 +19,16 @@ const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '4', 10);
 initSentry({ serviceName: 'ai-cfo-worker' });
 
 const handlers = {
+  healthPing: async (data, context = {}) => {
+    logger.info({
+      event: 'HEALTH_PING_OK',
+      jobId: context.jobId || null,
+      run_id: context.runId || null,
+      companyId: data?.companyId || null,
+      at: data?.at || null
+    }, 'HEALTH_PING_OK');
+    return { ok: true };
+  },
   generateAIInsights,
   updateReports,
   batchRecalc,
@@ -111,7 +121,7 @@ const startWorker = async () => {
 
       let result;
       try {
-        result = await handler(job.data);
+        result = await handler(job.data, { jobId: job.id, runId });
       } catch (err) {
         captureException(err, {
           run_id: runId,
