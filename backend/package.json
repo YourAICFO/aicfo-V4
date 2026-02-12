@@ -4,6 +4,7 @@
   "description": "AI CFO Platform Backend",
   "main": "src/server.js",
   "scripts": {
+    "prestart": "node migrations/run-sql.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "worker": "node src/worker/worker.js",
