@@ -63,6 +63,7 @@ const resolveByRules = async ({ sourceSystem, ledgerName, groupName, accountType
   const fields = {
     ledger_name: String(ledgerName || '').toLowerCase(),
     group_name: String(groupName || '').toLowerCase(),
+    source_group_name: String(groupName || '').toLowerCase(),
     account_type: String(accountType || '').toLowerCase(),
     category: String(category || '').toLowerCase()
   };
