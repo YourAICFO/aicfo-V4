@@ -48,7 +48,7 @@ router.post('/queue/ping', requireAdminApiKey, async (req, res) => {
     const companyId = req.body?.companyId || null;
     const at = new Date().toISOString();
     const job = await enqueueJob('healthPing', { companyId, at });
-    return res.json({ enqueued: true, jobId: job.id });
+    return res.json({ ok: true, jobId: job.id });
   } catch (error) {
     logger.error({ event: 'queue_ping_enqueue_failed', error: error.message }, 'Failed to enqueue healthPing');
     await logError({ event: 'queue_ping_enqueue_failed', service: 'ai-cfo-api' }, 'Failed to enqueue healthPing', error);
