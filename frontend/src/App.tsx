@@ -18,6 +18,7 @@ import Home from './pages/Home';
 import Debtors from './pages/Debtors';
 import Creditors from './pages/Creditors';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminControlTower from './pages/AdminControlTower';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -42,6 +43,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/create-company" element={<CreateCompany />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/control-tower" element={<AdminControlTower />} />
         </Route>
       </Route>
     </Routes>

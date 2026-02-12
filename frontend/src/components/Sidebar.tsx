@@ -24,6 +24,7 @@ const menuItems = [
   { path: '/ai-chat', label: 'AI Chat', icon: MessageSquare },
   { path: '/transactions', label: 'Transactions', icon: List },
   { path: '/integrations', label: 'Integrations', icon: Plug },
+  { path: '/admin/control-tower', label: 'Admin Control', icon: LayoutDashboard },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { requireAdminEmail } = require('../middleware/requireAdminEmail');
 const { adminUsageService } = require('../services');
+const adminControlTowerService = require('../services/adminControlTowerService');
 
 router.get('/summary', authenticate, requireAdminEmail, async (req, res) => {
   try {
@@ -13,29 +14,75 @@ router.get('/summary', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/usage', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/customers', authenticate, requireAdminEmail, async (req, res) => {
   try {
-    const months = Number(req.query.months || 12);
-    const data = await adminUsageService.getUsageByMonth(months);
+    const data = await adminUsageService.getCustomerMetrics();
     res.json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/system', authenticate, requireAdminEmail, async (req, res) => {
+  try {
+    const data = await adminControlTowerService.getSystemMetrics();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/business', authenticate, requireAdminEmail, async (req, res) => {
+  try {
+    const data = await adminControlTowerService.getBusinessMetrics();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/usage', authenticate, requireAdminEmail, async (req, res) => {
+  try {
+    const detailed = req.query.detailed === 'true';
+    if (detailed) {
+      const months = Number(req.query.months || 12);
+      const data = await adminUsageService.getUsageByMonth(months);
+      return res.json({ success: true, data });
+    }
+    const data = await adminControlTowerService.getUsageMetrics();
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
   }
 });
 
 router.get('/ai', authenticate, requireAdminEmail, async (req, res) => {
   try {
-    const months = Number(req.query.months || 12);
-    const data = await adminUsageService.getAIAnalytics(months);
+    const detailed = req.query.detailed === 'true';
+    if (detailed) {
+      const months = Number(req.query.months || 12);
+      const data = await adminUsageService.getAIAnalytics(months);
+      return res.json({ success: true, data });
+    }
+    const data = await adminControlTowerService.getAIMetrics();
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/accounting', authenticate, requireAdminEmail, async (req, res) => {
+  try {
+    const data = await adminControlTowerService.getAccountingMetrics();
     res.json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
 });
 
-router.get('/customers', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/risk', authenticate, requireAdminEmail, async (req, res) => {
   try {
-    const data = await adminUsageService.getCustomerMetrics();
+    const data = await adminControlTowerService.getRiskMetrics();
     res.json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
