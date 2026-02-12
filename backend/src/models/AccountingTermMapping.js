@@ -26,6 +26,23 @@ const AccountingTermMapping = sequelize.define('AccountingTermMapping', {
     type: DataTypes.ENUM('REVENUE', 'EXPENSE', 'ASSET', 'LIABILITY'),
     allowNull: false,
     field: 'normalized_type'
+  },
+  mappingRuleType: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    defaultValue: 'system_rule',
+    field: 'mapping_rule_type'
+  },
+  confidenceScore: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    defaultValue: 1.0,
+    field: 'confidence_score'
+  },
+  sourceRuleId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'source_rule_id'
   }
 }, {
   tableName: 'accounting_term_mapping',

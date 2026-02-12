@@ -32,6 +32,8 @@ const { CFOQuestionRule } = require('./CFOQuestionRule');
 const { CFOQuestionResult } = require('./CFOQuestionResult');
 const { PartyBalanceLatest } = require('./PartyBalanceLatest');
 const { AccountHeadDictionary } = require('./AccountHeadDictionary');
+const { SourceLedger } = require('./SourceLedger');
+const { SourceMappingRule } = require('./SourceMappingRule');
 const { CFOLedgerClassification } = require('./CFOLedgerClassification');
 const { LedgerMonthlyBalance } = require('./LedgerMonthlyBalance');
 const { AppLog } = require('./AppLog');
@@ -160,6 +162,8 @@ module.exports = {
   CFOAlert,
   CFOMetric,
   AccountHeadDictionary,
+  SourceLedger,
+  SourceMappingRule,
   CFOLedgerClassification,
   LedgerMonthlyBalance,
   AppLog,

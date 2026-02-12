@@ -24,6 +24,7 @@ const {
 const { normalizeAccountHead } = require('./accountHeadNormalizer');
 const { mapLedgersToCFOTotals, upsertLedgerClassifications } = require('./cfoAccountMappingService');
 const { validateChartOfAccountsPayload } = require('./coaPayloadValidator');
+const { normalizeSourceLedger, upsertAccountingTermMapping } = require('./sourceNormalizationService');
 const { logUsageEvent } = require('./adminUsageService');
 
 const { normalizeMonth, listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
@@ -66,19 +67,30 @@ const DEFAULT_TERM_MAP = {
 };
 
 const resolveTermMapping = async (sourceSystem, sourceTerm, normalizedType, transaction) => {
+  const sourceKey = String(sourceSystem || '').toLowerCase();
   const existing = await AccountingTermMapping.findOne({
-    where: { sourceSystem, sourceTerm },
+    where: { sourceSystem: sourceKey, sourceTerm },
     transaction
   });
   if (existing) return existing;
 
-  const fallback = DEFAULT_TERM_MAP[(sourceTerm || '').toLowerCase()];
-  return AccountingTermMapping.create({
+  const normalized = await normalizeSourceLedger({
     sourceSystem,
+    ledgerName: sourceTerm,
+    groupName: sourceTerm,
+    accountType: normalizedType,
+    category: sourceTerm
+  });
+  const fallback = DEFAULT_TERM_MAP[(sourceTerm || '').toLowerCase()];
+  return upsertAccountingTermMapping({
+    sourceSystem: sourceKey,
     sourceTerm,
-    normalizedTerm: fallback?.term || sourceTerm,
-    normalizedType: fallback?.type || normalizedType
-  }, { transaction });
+    normalizedType: normalized.normalizedType || fallback?.type || normalizedType,
+    normalizedBucket: normalized.normalizedBucket || fallback?.term || sourceTerm,
+    mappingRuleType: normalized.mappingRuleType || 'system_rule',
+    confidenceScore: normalized.confidenceScore || 1.0,
+    sourceRuleId: normalized.sourceRuleId || null
+  }, transaction);
 };
 
 const computeTrendFlag = (momChange) => {

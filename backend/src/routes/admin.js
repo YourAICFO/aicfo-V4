@@ -7,6 +7,7 @@ const { CFOMetric } = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { logger, logError } = require('../utils/logger');
 const { backfillCompany, getBackfillStatus } = require('../services/adminBackfillService');
+const { getCoverage, createRule } = require('../services/sourceNormalizationService');
 
 const requireAdminApiKey = (req, res, next) => {
   const expected = process.env.ADMIN_API_KEY;
@@ -94,6 +95,44 @@ router.get('/backfill/status', requireAdminApiKey, async (req, res) => {
     logger.error({ event: 'admin_backfill_status_failed', error: error.message }, 'Admin backfill status failed');
     await logError({ event: 'admin_backfill_status_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin backfill status failed', error);
     return res.status(500).json({ success: false, error: 'Backfill status failed' });
+  }
+});
+
+router.get('/mapping/coverage/:companyId', requireAdminApiKey, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const data = await getCoverage(companyId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error({ event: 'admin_mapping_coverage_failed', error: error.message }, 'Admin mapping coverage failed');
+    await logError({ event: 'admin_mapping_coverage_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin mapping coverage failed', error);
+    return res.status(500).json({ success: false, error: 'Mapping coverage failed' });
+  }
+});
+
+router.post('/mapping/rule', requireAdminApiKey, async (req, res) => {
+  try {
+    const { sourceSystem, matchField, matchValue, normalizedType, normalizedBucket, priority, isActive } = req.body || {};
+    if (!sourceSystem || !matchField || !matchValue || !normalizedType || !normalizedBucket) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourceSystem, matchField, matchValue, normalizedType and normalizedBucket are required'
+      });
+    }
+    const data = await createRule({
+      sourceSystem,
+      matchField,
+      matchValue,
+      normalizedType,
+      normalizedBucket,
+      priority,
+      isActive
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error({ event: 'admin_mapping_rule_create_failed', error: error.message }, 'Admin mapping rule create failed');
+    await logError({ event: 'admin_mapping_rule_create_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin mapping rule create failed', error);
+    return res.status(500).json({ success: false, error: 'Mapping rule creation failed' });
   }
 });
 
