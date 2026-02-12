@@ -42,9 +42,34 @@ const getAppliedMigrations = async () => {
   return new Set(rows.map((r) => r.filename));
 };
 
+const tableExists = async (tableName) => {
+  const rows = await sequelize.query(
+    `SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = :tableName
+    ) AS exists`,
+    { replacements: { tableName }, type: QueryTypes.SELECT }
+  );
+  return Boolean(rows[0]?.exists);
+};
+
+const canMarkApplied = async (filename) => {
+  if (filename === '2026-02-11-system-logs-audit.sql') {
+    const [hasAppLogs, hasAuditLog] = await Promise.all([
+      tableExists('app_logs'),
+      tableExists('audit_log')
+    ]);
+    return hasAppLogs && hasAuditLog;
+  }
+  return false;
+};
+
 const run = async () => {
   let appliedCount = 0;
   let skippedCount = 0;
+  let markedAppliedCount = 0;
 
   try {
     await sequelize.authenticate();
@@ -65,6 +90,16 @@ const run = async () => {
         continue;
       }
 
+      if (await canMarkApplied(file)) {
+        await sequelize.query(
+          'INSERT INTO schema_migrations(filename) VALUES (:filename) ON CONFLICT (filename) DO NOTHING',
+          { replacements: { filename: file }, type: QueryTypes.INSERT }
+        );
+        markedAppliedCount += 1;
+        console.log(`MARKED_APPLIED (already present): ${file}`);
+        continue;
+      }
+
       const sql = fs.readFileSync(path.join(migrationDir, file), 'utf8');
       await sequelize.transaction(async (transaction) => {
         await sequelize.query(sql, { transaction });
@@ -78,7 +113,7 @@ const run = async () => {
       console.log(`APPLIED ${file}`);
     }
 
-    console.log(`Migrations complete. applied=${appliedCount} skipped=${skippedCount}`);
+    console.log(`Migrations complete. applied=${appliedCount} marked_applied=${markedAppliedCount} skipped=${skippedCount}`);
     await sequelize.close();
     process.exit(0);
   } catch (error) {
