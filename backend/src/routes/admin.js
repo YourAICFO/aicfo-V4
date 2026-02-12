@@ -6,6 +6,7 @@ const { adminUsageService } = require('../services');
 const { CFOMetric } = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { logger, logError } = require('../utils/logger');
+const { backfillCompany, getBackfillStatus } = require('../services/adminBackfillService');
 
 const requireAdminApiKey = (req, res, next) => {
   const expected = process.env.ADMIN_API_KEY;
@@ -53,6 +54,46 @@ router.post('/queue/ping', requireAdminApiKey, async (req, res) => {
     logger.error({ event: 'queue_ping_enqueue_failed', error: error.message }, 'Failed to enqueue healthPing');
     await logError({ event: 'queue_ping_enqueue_failed', service: 'ai-cfo-api' }, 'Failed to enqueue healthPing', error);
     return res.status(500).json({ success: false, error: 'Failed to enqueue ping job' });
+  }
+});
+
+router.post('/backfill/company', requireAdminApiKey, async (req, res) => {
+  try {
+    const companyId = req.body?.companyId;
+    const monthsBack = req.body?.monthsBack ?? 18;
+    const markClosedThrough = req.body?.markClosedThrough ?? null;
+    if (!companyId) {
+      return res.status(400).json({ success: false, error: 'companyId is required' });
+    }
+    if (markClosedThrough && !/^\d{4}-\d{2}$/.test(markClosedThrough)) {
+      return res.status(400).json({ success: false, error: 'markClosedThrough must be YYYY-MM' });
+    }
+    const data = await backfillCompany({
+      companyId,
+      monthsBack,
+      markClosedThrough,
+      runId: req.run_id || null
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error({ event: 'admin_backfill_failed', error: error.message }, 'Admin company backfill failed');
+    await logError({ event: 'admin_backfill_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin company backfill failed', error);
+    return res.status(500).json({ success: false, error: 'Backfill failed' });
+  }
+});
+
+router.get('/backfill/status', requireAdminApiKey, async (req, res) => {
+  try {
+    const companyId = req.query?.companyId;
+    if (!companyId) {
+      return res.status(400).json({ success: false, error: 'companyId is required' });
+    }
+    const data = await getBackfillStatus(companyId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error({ event: 'admin_backfill_status_failed', error: error.message }, 'Admin backfill status failed');
+    await logError({ event: 'admin_backfill_status_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin backfill status failed', error);
+    return res.status(500).json({ success: false, error: 'Backfill status failed' });
   }
 });
 
