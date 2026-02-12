@@ -8,7 +8,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-console.log('MIGRATE_MODE: db-only');
+console.log('MIGRATE_MODE=db-only');
 
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialect: 'postgres',
@@ -96,7 +96,7 @@ const run = async () => {
           { replacements: { filename: file }, type: QueryTypes.INSERT }
         );
         markedAppliedCount += 1;
-        console.log(`MARKED_APPLIED (already present): ${file}`);
+        console.log(`MARKED_APPLIED (tables already exist): ${file}`);
         continue;
       }
 
