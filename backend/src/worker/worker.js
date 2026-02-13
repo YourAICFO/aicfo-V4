@@ -1,9 +1,10 @@
 require('dotenv').config();
-console.log("WORKER_BOOT_V=2026-02-11-redis-debug-2");
+console.log("WORKER_BOOT_V=2026-02-14-resilient-redis");
 if (process.env.DISABLE_WORKER === "true") {
   console.log("WORKER_DISABLED=true; exiting 0");
   process.exit(0);
 }
+
 const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const { logger } = require('./logger');
@@ -14,6 +15,9 @@ const { updateReports } = require('./tasks/updateReports');
 const { batchRecalc } = require('./tasks/batchRecalc');
 const { sendNotifications } = require('./tasks/sendNotifications');
 const { generateMonthlySnapshots } = require('./tasks/generateMonthlySnapshots');
+
+// Resilient worker mode - can work without Redis
+const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
 
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '4', 10);
 initSentry({ serviceName: 'ai-cfo-worker' });
@@ -48,6 +52,77 @@ const startWorker = async () => {
     process.exit(0);
   }
 
+  // Resilient mode: allow worker to start without Redis for development
+  if (RESILIENT_MODE) {
+    logger.warn({ event: 'worker_resilient_mode' }, 'Starting worker in resilient mode (no Redis)');
+    console.log("WORKER_RESILIENT_MODE=true - processing jobs synchronously");
+    
+    // In resilient mode, we'll process jobs directly without queue
+    // This allows development/testing without Redis
+    const processJobDirectly = async (jobName, jobData, context = {}) => {
+      const runId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const handler = handlers[jobName];
+      
+      if (!handler) {
+        throw new Error(`Unknown job type: ${jobName}`);
+      }
+
+      logger.info({
+        jobName,
+        userId: jobData?.userId,
+        companyId: jobData?.companyId,
+        run_id: runId
+      }, 'Direct job processing started');
+
+      let result;
+      try {
+        result = await handler(jobData, { ...context, runId });
+      } catch (err) {
+        captureException(err, {
+          run_id: runId,
+          job_name: jobName,
+          company_id: jobData?.companyId || null,
+          user_id: jobData?.userId || null
+        });
+        await logError({
+          service: 'ai-cfo-worker',
+          run_id: runId,
+          company_id: jobData?.companyId || null,
+          event: 'direct_job_failed'
+        }, `Direct job failed: ${jobName}`, err);
+        throw err;
+      }
+
+      logger.info({
+        jobName,
+        result,
+        run_id: runId
+      }, 'Direct job processing finished');
+
+      return result;
+    };
+
+    // Export direct processing function for use by API routes
+    global.processJobDirectly = processJobDirectly;
+    
+    logger.info({ event: 'worker_resilient_ready' }, 'Worker ready in resilient mode');
+    console.log("Worker ready in resilient mode - jobs will be processed synchronously");
+    
+    // Keep the process alive
+    process.on('SIGINT', () => {
+      logger.info({ event: 'worker_shutdown' }, 'Worker shutting down gracefully');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      logger.info({ event: 'worker_shutdown' }, 'Worker shutting down gracefully');
+      process.exit(0);
+    });
+    
+    return;
+  }
+
+  // Original Redis-based worker code
   if (!process.env.REDIS_URL) {
     logger.error({ event: 'redis_url_missing' }, 'REDIS_URL is required for worker startup');
     process.exit(1);
