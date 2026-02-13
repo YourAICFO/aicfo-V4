@@ -1,0 +1,222 @@
+import React, { useState } from 'react';
+import { Menu, X, Bell, User, Settings, LogOut, Moon, Sun } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { cn } from '../../lib/utils';
+import DarkModeToggle, { useDarkMode } from '../ui/DarkModeToggle';
+import { Button } from '../ui/Button';
+
+interface ModernLayoutProps {
+  children: React.ReactNode;
+  userName: string;
+  userEmail: string;
+  companyName: string;
+  onLogout: () => void;
+}
+
+const ModernLayout: React.FC<ModernLayoutProps> = ({
+  children,
+  userName,
+  userEmail,
+  companyName,
+  onLogout,
+}) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const location = useLocation();
+  const { isDark } = useDarkMode();
+
+  const navigation = [
+    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+    { name: 'Revenue', href: '/revenue', icon: '💰' },
+    { name: 'Expenses', href: '/expenses', icon: '💸' },
+    { name: 'Cashflow', href: '/cashflow', icon: '💳' },
+    { name: 'Debtors', href: '/debtors', icon: '👥' },
+    { name: 'Creditors', href: '/creditors', icon: '🏢' },
+    { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
+    { name: 'Integrations', href: '/integrations', icon: '🔗' },
+  ];
+
+  const isActive = (path: string) => location.pathname === path;
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-64 transform bg-white shadow-lg transition-transform duration-300 ease-in-out dark:bg-gray-800',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'lg:static lg:translate-x-0 lg:shadow-none'
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Sidebar header */}
+          <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-700">
+            <Link to="/dashboard" className="flex items-center space-x-2">
+              <div className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                AI CFO
+              </div>
+            </Link>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden rounded-md p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  isActive(item.href)
+                    ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/20 dark:text-primary-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                )}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <span className="mr-3 text-lg">{item.icon}</span>
+                {item.name}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Sidebar footer */}
+          <div className="border-t border-gray-200 p-4 dark:border-gray-700">
+            <div className="flex items-center space-x-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/20">
+                <span className="text-sm font-medium text-primary-900 dark:text-primary-300">
+                  {userName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {userName}
+                </p>
+                <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="lg:pl-64">
+        {/* Top navigation */}
+        <div className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex items-center">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-md p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="ml-4 lg:ml-0">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                {companyName}
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Financial Intelligence Dashboard
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {/* Dark mode toggle */}
+            <DarkModeToggle size="sm" />
+            
+            {/* Notifications */}
+            <div className="relative">
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <Bell className="h-5 w-5" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error-500 text-xs text-white">
+                  3
+                </span>
+              </button>
+              
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 rounded-lg bg-white shadow-lg dark:bg-gray-800">
+                  <div className="p-4">
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Notifications
+                    </h3>
+                    <div className="mt-2 space-y-2">
+                      <div className="rounded-md bg-gray-50 p-3 dark:bg-gray-700">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          Monthly sync completed successfully
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">2 minutes ago</p>
+                      </div>
+                      <div className="rounded-md bg-gray-50 p-3 dark:bg-gray-700">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          New AI insights available
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">1 hour ago</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* User menu */}
+            <div className="relative">
+              <button className="flex items-center space-x-2 rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/20">
+                  <span className="text-sm font-medium text-primary-900 dark:text-primary-300">
+                    {userName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="hidden text-sm font-medium text-gray-700 dark:text-gray-300 md:block">
+                  {userName}
+                </span>
+              </button>
+            </div>
+
+            {/* Settings dropdown */}
+            <div className="relative">
+              <button className="rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <Settings className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Logout */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLogout}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Main content area */}
+        <main className="flex-1 p-4 lg:p-6">
+          <div className="mx-auto max-w-7xl">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default ModernLayout;
