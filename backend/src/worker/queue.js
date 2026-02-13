@@ -29,40 +29,83 @@ const getRedisTarget = () => {
   }
 };
 
-if (!REDIS_URL) {
-  logger.error({ event: 'redis_url_missing' }, 'REDIS_URL is required for BullMQ connection');
-  throw new Error('REDIS_URL is required for BullMQ connection');
+// Check if we're in resilient mode (no Redis)
+const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
+
+let queue, events;
+
+if (!RESILIENT_MODE) {
+  if (!REDIS_URL) {
+    logger.error({ event: 'redis_url_missing' }, 'REDIS_URL is required for BullMQ connection');
+    throw new Error('REDIS_URL is required for BullMQ connection');
+  }
+
+  queue = new Queue(QUEUE_NAME, {
+    connection,
+    defaultJobOptions: {
+      removeOnComplete: 1000,
+      removeOnFail: 1000,
+      attempts: 5,
+      backoff: {
+        type: 'exponential',
+        delay: 1000
+      }
+    }
+  });
+
+  events = new QueueEvents(QUEUE_NAME, { connection });
+
+  events.on('completed', ({ jobId }) => {
+    logger.info({ jobId }, 'Job completed');
+  });
+
+  events.on('failed', ({ jobId, failedReason }) => {
+    logger.error({ jobId, failedReason }, 'Job failed');
+    logError({
+      service: 'ai-cfo-worker',
+      run_id: `job-${jobId}`,
+      event: 'worker_job_failed'
+    }, 'Queue event job failed', new Error(String(failedReason || 'unknown failure')));
+  });
+} else {
+  // In resilient mode, create mock queue objects
+  logger.warn({ event: 'queue_resilient_mode' }, 'Queue operating in resilient mode - no Redis connection');
+  queue = {
+    add: async () => {
+      throw new Error('Queue.add should not be called in resilient mode - use enqueueJob instead');
+    }
+  };
+  events = {
+    on: () => {} // No-op for event handlers
+  };
 }
 
-const queue = new Queue(QUEUE_NAME, {
-  connection,
-  defaultJobOptions: {
-    removeOnComplete: 1000,
-    removeOnFail: 1000,
-    attempts: 5,
-    backoff: {
-      type: 'exponential',
-      delay: 1000
+const enqueueJob = async (name, data, options = {}) => {
+  // Check if we're in resilient mode (no Redis)
+  const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
+  
+  if (RESILIENT_MODE && global.processJobDirectly) {
+    // Process job synchronously in resilient mode
+    logger.info({ jobName: name, companyId: data?.companyId }, 'Processing job synchronously in resilient mode');
+    try {
+      const result = await global.processJobDirectly(name, data, options);
+      return { 
+        id: `sync-${Date.now()}`,
+        name,
+        data,
+        opts: options,
+        processed: true,
+        result,
+        finished: () => Promise.resolve(),
+        remove: () => Promise.resolve()
+      };
+    } catch (error) {
+      logger.error({ jobName: name, error: error.message }, 'Direct job processing failed in resilient mode');
+      throw error;
     }
   }
-});
-
-const events = new QueueEvents(QUEUE_NAME, { connection });
-
-events.on('completed', ({ jobId }) => {
-  logger.info({ jobId }, 'Job completed');
-});
-
-events.on('failed', ({ jobId, failedReason }) => {
-  logger.error({ jobId, failedReason }, 'Job failed');
-  logError({
-    service: 'ai-cfo-worker',
-    run_id: `job-${jobId}`,
-    event: 'worker_job_failed'
-  }, 'Queue event job failed', new Error(String(failedReason || 'unknown failure')));
-});
-
-const enqueueJob = async (name, data, options = {}) => {
+  
+  // Normal Redis queue processing
   const job = await queue.add(name, data, options);
   return job;
 };
