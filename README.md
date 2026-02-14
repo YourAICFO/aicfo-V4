@@ -1,6 +1,6 @@
 # AI CFO Platform
 
-Financial Intelligence for Indian Startups and SMEs
+Financial Intelligence for Indian Startups and SMEs..
 
 ## Overview
 
