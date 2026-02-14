@@ -53,16 +53,35 @@ app.use(
 );
 
 /* ===============================
-   CORS — FIXED (IMPORTANT)
+   CORS — DYNAMIC (Production-ready)
 ================================ */
+const corsOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
 app.use(
   cors({
-    origin: [
-      'https://web-production-7440b.up.railway.app', // FRONTEND (Railway)
-      'http://localhost:5173',
-      'http://localhost:3000',
-    ],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // For development, allow localhost origins
+      if (origin.includes('localhost')) {
+        return callback(null, true);
+      }
+      
+      callback(new Error(`CORS policy violation: ${origin}`));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With'],
+    exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+    maxAge: 86400 // 24 hours
   })
 );
 
