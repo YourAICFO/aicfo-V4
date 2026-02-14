@@ -4,9 +4,6 @@
 
 FROM node:18-alpine
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
-
 # Create app directory
 WORKDIR /app
 
@@ -36,6 +33,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
-# Start the backend application
-ENTRYPOINT ["dumb-init", "--"]
+# Start the backend application directly
 CMD ["node", "src/server.js"]
