@@ -95,16 +95,16 @@
 ## 📋 DEPLOYMENT CHECKLIST
 
 ### Pre-Deployment
-- [x] **Build Configuration**: Railway.toml configured with proper build steps
+- [x] **Build Configuration**: Docker-based build with multi-stage optimization
 - [x] **Environment Variables**: All required env vars set in Railway dashboard
 - [x] **Database Migration**: Ensure all migrations are run
 - [x] **Connector File**: Place `AICFOConnectorSetup.exe` in `/backend/downloads/`
 - [x] **Code Signing**: Sign connector executable for production (recommended)
 
 ### Railway Dashboard Configuration
-- [x] **Root Directory**: Set to project root (contains frontend/, backend/)
-- [x] **Build Command**: Configured in railway.toml
-- [x] **Start Command**: `cd backend && npm start`
+- [x] **Service Type**: Docker deployment with custom Dockerfile
+- [x] **Dockerfile Path**: `./Dockerfile` (multi-stage Node.js/React build)
+- [x] **Start Command**: `node src/server.js` (runs from /app/backend)
 - [x] **Environment Variables**:
   - `NODE_ENV=production`
   - `DATABASE_URL=<your-railway-postgres-url>`
