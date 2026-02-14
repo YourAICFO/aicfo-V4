@@ -203,8 +203,9 @@ export default function ConnectorOnboarding() {
 
             {step.id === 'download' && !step.completed && (
               <a
-                href="/download"
+                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/download/connector`}
                 className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                download
               >
                 <Download className="w-4 h-4" />
                 Download

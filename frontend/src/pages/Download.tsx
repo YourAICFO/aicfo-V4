@@ -10,7 +10,6 @@ import {
   Zap,
   Monitor,
 } from 'lucide-react';
-import api from '../services/api';
 
 interface DownloadInfo {
   filename: string;
@@ -46,9 +45,25 @@ export default function Download() {
   const fetchDownloadInfo = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get('/download/info');
-      setDownloadInfo(response.data.data);
-      setError(null);
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${backendUrl}/download/info`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setDownloadInfo(data.data);
+        setError(null);
+      } else {
+        throw new Error(data.error || 'Failed to fetch download info');
+      }
     } catch (err) {
       console.error('Failed to fetch download info:', err);
       setError('Failed to load download information. Please try again later.');

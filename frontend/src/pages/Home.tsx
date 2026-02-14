@@ -25,7 +25,7 @@ export default function Home() {
             <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
               <a href="#features" className="hover:text-white">Features</a>
               <a href="#pricing" className="hover:text-white">Pricing</a>
-              <Link to="/download" className="hover:text-white">Download Connector</Link>
+              <a href="/download" className="hover:text-white">Download Connector</a>
             </nav>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-200 hover:text-white">

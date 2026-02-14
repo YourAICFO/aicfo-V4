@@ -221,8 +221,9 @@ export default function Integrations() {
                   {type === 'TALLY' ? (
                     <>
                       <a
-                        href="/download"
+                        href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/download/connector`}
                         className="w-full btn-primary flex items-center justify-center gap-2"
+                        download
                       >
                         <Plug className="w-4 h-4" />
                         Download Connector
