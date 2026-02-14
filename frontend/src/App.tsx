@@ -46,12 +46,10 @@ function App() {
         </Route>
         
         {/* Admin routes - require admin authentication */}
-        <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
-          <Route element={<AdminRoute />}>
-            <Route element={<Layout />}>
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/control-tower" element={<AdminControlTower />} />
-            </Route>
+        <Route element={<AdminRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/control-tower" element={<AdminControlTower />} />
           </Route>
         </Route>
       </Route>

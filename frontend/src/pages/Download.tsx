@@ -57,34 +57,34 @@ export default function Download() {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!downloadInfo?.canDownload) return;
 
     try {
       setIsDownloading(true);
       setError(null);
 
-      // Use the backend API to get the download URL
-      const response = await api.get('/download/connector', {
-        responseType: 'blob' // Important for file downloads
-      });
-
-      // Create a blob URL and trigger download
-      const blob = new Blob([response.data], { type: 'application/octet-stream' });
-      const downloadUrl = window.URL.createObjectURL(blob);
+      // Use direct browser download by creating a direct link to the backend
+      // This bypasses any SPA routing and lets the browser handle the download
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const downloadUrl = `${backendUrl}/download/connector`;
       
-      // Create temporary link and trigger download
+      // Create a direct download link
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = downloadInfo.filename;
+      link.target = '_blank'; // Open in new tab to avoid SPA interference
+      link.rel = 'noopener noreferrer';
+      
+      // Trigger download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      // Clean up the blob URL after a delay
+      // Reset download state after a delay
       setTimeout(() => {
-        window.URL.revokeObjectURL(downloadUrl);
-      }, 100);
+        setIsDownloading(false);
+      }, 2000);
 
       // Optional analytics
       const w = window as unknown as { gtag?: (...args: any[]) => void };
@@ -98,7 +98,6 @@ export default function Download() {
     } catch (err) {
       console.error('Download failed:', err);
       setError('Download failed. Please try again or contact support.');
-    } finally {
       setIsDownloading(false);
     }
   };
