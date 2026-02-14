@@ -16,7 +16,7 @@ const CONNECTOR_CONFIG = {
 
 /**
  * GET /download/connector
- * Download the Windows Tally Connector installer
+ * Download the Windows Tally Connector installer as ZIP
  */
 router.get('/connector', async (req, res) => {
   try {
@@ -32,18 +32,39 @@ router.get('/connector', async (req, res) => {
       });
     }
 
+    // For Node.js connector, we need to create a ZIP package
+    // Check if we have the Node.js connector distribution
+    const nodejsConnectorPath = path.join(__dirname, '../../../nodejs-connector/dist');
+    const nodejsZipPath = path.join(__dirname, '../../../nodejs-connector/dist/AICFOConnector.zip');
+    
+    let fileToSend = CONNECTOR_CONFIG.filePath;
+    let filename = CONNECTOR_CONFIG.filename;
+    let contentType = 'application/octet-stream';
+    
+    // If Node.js connector ZIP exists, prefer that
+    try {
+      await fs.access(nodejsZipPath);
+      fileToSend = nodejsZipPath;
+      filename = 'AICFOConnector.zip';
+      contentType = 'application/zip';
+      logger.info('Using Node.js connector ZIP distribution');
+    } catch (nodejsError) {
+      // Node.js connector ZIP doesn't exist, use existing C# executable
+      logger.info('Using existing C# connector executable');
+    }
+
     // Get file stats for content-length
-    const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
+    const stats = await fs.stat(fileToSend);
     
     // Set appropriate headers for file download
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_CONFIG.filename}"`);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Connector-Version', CONNECTOR_CONFIG.version);
     res.setHeader('Access-Control-Expose-Headers', 'X-Connector-Version, Content-Disposition');
     
     // Send the file
-    res.sendFile(CONNECTOR_CONFIG.filePath, (err) => {
+    res.sendFile(fileToSend, (err) => {
       if (err) {
         logger.error({ error: err }, 'Error sending connector file');
         if (!res.headersSent) {
@@ -56,7 +77,8 @@ router.get('/connector', async (req, res) => {
         logger.info({ 
           userAgent: req.headers['user-agent'] || '', 
           ip: req.ip,
-          timestamp: new Date().toISOString() 
+          timestamp: new Date().toISOString(),
+          fileType: filename
         }, 'Connector downloaded successfully');
       }
     });

@@ -1,0 +1,51 @@
+{
+  "name": "aicfo-connector",
+  "version": "1.0.0",
+  "description": "AI CFO Windows Connector - Node.js implementation",
+  "main": "src/index.js",
+  "bin": {
+    "aicfo-connector": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "build": "pkg . --targets node18-win-x64 --output AICFOConnector.exe",
+    "build:zip": "npm run build && npm run package",
+    "package": "node scripts/package.js",
+    "test": "jest"
+  },
+  "pkg": {
+    "scripts": [
+      "src/**/*.js",
+      "node_modules/**/*.js"
+    ],
+    "assets": [
+      "config.json",
+      "README.txt"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1",
+    "cron": "^3.1.6"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1",
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0"
+  },
+  "keywords": [
+    "tally",
+    "accounting",
+    "connector",
+    "windows",
+    "aicfo"
+  ],
+  "author": "AI CFO Team",
+  "license": "MIT"
+}

@@ -386,11 +386,110 @@ const generateMockTransactions = (type) => {
   return transactions;
 };
 
+const processConnectorPayload = async (companyId, payload) => {
+  try {
+    logger.info({ companyId, payloadSize: JSON.stringify(payload).length }, 'Processing connector payload');
+
+    const { chartOfAccounts, asOfDate } = payload;
+    
+    if (!chartOfAccounts || !chartOfAccounts.ledgers) {
+      throw new Error('Invalid payload: missing chartOfAccounts or ledgers');
+    }
+
+    // Extract the month key from the payload
+    const monthKey = chartOfAccounts.balances?.current?.monthKey || 
+                    (asOfDate ? asOfDate.substring(0, 7) : new Date().toISOString().substring(0, 7));
+
+    // Process ledgers and balances
+    const ledgers = chartOfAccounts.ledgers || [];
+    const balances = chartOfAccounts.balances?.current?.items || [];
+
+    // Create ledger monthly balances from the payload
+    const ledgerBalances = [];
+    
+    for (const ledger of ledgers) {
+      const balanceItem = balances.find(b => b.ledgerGuid === ledger.guid);
+      const balance = balanceItem ? balanceItem.balance : (ledger.closingBalance || ledger.balance || 0);
+      
+      if (balance !== 0) { // Only store non-zero balances
+        ledgerBalances.push({
+          companyId,
+          ledgerGuid: ledger.guid,
+          ledgerName: ledger.name,
+          parentGroup: ledger.parent,
+          monthKey: monthKey,
+          balance: balance,
+          asOfDate: asOfDate || new Date().toISOString().split('T')[0],
+          source: 'connector',
+          externalId: ledger.guid
+        });
+      }
+    }
+
+    // Store ledger monthly balances
+    if (ledgerBalances.length > 0) {
+      await LedgerMonthlyBalance.bulkCreate(ledgerBalances, {
+        updateOnDuplicate: ['balance', 'asOfDate', 'updated_at']
+      });
+      
+      logger.info({ companyId, monthKey, count: ledgerBalances.length }, 'Stored ledger monthly balances');
+    }
+
+    // Process closed months if provided
+    const closedMonths = chartOfAccounts.balances?.closedMonths || [];
+    for (const closedMonth of closedMonths) {
+      if (closedMonth.monthKey && closedMonth.items) {
+        const closedMonthBalances = closedMonth.items
+          .filter(item => item.balance !== 0)
+          .map(item => {
+            const ledger = ledgers.find(l => l.guid === item.ledgerGuid);
+            return {
+              companyId,
+              ledgerGuid: item.ledgerGuid,
+              ledgerName: ledger ? ledger.name : 'Unknown',
+              parentGroup: ledger ? ledger.parent : 'Unknown',
+              monthKey: closedMonth.monthKey,
+              balance: item.balance,
+              asOfDate: closedMonth.asOfDate || `${closedMonth.monthKey}-01`,
+              source: 'connector',
+              externalId: item.ledgerGuid
+            };
+          });
+
+        if (closedMonthBalances.length > 0) {
+          await LedgerMonthlyBalance.bulkCreate(closedMonthBalances, {
+            updateOnDuplicate: ['balance', 'asOfDate', 'updated_at']
+          });
+          
+          logger.info({ companyId, monthKey: closedMonth.monthKey, count: closedMonthBalances.length }, 'Stored closed month balances');
+        }
+      }
+    }
+
+    // Trigger monthly snapshot generation for the affected month
+    await enqueueJob('generateMonthlySnapshots', {
+      companyId,
+      amendedMonth: monthKey,
+      debtors: null, // Will be derived from ledger balances
+      creditors: null, // Will be derived from ledger balances
+      currentBalances: null, // Will be calculated from ledger balances
+      chartOfAccounts: chartOfAccounts
+    });
+
+    logger.info({ companyId, monthKey }, 'Successfully processed connector payload');
+
+  } catch (error) {
+    logger.error({ companyId, error: error.message }, 'Failed to process connector payload');
+    throw error;
+  }
+};
+
 module.exports = {
   getIntegrations,
   connectTally,
   connectZoho,
   connectQuickBooks,
   disconnectIntegration,
-  syncIntegration
+  syncIntegration,
+  processConnectorPayload
 };

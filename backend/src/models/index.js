@@ -38,6 +38,10 @@ const { CFOLedgerClassification } = require('./CFOLedgerClassification');
 const { LedgerMonthlyBalance } = require('./LedgerMonthlyBalance');
 const { AppLog } = require('./AppLog');
 const { AuditLog } = require('./AuditLog');
+const { ConnectorClient } = require('./ConnectorClient');
+const { IntegrationSyncRun } = require('./IntegrationSyncRun');
+const { IntegrationSyncEvent } = require('./IntegrationSyncEvent');
+const { IngestionLog } = require('./IngestionLog');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -132,6 +136,22 @@ CFOQuestionRule.belongsTo(CFOQuestion, { foreignKey: 'question_id', as: 'questio
 CFOQuestionResult.belongsTo(CFOQuestion, { foreignKey: 'question_id', as: 'question' });
 Company.hasMany(CFOQuestionResult, { foreignKey: 'company_id', as: 'cfoQuestionResults' });
 
+// Connector sync relationships
+Company.hasMany(ConnectorClient, { foreignKey: 'company_id', as: 'connectorClients' });
+ConnectorClient.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(IntegrationSyncRun, { foreignKey: 'company_id', as: 'syncRuns' });
+IntegrationSyncRun.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+ConnectorClient.hasMany(IntegrationSyncRun, { foreignKey: 'connector_client_id', as: 'syncRuns' });
+IntegrationSyncRun.belongsTo(ConnectorClient, { foreignKey: 'connector_client_id', as: 'connectorClient' });
+
+IntegrationSyncRun.hasMany(IntegrationSyncEvent, { foreignKey: 'run_id', as: 'events' });
+IntegrationSyncEvent.belongsTo(IntegrationSyncRun, { foreignKey: 'run_id', as: 'syncRun' });
+
+Company.hasMany(IngestionLog, { foreignKey: 'company_id', as: 'ingestionLogs' });
+IngestionLog.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
   sequelize,
   User,
@@ -172,5 +192,9 @@ module.exports = {
   CFOQuestionMetric,
   CFOQuestionRule,
   CFOQuestionResult,
-  PartyBalanceLatest
+  PartyBalanceLatest,
+  ConnectorClient,
+  IntegrationSyncRun,
+  IntegrationSyncEvent,
+  IngestionLog
 };

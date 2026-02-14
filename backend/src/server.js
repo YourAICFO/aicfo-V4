@@ -30,6 +30,7 @@ const debtorsRoutes = require('./routes/debtors');
 const creditorsRoutes = require('./routes/creditors');
 const devToolsRoutes = require('./routes/devTools');
 const downloadRoutes = require('./routes/download');
+const connectorRoutes = require('./routes/connector');
 
 
 const app = express();
@@ -151,6 +152,7 @@ app.use('/api/dev', devToolsRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
+app.use('/api/connector', connectorRoutes);
 
 
 /* ===============================
