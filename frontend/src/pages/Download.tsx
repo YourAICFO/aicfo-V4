@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Download, CheckCircle, AlertCircle, RefreshCw, Settings, Shield, Zap, Monitor } from 'lucide-react';
+import {
+  Download as DownloadIcon,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Settings,
+  Shield,
+  Zap,
+  Monitor,
+} from 'lucide-react';
 import api from '../services/api';
 
 interface DownloadInfo {
@@ -31,6 +40,7 @@ export default function Download() {
 
   useEffect(() => {
     fetchDownloadInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDownloadInfo = async () => {
@@ -52,24 +62,27 @@ export default function Download() {
 
     try {
       setIsDownloading(true);
-      
-      // Create a hidden anchor element to trigger download
+
+      // Prefer backend-provided download URL if available; fallback to fixed endpoint
+      const href = downloadInfo.downloadUrl || '/download/connector';
+
+      // Trigger download via an anchor click
       const link = document.createElement('a');
-      link.href = '/download/connector';
+      link.href = href;
       link.download = downloadInfo.filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      // Track download analytics (you can add Google Analytics or similar here)
-      if (window.gtag) {
-        window.gtag('event', 'download', {
+      // Optional analytics
+      const w = window as unknown as { gtag?: (...args: any[]) => void };
+      if (w.gtag) {
+        w.gtag('event', 'download', {
           event_category: 'connector',
           event_label: downloadInfo.version,
           value: 1,
         });
       }
-
     } catch (err) {
       console.error('Download failed:', err);
       setError('Download failed. Please try again or contact support.');
@@ -95,45 +108,57 @@ export default function Download() {
     <>
       <Helmet>
         <title>Download AI CFO Tally Connector for Windows | Free Integration Tool</title>
-        <meta name="description" content="Download the free AI CFO Tally Connector for Windows. Connect your Tally ERP 9 or TallyPrime to AI CFO's cloud platform for automated financial insights and reporting." />
-        <meta name="keywords" content="Tally connector, Tally ERP 9 integration, TallyPrime connector, Windows download, AI CFO, financial software, accounting integration" />
-        
+        <meta
+          name="description"
+          content="Download the free AI CFO Tally Connector for Windows. Connect your Tally ERP 9 or TallyPrime to AI CFO's cloud platform for automated financial insights and reporting."
+        />
+        <meta
+          name="keywords"
+          content="Tally connector, Tally ERP 9 integration, TallyPrime connector, Windows download, AI CFO, financial software, accounting integration"
+        />
+
         {/* Open Graph / Social Media */}
         <meta property="og:title" content="Download AI CFO Tally Connector for Windows" />
-        <meta property="og:description" content="Free Windows application to connect Tally ERP 9/TallyPrime to AI CFO's AI-powered financial analytics platform." />
+        <meta
+          property="og:description"
+          content="Free Windows application to connect Tally ERP 9/TallyPrime to AI CFO's AI-powered financial analytics platform."
+        />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://aicfo.com/download" />
         <meta property="og:image" content="https://aicfo.com/og-download.jpg" />
-        
+
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="AI CFO Tally Connector - Free Download" />
-        <meta name="twitter:description" content="Connect Tally to AI CFO's cloud platform for automated financial insights." />
+        <meta
+          name="twitter:description"
+          content="Connect Tally to AI CFO's cloud platform for automated financial insights."
+        />
         <meta name="twitter:image" content="https://aicfo.com/twitter-download.jpg" />
-        
+
         {/* Canonical URL */}
         <link rel="canonical" href="https://aicfo.com/download" />
-        
+
         {/* Structured Data */}
         <script type="application/ld+json">
           {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            "name": "AI CFO Tally Connector",
-            "description": "Windows application to connect Tally ERP 9 and TallyPrime to AI CFO's cloud platform",
-            "applicationCategory": "BusinessApplication",
-            "operatingSystem": "Windows 7 or later",
-            "offers": {
-              "@type": "Offer",
-              "price": "0",
-              "priceCurrency": "INR"
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'AI CFO Tally Connector',
+            description: "Windows application to connect Tally ERP 9 and TallyPrime to AI CFO's cloud platform",
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Windows 7 or later',
+            offers: {
+              '@type': 'Offer',
+              price: '0',
+              priceCurrency: 'INR',
             },
-            "publisher": {
-              "@type": "Organization",
-              "name": "AI CFO Platform",
-              "url": "https://aicfo.com"
+            publisher: {
+              '@type': 'Organization',
+              name: 'AI CFO Platform',
+              url: 'https://aicfo.com',
             },
-            "downloadUrl": "https://aicfo.com/download/connector"
+            downloadUrl: 'https://aicfo.com/download/connector',
           })}
         </script>
       </Helmet>
@@ -152,10 +177,7 @@ export default function Download() {
                   <p className="text-lg font-semibold text-white">Tally Connector</p>
                 </div>
               </div>
-              <a 
-                href="/" 
-                className="text-sm text-slate-300 hover:text-white transition-colors"
-              >
+              <a href="/" className="text-sm text-slate-300 hover:text-white transition-colors">
                 ← Back to Home
               </a>
             </div>
@@ -169,10 +191,10 @@ export default function Download() {
               Download AI CFO Tally Connector
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-8">
-              Connect your Tally ERP 9 or TallyPrime to AI CFO's cloud platform. 
-              Get automated financial insights, AI-powered analytics, and real-time reporting.
+              Connect your Tally ERP 9 or TallyPrime to AI CFO&apos;s cloud platform. Get automated financial
+              insights, AI-powered analytics, and real-time reporting.
             </p>
-            
+
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
                 <div className="flex items-center gap-3">
@@ -189,12 +211,8 @@ export default function Download() {
                   <div className="flex items-center justify-center gap-3 mb-6">
                     <Monitor className="w-8 h-8 text-blue-400" />
                     <div className="text-left">
-                      <h3 className="text-lg font-semibold text-white">
-                        Windows Download
-                      </h3>
-                      <p className="text-sm text-slate-400">
-                        Version {downloadInfo.version} • Free
-                      </p>
+                      <h3 className="text-lg font-semibold text-white">Windows Download</h3>
+                      <p className="text-sm text-slate-400">Version {downloadInfo.version} • Free</p>
                     </div>
                   </div>
 
@@ -210,25 +228,26 @@ export default function Download() {
                       </>
                     ) : (
                       <>
-                        <Download className="w-5 h-5" />
+                        <DownloadIcon className="w-5 h-5" />
                         Download Connector
                       </>
                     )}
                   </button>
 
                   <p className="text-sm text-slate-400">
-                    File size: {downloadInfo.fileSize ? `${(downloadInfo.fileSize / 1024 / 1024).toFixed(1)} MB` : 'Calculating...'}
+                    File size:{' '}
+                    {downloadInfo.fileSize
+                      ? `${(downloadInfo.fileSize / 1024 / 1024).toFixed(1)} MB`
+                      : 'Calculating...'}
                   </p>
                 </>
               ) : (
                 <div className="text-center">
                   <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">
-                    Windows Required
-                  </h3>
+                  <h3 className="text-lg font-semibold text-white mb-2">Windows Required</h3>
                   <p className="text-slate-300 mb-4">
-                    The AI CFO Tally Connector is designed specifically for Windows systems 
-                    running Tally ERP 9 or TallyPrime.
+                    The AI CFO Tally Connector is designed specifically for Windows systems running Tally ERP 9
+                    or TallyPrime.
                   </p>
                   <p className="text-sm text-slate-400">
                     Please use a Windows computer to download and install the connector.
@@ -304,10 +323,8 @@ export default function Download() {
             <div className="flex items-start gap-4">
               <Shield className="w-6 h-6 text-blue-400 flex-shrink-0 mt-1" />
               <div>
-                <h3 className="font-semibold text-white mb-2">Security & Privacy</h3>
-                <p className="text-slate-300 mb-3">
-                  The AI CFO Tally Connector uses enterprise-grade security:
-                </p>
+                <h3 className="font-semibold text-white mb-2">Security &amp; Privacy</h3>
+                <p className="text-slate-300 mb-3">The AI CFO Tally Connector uses enterprise-grade security:</p>
                 <ul className="space-y-2 text-slate-300">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-emerald-400" />
