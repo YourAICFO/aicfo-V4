@@ -141,24 +141,61 @@ app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
 
+
 /* ===============================
    Static file serving for frontend (Production)
 ================================ */
 if (process.env.NODE_ENV === 'production') {
-  // Serve static files from frontend build
-  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+  // Check if frontend static files exist
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  const fs = require('fs');
   
-  // Handle React Router - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
-    // Don't serve index.html for API routes
-    if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path.startsWith('/download')) {
-      return res.status(404).json({
-        success: false,
-        error: 'Endpoint not found',
+  try {
+    if (fs.existsSync(frontendPath)) {
+      // Serve static files from frontend build if available
+      app.use(express.static(frontendPath));
+      
+      // Handle React Router - serve index.html for all non-API routes
+      app.get('*', (req, res) => {
+        // Don't serve index.html for API routes
+        if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path.startsWith('/download')) {
+          return res.status(404).json({
+            success: false,
+            error: 'Endpoint not found',
+          });
+        }
+        res.sendFile(path.join(frontendPath, 'index.html'));
+      });
+    } else {
+      logger.info('Frontend static files not found, serving API-only mode');
+      // API-only mode - serve backend info for root path
+      app.get('/', (req, res) => {
+        res.json({
+          name: 'AI CFO Platform API',
+          version: '1.0.0',
+          status: 'running',
+          health: '/health',
+          environment: 'production',
+          mode: 'api-only',
+          message: 'Backend API is running. Frontend should be deployed separately or frontend files are missing.'
+        });
       });
     }
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
-  });
+  } catch (err) {
+    logger.warn('Error checking frontend static files, serving API-only mode');
+    // API-only mode - serve backend info for root path
+    app.get('/', (req, res) => {
+      res.json({
+        name: 'AI CFO Platform API',
+        version: '1.0.0',
+        status: 'running',
+        health: '/health',
+        environment: 'production',
+        mode: 'api-only',
+        message: 'Backend API is running. Frontend should be deployed separately or frontend files are missing.'
+      });
+    });
+  }
 } else {
   /* ===============================
      Root (Development)
