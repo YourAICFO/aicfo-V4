@@ -6,6 +6,7 @@ interface User {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  isAdmin?: boolean;
 }
 
 interface AuthState {
@@ -16,6 +17,7 @@ interface AuthState {
   setAuth: (user: User, token: string) => void;
   logout: () => void;
   setSelectedCompany: (companyId: string) => void;
+  updateUser: (user: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -28,6 +30,9 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
       logout: () => set({ user: null, token: null, isAuthenticated: false, selectedCompanyId: null }),
       setSelectedCompany: (companyId) => set({ selectedCompanyId: companyId }),
+      updateUser: (userData) => set((state) => ({ 
+        user: state.user ? { ...state.user, ...userData } : null 
+      })),
     }),
     {
       name: 'auth-storage',

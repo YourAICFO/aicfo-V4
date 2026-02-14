@@ -20,18 +20,6 @@ const CONNECTOR_CONFIG = {
  */
 router.get('/connector', async (req, res) => {
   try {
-    const userAgent = req.headers['user-agent'] || '';
-    const isWindows = /windows|win32|win64/i.test(userAgent);
-    
-    if (!isWindows) {
-      return res.status(400).json({
-        success: false,
-        error: 'Connector is only available for Windows operating systems',
-        message: 'The AI CFO Tally Connector is designed specifically for Windows systems running Tally ERP 9 or TallyPrime.',
-        alternative: 'Please use a Windows computer to download and install the connector.'
-      });
-    }
-
     // Check if connector file exists
     try {
       await fs.access(CONNECTOR_CONFIG.filePath);
@@ -66,7 +54,7 @@ router.get('/connector', async (req, res) => {
         }
       } else {
         logger.info({ 
-          userAgent, 
+          userAgent: req.headers['user-agent'] || '', 
           ip: req.ip,
           timestamp: new Date().toISOString() 
         }, 'Connector downloaded successfully');

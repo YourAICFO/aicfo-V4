@@ -20,40 +20,44 @@ import Creditors from './pages/Creditors';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminControlTower from './pages/AdminControlTower';
 import Download from './pages/Download';
+import UserProfileLoader from './components/UserProfileLoader';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/download" element={<Download />} />
-      <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
-        <Route element={<Layout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/revenue" element={<Revenue />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/cashflow" element={<Cashflow />} />
-          <Route path="/ai-insights" element={<AIInsights />} />
-          <Route path="/ai-chat" element={<AIChat />} />
-          <Route path="/integrations" element={<Integrations />} />
-          <Route path="/debtors" element={<Debtors />} />
-          <Route path="/creditors" element={<Creditors />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/create-company" element={<CreateCompany />} />
-        </Route>
-        
-        {/* Admin routes - require admin authentication */}
-        <Route element={<AdminRoute />}>
+    <>
+      <UserProfileLoader />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/download" element={<Download />} />
+        <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<Layout />}>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/control-tower" element={<AdminControlTower />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/revenue" element={<Revenue />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/cashflow" element={<Cashflow />} />
+            <Route path="/ai-insights" element={<AIInsights />} />
+            <Route path="/ai-chat" element={<AIChat />} />
+            <Route path="/integrations" element={<Integrations />} />
+            <Route path="/debtors" element={<Debtors />} />
+            <Route path="/creditors" element={<Creditors />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/create-company" element={<CreateCompany />} />
+          </Route>
+          
+          {/* Admin routes - require admin authentication */}
+          <Route element={<AdminRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/control-tower" element={<AdminControlTower />} />
+            </Route>
           </Route>
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

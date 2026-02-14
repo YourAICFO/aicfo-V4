@@ -37,11 +37,7 @@ type SidebarProps = {
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const { user } = useAuthStore();
-  
-  // Check if user is admin
-  const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map((email: string) => email.trim().toLowerCase()).filter(Boolean);
-  const userEmail = user?.email?.toLowerCase();
-  const isAdmin = userEmail && adminEmails.includes(userEmail);
+  const isAdmin = user?.isAdmin || false;
 
   useEffect(() => {
     if (!mobileOpen) return;

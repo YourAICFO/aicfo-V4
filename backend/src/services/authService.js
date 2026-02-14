@@ -92,7 +92,21 @@ const getProfile = async (userId) => {
     throw new Error('User not found');
   }
 
-  return user;
+  // Check if user is admin
+  const isAllowedAdmin = (email) => {
+    const allowlist = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean);
+    return allowlist.includes((email || '').toLowerCase());
+  };
+  
+  const isAdmin = isAllowedAdmin(user.email);
+
+  return {
+    ...user.toJSON(),
+    isAdmin
+  };
 };
 
 const updateProfile = async (userId, updateData) => {
