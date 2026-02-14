@@ -1,8 +1,7 @@
 # Backend-only Dockerfile for Railway deployment
-# This version works when Railway builds from backend/ directory only
-# Frontend must be pre-built or served separately
+# Simplified version for better compatibility
 
-FROM node:18-alpine
+FROM node:18
 
 # Create app directory
 WORKDIR /app
@@ -22,8 +21,7 @@ COPY downloads ./downloads
 # Create public directory for any static files (if needed)
 RUN mkdir -p public
 
-# Set permissions and switch to non-root user
-RUN chown -R node:node /app
+# Use node user (already exists in node:18 image)
 USER node
 
 # Expose port (Railway uses $PORT)
