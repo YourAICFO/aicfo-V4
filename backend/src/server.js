@@ -53,11 +53,14 @@ app.use(
 );
 
 /* ===============================
-   CORS — DYNAMIC (Production-ready)
+   CORS — PRODUCTION-READY CONFIGURATION
 ================================ */
 const corsOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
   : ['http://localhost:5173', 'http://localhost:3000'];
+
+// Add Vercel preview deployments pattern
+const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
 
 app.use(
   cors({
@@ -70,6 +73,11 @@ app.use(
         return callback(null, true);
       }
       
+      // Allow Vercel preview deployments
+      if (vercelPattern.test(origin)) {
+        return callback(null, true);
+      }
+      
       // For development, allow localhost origins
       if (origin.includes('localhost')) {
         return callback(null, true);
@@ -78,12 +86,15 @@ app.use(
       callback(new Error(`CORS policy violation: ${origin}`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With', 'Accept', 'Origin'],
     exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
     maxAge: 86400 // 24 hours
   })
 );
+
+// Handle preflight OPTIONS requests explicitly
+app.options('*', cors());
 
 /* ===============================
    Request context + logging
