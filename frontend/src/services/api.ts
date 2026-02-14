@@ -146,3 +146,9 @@ export const adminApi = {
   getAccountingMetrics: () => api.get('/admin/metrics/accounting'),
   getRiskMetrics: () => api.get('/admin/metrics/risk'),
 };
+
+// Download API
+export const downloadApi = {
+  getInfo: () => api.get('/download/info'),
+  getCheck: () => api.get('/download/check'),
+};

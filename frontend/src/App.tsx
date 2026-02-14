@@ -19,6 +19,7 @@ import Debtors from './pages/Debtors';
 import Creditors from './pages/Creditors';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminControlTower from './pages/AdminControlTower';
+import Download from './pages/Download';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -28,6 +29,7 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/download" element={<Download />} />
       <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />

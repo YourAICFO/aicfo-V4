@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Bell, ChevronDown, LogOut, Building2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bell, ChevronDown, LogOut, Building2, Download } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { companyApi } from '../services/api';
 
@@ -73,6 +74,14 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          <Link 
+            to="/download" 
+            className="hidden md:flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download Connector
+          </Link>
+          
           <button className="relative p-2 text-gray-600 hover:text-gray-900">
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>

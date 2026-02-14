@@ -209,6 +209,59 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Connector Download CTA - Show when no data is available */}
+      {!data && syncStatus === 'syncing' && (
+        <div className="card border-blue-200 bg-blue-50">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                  Connect Your Tally Data
+                </h3>
+                <p className="text-sm text-blue-800 mb-3">
+                  Download the AI CFO Tally Connector to automatically sync your financial data 
+                  and unlock powerful AI insights about your business.
+                </p>
+                <ul className="text-sm text-blue-700 space-y-1 mb-4">
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Automatic data sync from Tally ERP 9 / TallyPrime
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Real-time financial health monitoring
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    AI-powered insights and recommendations
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <Link 
+              to="/download" 
+              className="btn-primary px-6 py-3 flex items-center gap-2 whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Download Connector
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 

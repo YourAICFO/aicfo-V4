@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
+const path = require('path');
 require('dotenv').config();
 
 const { sequelize } = require('./models');
@@ -28,6 +29,7 @@ const syncStatusRoutes = require('./routes/syncStatus');
 const debtorsRoutes = require('./routes/debtors');
 const creditorsRoutes = require('./routes/creditors');
 const devToolsRoutes = require('./routes/devTools');
+const downloadRoutes = require('./routes/download');
 
 
 const app = express();
@@ -118,18 +120,40 @@ app.use('/api/creditors', creditorsRoutes);
 app.use('/api/dev', devToolsRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/admin', adminRoutes);
+app.use('/download', downloadRoutes);
 
 /* ===============================
-   Root
+   Static file serving for frontend (Production)
 ================================ */
-app.get('/', (req, res) => {
-  res.json({
-    name: 'AI CFO Platform API',
-    version: '1.0.0',
-    status: 'running',
-    health: '/health',
+if (process.env.NODE_ENV === 'production') {
+  // Serve static files from frontend build
+  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+  
+  // Handle React Router - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    // Don't serve index.html for API routes
+    if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path.startsWith('/download')) {
+      return res.status(404).json({
+        success: false,
+        error: 'Endpoint not found',
+      });
+    }
+    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
   });
-});
+} else {
+  /* ===============================
+     Root (Development)
+  ================================ */
+  app.get('/', (req, res) => {
+    res.json({
+      name: 'AI CFO Platform API',
+      version: '1.0.0',
+      status: 'running',
+      health: '/health',
+      environment: 'development',
+    });
+  });
+}
 
 /* ===============================
    404 handler

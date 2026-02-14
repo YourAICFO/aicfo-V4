@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, LineChart, Wallet, PlugZap, CheckCircle2 } from 'lucide-react';
+import VersionDisplay from '../components/VersionDisplay';
 
 export default function Home() {
   return (
@@ -21,10 +22,11 @@ export default function Home() {
               <p className="text-lg font-semibold">AI CFO</p>
             </div>
           </div>
-          <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
-            <a href="#features" className="hover:text-white">Features</a>
-            <a href="#pricing" className="hover:text-white">Pricing</a>
-          </nav>
+            <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
+              <a href="#features" className="hover:text-white">Features</a>
+              <a href="#pricing" className="hover:text-white">Pricing</a>
+              <Link to="/download" className="hover:text-white">Download Connector</Link>
+            </nav>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-200 hover:text-white">
               Log in
@@ -198,6 +200,9 @@ export default function Home() {
       <footer className="border-t border-white/10 pb-10 pt-8 text-center text-xs text-slate-400">
         <p>AI CFO provides decision support, not statutory advice.</p>
         <p className="mt-2">© 2024 AI CFO. All rights reserved.</p>
+        <div className="mt-4 flex justify-center">
+          <VersionDisplay />
+        </div>
       </footer>
     </div>
   );
