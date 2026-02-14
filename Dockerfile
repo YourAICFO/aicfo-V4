@@ -1,30 +1,24 @@
 # Multi-stage Dockerfile for AI CFO Platform
-# This ignores the .NET connector and focuses on Node.js/React stack
+# Fixes PostCSS/Tailwind build dependencies and COPY path issues
 
-# Stage 1: Build Frontend
+# Stage 1: Frontend Builder - Install ALL dependencies including dev/build deps
 FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copy frontend package files
+# Copy package files first for better layer caching
 COPY frontend/package*.json ./
-COPY frontend/vite.config.ts ./
-COPY frontend/tsconfig*.json ./
-COPY frontend/tailwind.config.js ./
-COPY frontend/postcss.config.js ./
 
-# Install frontend dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci
 
-# Copy frontend source code
-COPY frontend/src ./src
-COPY frontend/index.html ./index.html
-COPY frontend/src/index.css ./src/index.css
+# Copy entire frontend source after dependencies are installed
+COPY frontend/ ./
 
-# Build frontend
+# Build frontend (now with all PostCSS/Tailwind deps available)
 RUN npm run build
 
-# Stage 2: Setup Backend
+# Stage 2: Backend Builder - Production dependencies only
 FROM node:18-alpine AS backend-builder
 
 WORKDIR /app/backend
@@ -32,34 +26,33 @@ WORKDIR /app/backend
 # Copy backend package files
 COPY backend/package*.json ./
 
-# Install backend dependencies
-RUN npm ci --only=production
+# Install production dependencies only (runtime deps)
+RUN npm ci --omit=dev
 
-# Stage 3: Final Production Image
+# Stage 3: Production Runtime
 FROM node:18-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
 
-# Create app directory
+# Create app directory structure
 WORKDIR /app
 
-# Copy backend from builder stage
+# Copy backend from builder stage (production deps only)
 COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
 COPY --from=backend-builder /app/backend/package*.json ./backend/
 
-# Copy backend source code (excluding .NET connector)
+# Copy backend source code
 COPY backend/src ./backend/src
 COPY backend/docs ./backend/docs
 COPY backend/migrations ./backend/migrations
 COPY backend/downloads ./backend/downloads
 
-# Copy built frontend
+# Copy built frontend dist
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Create downloads directory for connector
-RUN mkdir -p /app/backend/downloads && \
-    chown -R node:node /app
+# Set permissions
+RUN chown -R node:node /app
 
 # Switch to non-root user
 USER node
