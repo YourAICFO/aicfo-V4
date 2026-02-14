@@ -7,11 +7,11 @@ import {
   Wallet,
   Brain,
   MessageSquare,
-  List,
   Plug,
   Settings,
   Users,
 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 const menuItems = [
   { path: '/dashboard', label: 'CFO Overview', icon: LayoutDashboard },
@@ -22,10 +22,12 @@ const menuItems = [
   { path: '/creditors', label: 'Creditors', icon: Users },
   { path: '/ai-insights', label: 'AI Insights', icon: Brain },
   { path: '/ai-chat', label: 'AI Chat', icon: MessageSquare },
-  { path: '/transactions', label: 'Transactions', icon: List },
   { path: '/integrations', label: 'Integrations', icon: Plug },
-  { path: '/admin/control-tower', label: 'Admin Control', icon: LayoutDashboard },
   { path: '/settings', label: 'Settings', icon: Settings },
+];
+
+const adminMenuItems = [
+  { path: '/admin/control-tower', label: 'Admin Control', icon: LayoutDashboard },
 ];
 
 type SidebarProps = {
@@ -34,6 +36,13 @@ type SidebarProps = {
 };
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
+  const { user } = useAuthStore();
+  
+  // Check if user is admin
+  const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map((email: string) => email.trim().toLowerCase()).filter(Boolean);
+  const userEmail = user?.email?.toLowerCase();
+  const isAdmin = userEmail && adminEmails.includes(userEmail);
+
   useEffect(() => {
     if (!mobileOpen) return;
     const handleKey = (event: KeyboardEvent) => {
@@ -71,6 +80,33 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
               </NavLink>
             </li>
           ))}
+          {/* Show admin items only for admin users */}
+          {isAdmin && (
+            <>
+              <li className="pt-4 mt-4 border-t border-gray-200">
+                <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Admin
+                </div>
+              </li>
+              {adminMenuItems.map((item) => (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 text-primary-700 font-medium'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`
+                    }
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </>
+          )}
         </ul>
       </nav>
     </>

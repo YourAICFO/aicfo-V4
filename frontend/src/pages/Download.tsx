@@ -62,17 +62,29 @@ export default function Download() {
 
     try {
       setIsDownloading(true);
+      setError(null);
 
-      // Prefer backend-provided download URL if available; fallback to fixed endpoint
-      const href = downloadInfo.downloadUrl || '/download/connector';
+      // Use the backend API to get the download URL
+      const response = await api.get('/download/connector', {
+        responseType: 'blob' // Important for file downloads
+      });
 
-      // Trigger download via an anchor click
+      // Create a blob URL and trigger download
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      
+      // Create temporary link and trigger download
       const link = document.createElement('a');
-      link.href = href;
+      link.href = downloadUrl;
       link.download = downloadInfo.filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the blob URL after a delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(downloadUrl);
+      }, 100);
 
       // Optional analytics
       const w = window as unknown as { gtag?: (...args: any[]) => void };

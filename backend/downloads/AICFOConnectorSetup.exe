@@ -1,0 +1,6 @@
+#!/bin/bash
+# This is a placeholder for the AI CFO Tally Connector installer
+# In production, this should be replaced with the actual Windows executable
+echo "AI CFO Tally Connector Installer Placeholder"
+echo "This file should be replaced with the actual AICFOConnectorSetup.exe"
+echo "File size: 1024 bytes"

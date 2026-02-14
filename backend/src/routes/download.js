@@ -44,10 +44,15 @@ router.get('/connector', async (req, res) => {
       });
     }
 
+    // Get file stats for content-length
+    const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
+    
     // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_CONFIG.filename}"`);
+    res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Connector-Version', CONNECTOR_CONFIG.version);
+    res.setHeader('Access-Control-Expose-Headers', 'X-Connector-Version, Content-Disposition');
     
     // Send the file
     res.sendFile(CONNECTOR_CONFIG.filePath, (err) => {
@@ -83,45 +88,65 @@ router.get('/connector', async (req, res) => {
  * GET /download/info
  * Get connector download information and system requirements
  */
-router.get('/info', (req, res) => {
-  const userAgent = req.headers['user-agent'] || '';
-  const isWindows = /windows|win32|win64/i.test(userAgent);
-  
-  res.json({
-    success: true,
-    data: {
-      filename: CONNECTOR_CONFIG.filename,
-      version: CONNECTOR_CONFIG.version,
-      supportedPlatforms: CONNECTOR_CONFIG.supportedPlatforms,
-      systemRequirements: {
-        os: 'Windows 7 or later',
-        framework: '.NET Framework 4.7.2 or later',
-        tally: 'Tally ERP 9/Prime with Tally API enabled',
-        ram: 'Minimum 2GB RAM',
-        disk: '50MB free disk space',
+router.get('/info', async (req, res) => {
+  try {
+    const userAgent = req.headers['user-agent'] || '';
+    const isWindows = /windows|win32|win64/i.test(userAgent);
+    
+    let fileSize = null;
+    let lastUpdated = null;
+    
+    // Get file info if it exists
+    try {
+      const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
+      fileSize = stats.size;
+      lastUpdated = stats.mtime;
+    } catch (error) {
+      // File doesn't exist, keep null values
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        filename: CONNECTOR_CONFIG.filename,
+        version: CONNECTOR_CONFIG.version,
+        supportedPlatforms: CONNECTOR_CONFIG.supportedPlatforms,
+        systemRequirements: {
+          os: 'Windows 7 or later',
+          framework: '.NET Framework 4.7.2 or later',
+          tally: 'Tally ERP 9/Prime with Tally API enabled',
+          ram: 'Minimum 2GB RAM',
+          disk: '50MB free disk space',
+        },
+        downloadUrl: CONNECTOR_CONFIG.downloadUrl,
+        isWindows,
+        canDownload: isWindows,
+        fileSize,
+        lastUpdated,
+        features: [
+          'Connects directly to Tally API on localhost',
+          'Secure HTTPS encrypted communication',
+          'Automatic company detection',
+          'Real-time sync status indicators',
+          'One-click sync functionality',
+          'System tray integration',
+        ],
+        installationSteps: [
+          'Download the connector installer',
+          'Run as Administrator',
+          'Enter your AI CFO credentials',
+          'Click "Connect to Tally"',
+          'Start syncing your financial data',
+        ],
       },
-      downloadUrl: CONNECTOR_CONFIG.downloadUrl,
-      isWindows,
-      canDownload: isWindows,
-      fileSize: null, // Will be populated when file exists
-      lastUpdated: null, // Will be populated when file exists
-      features: [
-        'Connects directly to Tally API on localhost',
-        'Secure HTTPS encrypted communication',
-        'Automatic company detection',
-        'Real-time sync status indicators',
-        'One-click sync functionality',
-        'System tray integration',
-      ],
-      installationSteps: [
-        'Download the connector installer',
-        'Run as Administrator',
-        'Enter your AI CFO credentials',
-        'Click "Connect to Tally"',
-        'Start syncing your financial data',
-      ],
-    },
-  });
+    });
+  } catch (error) {
+    logger.error({ error }, 'Error getting download info');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get download information',
+    });
+  }
 });
 
 /**

@@ -152,3 +152,8 @@ export const downloadApi = {
   getInfo: () => api.get('/download/info'),
   getCheck: () => api.get('/download/check'),
 };
+
+// Connector API
+export const connectorApi = {
+  getStatus: (companyId: string) => api.get('/connector/status', { params: { companyId } }),
+};

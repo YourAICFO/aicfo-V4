@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plug, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { integrationApi } from '../services/api';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import ConnectorOnboarding from '../components/ConnectorOnboarding';
 
 interface Integration {
   id: string;
@@ -103,6 +104,8 @@ export default function Integrations() {
     return integrations.find((i) => i.type === type);
   };
 
+  const hasTallyConnector = isConnected('TALLY');
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -154,6 +157,11 @@ export default function Integrations() {
         <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
         <p className="text-gray-600">Connect your accounting software for automatic data sync</p>
       </div>
+
+      {/* Connector Onboarding - Show if no Tally connector is connected */}
+      {!hasTallyConnector && (
+        <ConnectorOnboarding />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(integrationInfo).map(([type, info]) => {
@@ -209,19 +217,33 @@ export default function Integrations() {
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    if (type === 'TALLY') {
-                      setShowTallyModal(true);
-                    } else {
-                      alert(`${info.name} integration coming soon!`);
-                    }
-                  }}
-                  className="w-full btn-primary flex items-center justify-center gap-2"
-                >
-                  <Plug className="w-4 h-4" />
-                  Connect
-                </button>
+                <div className="space-y-2">
+                  {type === 'TALLY' ? (
+                    <>
+                      <a
+                        href="/download"
+                        className="w-full btn-primary flex items-center justify-center gap-2"
+                      >
+                        <Plug className="w-4 h-4" />
+                        Download Connector
+                      </a>
+                      <button
+                        onClick={() => setShowTallyModal(true)}
+                        className="w-full text-sm text-gray-600 hover:text-gray-800 underline"
+                      >
+                        Or use manual setup (Advanced)
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => alert(`${info.name} integration coming soon!`)}
+                      className="w-full btn-primary flex items-center justify-center gap-2"
+                    >
+                      <Plug className="w-4 h-4" />
+                      Connect
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           );

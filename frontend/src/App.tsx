@@ -9,10 +9,10 @@ import Expenses from './pages/Expenses';
 import Cashflow from './pages/Cashflow';
 import AIInsights from './pages/AIInsights';
 import AIChat from './pages/AIChat';
-import Transactions from './pages/Transactions';
 import Integrations from './pages/Integrations';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import CreateCompany from './pages/CreateCompany';
 import Home from './pages/Home';
 import Debtors from './pages/Debtors';
@@ -38,14 +38,21 @@ function App() {
           <Route path="/cashflow" element={<Cashflow />} />
           <Route path="/ai-insights" element={<AIInsights />} />
           <Route path="/ai-chat" element={<AIChat />} />
-          <Route path="/transactions" element={<Transactions />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/debtors" element={<Debtors />} />
           <Route path="/creditors" element={<Creditors />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/create-company" element={<CreateCompany />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/control-tower" element={<AdminControlTower />} />
+        </Route>
+        
+        {/* Admin routes - require admin authentication */}
+        <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
+          <Route element={<AdminRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/control-tower" element={<AdminControlTower />} />
+            </Route>
+          </Route>
         </Route>
       </Route>
     </Routes>
