@@ -1,32 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="AI CFO Connector" Manufacturer="AI CFO" Version="1.0.0" UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf" Language="1033">
+  <Package Name="AI CFO Connector"
+           Manufacturer="AI CFO"
+           Version="1.0.0"
+           UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf"
+           Language="1033">
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="AICFOConnector">
-        <Component Id="ServiceExeComponent" Guid="*">
-          <File Id="ServiceExe" Source="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" KeyPath="yes" />
-          <ServiceInstall Id="ConnectorServiceInstall"
-                          Name="AICFO Connector Service"
-                          DisplayName="AICFO Connector Service"
-                          Description="Syncs Tally accounting data to AI CFO backend"
-                          Type="ownProcess"
-                          Start="auto"
-                          ErrorControl="normal"
-                          Account="LocalSystem" />
-          <ServiceControl Id="ConnectorServiceControl"
-                          Name="AICFO Connector Service"
-                          Start="install"
-                          Stop="both"
-                          Remove="uninstall"
-                          Wait="yes" />
-        </Component>
-
-        <Component Id="TrayExeComponent" Guid="*">
-          <File Id="TrayExe" Source="$(var.TrayPublishDir)\AICFO.Connector.Tray.exe" KeyPath="yes" />
-        </Component>
+        <Directory Id="ServiceInstallDir" Name="Service" />
+        <Directory Id="TrayInstallDir" Name="Tray" />
       </Directory>
     </StandardDirectory>
 
@@ -37,9 +22,47 @@
       </Directory>
     </StandardDirectory>
 
+    <ComponentGroup Id="ConnectorServiceFiles" Directory="ServiceInstallDir">
+      <Files Include="$(var.ServicePublishDir)\**\*"
+             Exclude="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="ConnectorTrayFiles" Directory="TrayInstallDir">
+      <Files Include="$(var.TrayPublishDir)\**\*" />
+    </ComponentGroup>
+
+    <Component Id="ConnectorServiceExeComponent" Directory="ServiceInstallDir" Guid="*">
+      <File Id="ServiceExe" Source="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" KeyPath="yes" />
+      <ServiceInstall Id="ConnectorServiceInstall"
+                      Name="AICFO Connector Service"
+                      DisplayName="AICFO Connector Service"
+                      Description="Syncs Tally accounting data to AI CFO backend"
+                      Type="ownProcess"
+                      Start="auto"
+                      ErrorControl="normal"
+                      Account="LocalSystem" />
+      <ServiceControl Id="ConnectorServiceControl"
+                      Name="AICFO Connector Service"
+                      Start="install"
+                      Stop="both"
+                      Remove="uninstall"
+                      Wait="yes" />
+    </Component>
+
+    <Component Id="ProgramDataConfigFolderComponent" Directory="ProgramDataConfig" Guid="*">
+      <CreateFolder KeyPath="yes" />
+    </Component>
+
+    <Component Id="ProgramDataLogsFolderComponent" Directory="ProgramDataLogs" Guid="*">
+      <CreateFolder KeyPath="yes" />
+    </Component>
+
     <Feature Id="MainFeature" Title="AI CFO Connector" Level="1">
-      <ComponentRef Id="ServiceExeComponent" />
-      <ComponentRef Id="TrayExeComponent" />
+      <ComponentRef Id="ConnectorServiceExeComponent" />
+      <ComponentRef Id="ProgramDataConfigFolderComponent" />
+      <ComponentRef Id="ProgramDataLogsFolderComponent" />
+      <ComponentGroupRef Id="ConnectorServiceFiles" />
+      <ComponentGroupRef Id="ConnectorTrayFiles" />
     </Feature>
   </Package>
 </Wix>

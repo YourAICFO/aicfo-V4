@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>Package</OutputType>
     <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>AICFOConnectorSetup</OutputName>
     <DefineConstants>
       ServicePublishDir=$(MSBuildThisFileDirectory)..\publish\service;
       TrayPublishDir=$(MSBuildThisFileDirectory)..\publish\tray

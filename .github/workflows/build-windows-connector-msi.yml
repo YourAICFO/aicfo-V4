@@ -1,0 +1,51 @@
+name: Build Windows Connector MSI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "connector-dotnet/**"
+      - ".github/workflows/build-windows-connector-msi.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "connector-dotnet/**"
+      - ".github/workflows/build-windows-connector-msi.yml"
+  workflow_dispatch:
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install WiX v4 tool
+        shell: pwsh
+        run: dotnet tool install --global wix --version 4.*
+
+      - name: Build connector MSI
+        shell: pwsh
+        run: ./connector-dotnet/build.ps1 -Configuration Release
+
+      - name: Verify MSI exists
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
+          if (-not $msi) {
+            throw "AICFOConnectorSetup.msi not found after build."
+          }
+          Write-Host "MSI found at $($msi.FullName)"
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AICFO-Connector-MSI
+          path: "**/AICFOConnectorSetup.msi"
+          if-no-files-found: error

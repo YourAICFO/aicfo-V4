@@ -35,8 +35,11 @@ cd connector-dotnet
 ./build.ps1 -Configuration Release
 ```
 
-Expected MSI output:
-- `connector-dotnet/installer/bin/Release/AICFO.Connector.Installer.msi`
+Expected MSI output name:
+- `AICFOConnectorSetup.msi`
+
+Typical output path:
+- `connector-dotnet/installer/bin/Release/**/AICFOConnectorSetup.msi`
 
 After build, rename/copy artifact to backend download location:
 - `backend/downloads/AICFOConnectorSetup.msi`
