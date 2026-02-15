@@ -36,6 +36,7 @@ export default function Download() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
   useEffect(() => {
     fetchDownloadInfo();
@@ -45,7 +46,6 @@ export default function Download() {
   const fetchDownloadInfo = async () => {
     try {
       setIsLoading(true);
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
       const response = await fetch(`${backendUrl}/download/info`, {
         method: 'GET',
         headers: {
@@ -81,7 +81,6 @@ export default function Download() {
 
       // Use direct browser download by creating a direct link to the backend
       // This bypasses any SPA routing and lets the browser handle the download
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
       const downloadUrl = `${backendUrl}/download/connector`;
       
       // Create a direct download link

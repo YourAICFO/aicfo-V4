@@ -32,7 +32,8 @@ class ConfigManager {
       heartbeat_interval_seconds: 30,
       max_retry_attempts: 3,
       retry_delay_seconds: 5,
-      log_level: 'info'
+      log_level: 'info',
+      connector_allow_mock: true
     };
 
     try {

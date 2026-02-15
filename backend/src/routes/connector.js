@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-const { syncStatusService } = require('../services');
+const { syncStatusService, integrationService } = require('../services');
+const { IntegrationSyncRun, Company } = require('../models');
 const { authenticate } = require('../middleware/auth');
 
 /**
@@ -160,6 +161,23 @@ router.post('/sync/start', authenticateConnector, async (req, res) => {
   } catch (error) {
     console.error('Sync start error:', error);
     res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   POST /api/connector/sync
+   Auth: Bearer <connectorToken>
+================================ */
+router.post('/sync', authenticateConnector, async (req, res) => {
+  try {
+    const data = await integrationService.processConnectorPayload(req.companyId, req.body || {});
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Connector sync payload error:', error);
+    res.status(400).json({
       success: false,
       error: error.message
     });
@@ -340,6 +358,26 @@ router.post('/heartbeat', authenticateConnector, async (req, res) => {
 });
 
 /* ===============================
+   GET /api/connector/status/connector
+   Auth: connector token
+================================ */
+router.get('/status/connector', authenticateConnector, async (req, res) => {
+  try {
+    const status = await syncStatusService.getSyncStatus(req.companyId);
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('Get connector sync status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
    GET /api/connector/status
    Auth: normal user JWT (front-end usage)
 ================================ */
@@ -355,7 +393,6 @@ router.get('/status', authenticate, async (req, res) => {
     }
 
     // Verify user has access to this company
-    const { Company } = require('../models');
     const company = await Company.findOne({
       where: { 
         id: companyId,

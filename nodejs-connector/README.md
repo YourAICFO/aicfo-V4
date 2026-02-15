@@ -122,6 +122,8 @@ npm run build:zip
 - `max_retry_attempts`: Maximum retry attempts (default: 3)
 - `retry_delay_seconds`: Base retry delay (default: 5)
 - `log_level`: Logging level (default: `info`)
+- `connector_allow_mock`: Allow mock data fallback when Tally returns no data (default: `true` for development)
+- `CONNECTOR_ALLOW_MOCK` (env): Overrides config at runtime. In production, mock mode is disabled unless set to `true`.
 
 ## API Integration
 
@@ -132,10 +134,11 @@ Authorization: Bearer <connector_token>
 ```
 
 ### Endpoints Used
-- `POST /connector/heartbeat` - Heartbeat signal
-- `POST /connector/sync/start` - Start sync run
-- `POST /connector/sync` - Send sync data (main payload)
-- `POST /connector/sync/complete` - Complete sync run
+- `GET /api/connector/status/connector` - Connector-auth status check
+- `POST /api/connector/heartbeat` - Heartbeat signal
+- `POST /api/connector/sync/start` - Start sync run
+- `POST /api/connector/sync` - Send sync data (main payload)
+- `POST /api/connector/sync/complete` - Complete sync run
 
 ### Payload Format
 The connector sends data in the finalized COA format as specified in the backend contract:

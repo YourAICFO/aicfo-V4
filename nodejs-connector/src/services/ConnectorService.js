@@ -221,7 +221,21 @@ class ConnectorService {
 
       // For MVP, we'll use mock data if Tally is not available
       if (!chartOfAccounts && !ledgers) {
-        this.logger.warn('No data from Tally, using mock data for MVP');
+        const allowMockFromEnv = process.env.CONNECTOR_ALLOW_MOCK;
+        const allowMockFromConfig = this.config.connector_allow_mock;
+        const allowMock = allowMockFromEnv !== undefined
+          ? allowMockFromEnv === 'true'
+          : (allowMockFromConfig !== undefined ? allowMockFromConfig === true : process.env.NODE_ENV !== 'production');
+
+        if (!allowMock && process.env.NODE_ENV === 'production') {
+          throw new Error('Mock connector mode is disabled in production. Set CONNECTOR_ALLOW_MOCK=true to override.');
+        }
+
+        if (!allowMock) {
+          throw new Error('No data returned from Tally and mock mode is disabled.');
+        }
+
+        this.logger.warn('No data from Tally, using mock data because CONNECTOR_ALLOW_MOCK is enabled');
         return this.generateMockData();
       }
 

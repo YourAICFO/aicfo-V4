@@ -256,8 +256,11 @@ const syncTallyIntegration = async (integration, companyId) => {
   // Stage 3: Normalize and map data
   const normalizedCoa = chartOfAccounts ? normalizeCoaPayload(chartOfAccounts, companyId) : null;
   
-  if (ledgers && ledgers.length > 0) {
-    await upsertSourceLedgersFromChartOfAccounts(companyId, 'tally', ledgers);
+  const chartOfAccountsForUpsert = normalizedCoa?.chartOfAccounts || (ledgers && ledgers.length > 0 ? { groups: [], ledgers } : null);
+  if (chartOfAccountsForUpsert) {
+    await upsertSourceLedgersFromChartOfAccounts(companyId, 'tally', chartOfAccountsForUpsert);
+  } else {
+    logger.warn({ integrationId: integration.id, companyId }, 'Skipping source ledger upsert: no chartOfAccounts.ledgers provided');
   }
 
   // Stage 4: Generate structured tables (monthly snapshots)

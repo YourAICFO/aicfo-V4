@@ -46,11 +46,7 @@ function App() {
             <Route path="/creditors" element={<Creditors />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/create-company" element={<CreateCompany />} />
-          </Route>
-          
-          {/* Admin routes - require admin authentication */}
-          <Route element={<AdminRoute />}>
-            <Route element={<Layout />}>
+            <Route element={<AdminRoute />}>
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/control-tower" element={<AdminControlTower />} />
             </Route>

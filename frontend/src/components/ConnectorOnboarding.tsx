@@ -24,6 +24,8 @@ export default function ConnectorOnboarding() {
   const [error, setError] = useState<string | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  const connectorDownloadUrl = `${backendUrl}/download/connector`;
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -203,7 +205,7 @@ export default function ConnectorOnboarding() {
 
             {step.id === 'download' && !step.completed && (
               <a
-                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/download/connector`}
+                href={connectorDownloadUrl}
                 className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 download
               >

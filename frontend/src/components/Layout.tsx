@@ -21,7 +21,7 @@ export default function Layout() {
     if (!isAuthenticated) return;
     if (selectedCompanyId) return;
     const path = location.pathname;
-    if (path === '/create-company' || path === '/admin') return;
+    if (path === '/create-company' || path.startsWith('/admin')) return;
     navigate('/create-company', { replace: true, state: { message: 'Please create or select a company first.' } });
   }, [isAuthenticated, selectedCompanyId, location.pathname, navigate]);
 

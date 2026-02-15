@@ -3,6 +3,9 @@ import { Sparkles, LineChart, Wallet, PlugZap, CheckCircle2 } from 'lucide-react
 import VersionDisplay from '../components/VersionDisplay';
 
 export default function Home() {
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="relative overflow-hidden">
@@ -25,7 +28,7 @@ export default function Home() {
             <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
               <a href="#features" className="hover:text-white">Features</a>
               <a href="#pricing" className="hover:text-white">Pricing</a>
-              <a href="/download" className="hover:text-white">Download Connector</a>
+              <a href={connectorDownloadUrl} className="hover:text-white">Download Connector</a>
             </nav>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-200 hover:text-white">

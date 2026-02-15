@@ -6,6 +6,7 @@ class ApiClient {
     this.connectorToken = connectorToken;
     this.companyId = companyId;
     this.logger = logger;
+    this.connectorBasePath = this.apiUrl.endsWith('/api') ? '/connector' : '/api/connector';
     
     this.client = axios.create({
       baseURL: this.apiUrl,
@@ -46,7 +47,7 @@ class ApiClient {
     try {
       this.logger.info('Testing API connection...');
       
-      const response = await this.client.get('/connector/status');
+      const response = await this.client.get(`${this.connectorBasePath}/status/connector`);
       
       if (response.data && response.data.success) {
         this.logger.info('API connection test successful');
@@ -69,7 +70,7 @@ class ApiClient {
     try {
       this.logger.debug('Sending heartbeat...');
       
-      const response = await this.client.post('/connector/heartbeat', {
+      const response = await this.client.post(`${this.connectorBasePath}/heartbeat`, {
         companyId: this.companyId
       });
 
@@ -89,7 +90,7 @@ class ApiClient {
     try {
       this.logger.info('Starting sync run...');
       
-      const response = await this.client.post('/connector/sync/start', {
+      const response = await this.client.post(`${this.connectorBasePath}/sync/start`, {
         companyId: this.companyId
       });
 
@@ -110,7 +111,7 @@ class ApiClient {
     try {
       this.logger.debug(`Updating sync progress: ${stage} - ${progress}%`);
       
-      const response = await this.client.post('/connector/sync/progress', {
+      const response = await this.client.post(`${this.connectorBasePath}/sync/progress`, {
         runId,
         stage,
         progress,
@@ -133,7 +134,7 @@ class ApiClient {
     try {
       this.logger.info(`Completing sync run: ${status}`);
       
-      const response = await this.client.post('/connector/sync/complete', {
+      const response = await this.client.post(`${this.connectorBasePath}/sync/complete`, {
         runId,
         status,
         finishedAt: new Date().toISOString(),
@@ -157,7 +158,7 @@ class ApiClient {
       this.logger.info('Sending sync data to API...');
       
       // This is the main endpoint that sends the finalized COA payload
-      const response = await this.client.post('/connector/sync', payload);
+      const response = await this.client.post(`${this.connectorBasePath}/sync`, payload);
 
       if (response.data && response.data.success) {
         this.logger.info('Sync data sent successfully');

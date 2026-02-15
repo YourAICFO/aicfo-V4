@@ -6,6 +6,7 @@ const {
   AccountHeadDictionary,
   sequelize
 } = require('../models');
+const { logger } = require('../utils/logger');
 
 const VALID_NORMALIZED_TYPES = new Set(['REVENUE', 'EXPENSE', 'ASSET', 'LIABILITY']);
 
@@ -136,7 +137,10 @@ const upsertAccountingTermMapping = async ({
 };
 
 const upsertSourceLedgersFromChartOfAccounts = async (companyId, sourceSystem, chartOfAccounts) => {
-  if (!chartOfAccounts || !Array.isArray(chartOfAccounts.ledgers)) return { count: 0 };
+  if (!chartOfAccounts || !Array.isArray(chartOfAccounts.ledgers)) {
+    logger.warn({ companyId, sourceSystem }, 'Source ledger upsert skipped: chartOfAccounts.ledgers missing');
+    return { count: 0 };
+  }
   const groups = Array.isArray(chartOfAccounts.groups) ? chartOfAccounts.groups : [];
   const parentByGroup = new Map();
   for (const g of groups) {

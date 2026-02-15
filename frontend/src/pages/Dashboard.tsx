@@ -40,6 +40,8 @@ export default function Dashboard() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const { isTrial, trialEndsInDays } = useSubscriptionStore();
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  const connectorDownloadUrl = `${backendUrl}/download/connector`;
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -250,7 +252,7 @@ export default function Dashboard() {
               </div>
             </div>
             <a 
-              href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/download/connector`}
+              href={connectorDownloadUrl}
               className="btn-primary px-6 py-3 flex items-center gap-2 whitespace-nowrap"
               download
             >

@@ -16,6 +16,8 @@ export default function Header() {
   const { user, logout, selectedCompanyId, setSelectedCompany } = useAuthStore();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  const connectorDownloadUrl = `${backendUrl}/download/connector`;
 
   useEffect(() => {
     loadCompanies();
@@ -75,7 +77,7 @@ export default function Header() {
 
         <div className="flex items-center gap-4">
           <a 
-            href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/download/connector`}
+            href={connectorDownloadUrl}
             className="hidden md:flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             download
           >
