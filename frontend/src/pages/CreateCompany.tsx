@@ -73,7 +73,6 @@ export default function CreateCompany() {
               className="input"
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              required
             />
           </div>
 

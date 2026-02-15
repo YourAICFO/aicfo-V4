@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, Bell, Settings, LogOut } from 'lucide-react';
+import { Menu, X, Bell, Settings, LogOut, ChevronDown, Building2, PlusCircle } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import DarkModeToggle from '../ui/DarkModeToggle';
@@ -14,10 +14,12 @@ interface Company {
 
 const ModernLayout: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout, selectedCompanyId } = useAuthStore();
+  const { user, logout, selectedCompanyId, setSelectedCompany } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const location = useLocation();
   const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
   const userEmail = user?.email || '';
@@ -27,19 +29,30 @@ const ModernLayout: React.FC = () => {
     let mounted = true;
     const loadCompanies = async () => {
       try {
+        setLoadingCompanies(true);
         const response = await companyApi.getAll();
         const items = response?.data?.data || [];
         if (!mounted) return;
         setCompanies(items);
+        if (items.length > 0) {
+          const hasSelectedCompany = selectedCompanyId && items.some((item: Company) => item.id === selectedCompanyId);
+          if (!hasSelectedCompany) {
+            setSelectedCompany(items[0].id);
+          }
+        }
       } catch (error) {
         console.error('Failed to load companies for layout', error);
+      } finally {
+        if (mounted) {
+          setLoadingCompanies(false);
+        }
       }
     };
     loadCompanies();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [location.pathname, selectedCompanyId, setSelectedCompany]);
 
   const handleLogout = () => {
     logout();
@@ -59,6 +72,8 @@ const ModernLayout: React.FC = () => {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+  const hasCompanies = companies.length > 0;
+  const isCreateCompanyRoute = location.pathname === '/create-company';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -147,12 +162,63 @@ const ModernLayout: React.FC = () => {
               <Menu className="h-5 w-5" />
             </button>
             <div className="ml-4 lg:ml-0">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {companyName}
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Financial Intelligence Dashboard
-              </p>
+              <div className="relative">
+                <button
+                  onClick={() => setCompanyDropdownOpen(!companyDropdownOpen)}
+                  className="flex items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left hover:border-gray-200 hover:bg-gray-100 dark:hover:border-gray-700 dark:hover:bg-gray-700"
+                >
+                  <Building2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  <div>
+                    <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {hasCompanies ? companyName : 'No company selected'}
+                    </h1>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {hasCompanies ? 'Switch company' : 'Create your first company'}
+                    </p>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                </button>
+
+                {companyDropdownOpen && (
+                  <div className="absolute left-0 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="max-h-80 overflow-y-auto p-2">
+                      {companies.length === 0 ? (
+                        <div className="p-3 text-sm text-gray-500 dark:text-gray-400">No companies yet</div>
+                      ) : (
+                        companies.map((company) => (
+                          <button
+                            key={company.id}
+                            onClick={() => {
+                              setSelectedCompany(company.id);
+                              setCompanyDropdownOpen(false);
+                            }}
+                            className={cn(
+                              'w-full rounded-md px-3 py-2 text-left text-sm',
+                              company.id === selectedCompanyId
+                                ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/20 dark:text-primary-300'
+                                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                            )}
+                          >
+                            {company.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <div className="border-t border-gray-200 p-2 dark:border-gray-700">
+                      <button
+                        onClick={() => {
+                          setCompanyDropdownOpen(false);
+                          navigate('/create-company');
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-900/20"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        Create New Company
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -218,6 +284,15 @@ const ModernLayout: React.FC = () => {
               </Link>
             </div>
 
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/create-company')}
+              className="hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 md:inline-flex"
+            >
+              <PlusCircle className="h-4 w-4" />
+            </Button>
+
             {/* Logout */}
             <Button
               variant="ghost"
@@ -233,7 +308,23 @@ const ModernLayout: React.FC = () => {
         {/* Main content area */}
         <main className="flex-1 bg-gray-50 p-4 text-gray-900 dark:bg-slate-900 dark:text-slate-100 lg:p-6">
           <div className="mx-auto max-w-7xl">
-            <Outlet />
+            {loadingCompanies ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
+              </div>
+            ) : !hasCompanies && !isCreateCompanyRoute ? (
+              <div className="card py-12 text-center">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Create a company to get started</h2>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  Your dashboard and insights will appear after you add your first company.
+                </p>
+                <button className="btn-primary mt-6" onClick={() => navigate('/create-company')}>
+                  Create Company
+                </button>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

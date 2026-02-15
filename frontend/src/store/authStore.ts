@@ -26,10 +26,16 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      selectedCompanyId: null,
+      selectedCompanyId: localStorage.getItem('selectedCompanyId'),
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
-      logout: () => set({ user: null, token: null, isAuthenticated: false, selectedCompanyId: null }),
-      setSelectedCompany: (companyId) => set({ selectedCompanyId: companyId }),
+      logout: () => {
+        localStorage.removeItem('selectedCompanyId');
+        set({ user: null, token: null, isAuthenticated: false, selectedCompanyId: null });
+      },
+      setSelectedCompany: (companyId) => {
+        localStorage.setItem('selectedCompanyId', companyId);
+        set({ selectedCompanyId: companyId });
+      },
       updateUser: (userData) => set((state) => ({ 
         user: state.user ? { ...state.user, ...userData } : null 
       })),
