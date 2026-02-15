@@ -7,16 +7,16 @@ const router = express.Router();
 
 // Connector download configuration
 const CONNECTOR_CONFIG = {
-  filename: 'AICFOConnectorSetup.exe',
+  filename: 'AICFOConnectorSetup.msi',
   version: '1.0.0',
   supportedPlatforms: ['win32', 'win64'],
-  filePath: path.join(__dirname, '../../downloads/AICFOConnectorSetup.exe'),
+  filePath: path.join(__dirname, '../../downloads/AICFOConnectorSetup.msi'),
   downloadUrl: process.env.CONNECTOR_DOWNLOAD_URL || '/download/connector',
 };
 
 /**
  * GET /download/connector
- * Download the Windows Tally Connector installer as ZIP
+ * Download the Windows Tally Connector installer (MSI)
  */
 router.get('/connector', async (req, res) => {
   try {
@@ -32,39 +32,18 @@ router.get('/connector', async (req, res) => {
       });
     }
 
-    // For Node.js connector, we need to create a ZIP package
-    // Check if we have the Node.js connector distribution
-    const nodejsConnectorPath = path.join(__dirname, '../../../nodejs-connector/dist');
-    const nodejsZipPath = path.join(__dirname, '../../../nodejs-connector/dist/AICFOConnector.zip');
-    
-    let fileToSend = CONNECTOR_CONFIG.filePath;
-    let filename = CONNECTOR_CONFIG.filename;
-    let contentType = 'application/octet-stream';
-    
-    // If Node.js connector ZIP exists, prefer that
-    try {
-      await fs.access(nodejsZipPath);
-      fileToSend = nodejsZipPath;
-      filename = 'AICFOConnector.zip';
-      contentType = 'application/zip';
-      logger.info('Using Node.js connector ZIP distribution');
-    } catch (nodejsError) {
-      // Node.js connector ZIP doesn't exist, use existing C# executable
-      logger.info('Using existing C# connector executable');
-    }
-
     // Get file stats for content-length
-    const stats = await fs.stat(fileToSend);
+    const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
     
     // Set appropriate headers for file download
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_CONFIG.filename}"`);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Connector-Version', CONNECTOR_CONFIG.version);
     res.setHeader('Access-Control-Expose-Headers', 'X-Connector-Version, Content-Disposition');
     
     // Send the file
-    res.sendFile(fileToSend, (err) => {
+    res.sendFile(CONNECTOR_CONFIG.filePath, (err) => {
       if (err) {
         logger.error({ error: err }, 'Error sending connector file');
         if (!res.headersSent) {
@@ -78,7 +57,7 @@ router.get('/connector', async (req, res) => {
           userAgent: req.headers['user-agent'] || '', 
           ip: req.ip,
           timestamp: new Date().toISOString(),
-          fileType: filename
+          fileType: CONNECTOR_CONFIG.filename
         }, 'Connector downloaded successfully');
       }
     });
@@ -123,7 +102,7 @@ router.get('/info', async (req, res) => {
         supportedPlatforms: CONNECTOR_CONFIG.supportedPlatforms,
         systemRequirements: {
           os: 'Windows 7 or later',
-          framework: '.NET Framework 4.7.2 or later',
+          framework: '.NET Desktop Runtime 8.0 (included with installer)',
           tally: 'Tally ERP 9/Prime with Tally API enabled',
           ram: 'Minimum 2GB RAM',
           disk: '50MB free disk space',
@@ -134,19 +113,19 @@ router.get('/info', async (req, res) => {
         fileSize,
         lastUpdated,
         features: [
-          'Connects directly to Tally API on localhost',
-          'Secure HTTPS encrypted communication',
-          'Automatic company detection',
-          'Real-time sync status indicators',
-          'One-click sync functionality',
-          'System tray integration',
+          'Runs as Windows Service (auto-start)',
+          'Secure token storage via Windows Credential Manager',
+          'Connects directly to Tally XML over localhost HTTP port',
+          'Connector heartbeat + scheduled sync',
+          'One-click sync-now from tray support app',
+          'Logs under ProgramData for supportability',
         ],
         installationSteps: [
-          'Download the connector installer',
-          'Run as Administrator',
-          'Enter your AI CFO credentials',
-          'Click "Connect to Tally"',
-          'Start syncing your financial data',
+          'Download and run AICFOConnectorSetup.msi as Administrator',
+          'Open tray app and configure API URL, Company ID, Connector Token',
+          'Ensure Tally is running and XML port is enabled',
+          'Service starts automatically and begins heartbeat',
+          'Use tray action "Sync Now" for immediate sync test',
         ],
       },
     });

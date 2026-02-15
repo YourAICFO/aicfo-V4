@@ -128,3 +128,19 @@ MIT
 # Test push after secret cleanup
 
 
+
+## Windows Connector (MSI)
+
+A production Windows connector solution is available under `connector-dotnet/`.
+
+Build on Windows:
+```powershell
+cd connector-dotnet
+./build.ps1 -Configuration Release
+```
+
+Copy generated MSI to backend download path:
+- `backend/downloads/AICFOConnectorSetup.msi`
+
+Backend serves this artifact from:
+- `GET /download/connector`

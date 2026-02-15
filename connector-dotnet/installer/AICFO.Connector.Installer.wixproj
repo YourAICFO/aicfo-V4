@@ -1,0 +1,13 @@
+<Project Sdk="WixToolset.Sdk/4.0.4">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <DefineConstants>
+      ServicePublishDir=$(MSBuildThisFileDirectory)..\publish\service;
+      TrayPublishDir=$(MSBuildThisFileDirectory)..\publish\tray
+    </DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
+  </ItemGroup>
+</Project>
