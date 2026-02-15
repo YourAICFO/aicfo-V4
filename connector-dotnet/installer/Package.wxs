@@ -45,7 +45,7 @@
                       Wait="yes" />
     </Component>
 
-    <Component Id="ConnectorTrayExeComponent" Directory="TRAYFOLDER">
+    <Component Id="ConnectorTrayExeComponent" Directory="TRAYFOLDER" Guid="{3C4E16A1-6D99-4C93-9D97-EBC6E2DB4C58}">
       <File Id="TrayExe" Source="$(var.TrayPublishDir)\AICFO.Connector.Tray.exe">
         <Shortcut Id="TrayDesktopShortcut"
                   Directory="DesktopFolder"
@@ -64,6 +64,9 @@
                   WorkingDirectory="TRAYFOLDER" />
       </File>
       <RemoveFolder Id="RemoveAICFOProgramMenuFolder" Directory="AICFOProgramMenuFolder" On="uninstall" />
+    </Component>
+
+    <Component Id="ConnectorTrayMarkerComponent" Directory="TRAYFOLDER" Guid="{92B9FC7D-9A32-4D53-8F68-D4DEEEA093A1}">
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
@@ -78,6 +81,7 @@
     <Feature Id="MainFeature" Title="AI CFO Connector" Level="1">
       <ComponentRef Id="ConnectorServiceExeComponent" />
       <ComponentRef Id="ConnectorTrayExeComponent" />
+      <ComponentRef Id="ConnectorTrayMarkerComponent" />
       <ComponentRef Id="ProgramDataConfigFolderComponent" />
       <ComponentRef Id="ProgramDataLogsFolderComponent" />
       <ComponentGroupRef Id="ServicePublishFiles" />
