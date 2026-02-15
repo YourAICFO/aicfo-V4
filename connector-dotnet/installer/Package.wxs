@@ -5,13 +5,18 @@
            Version="1.0.0"
            UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf"
            Language="1033">
+
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="AICFOConnector">
-        <Directory Id="ServiceInstallDir" Name="Service" />
-        <Directory Id="TrayInstallDir" Name="Tray" />
+        <Directory Id="ServiceInstallDir" Name="Service">
+          <Files Include="$(var.ServicePublishDir)\**\*" Exclude="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" />
+        </Directory>
+        <Directory Id="TrayInstallDir" Name="Tray">
+          <Files Include="$(var.TrayPublishDir)\**\*" />
+        </Directory>
       </Directory>
     </StandardDirectory>
 
@@ -22,17 +27,8 @@
       </Directory>
     </StandardDirectory>
 
-    <ComponentGroup Id="ConnectorServiceFiles" Directory="ServiceInstallDir">
-      <Files Include="$(var.ServicePublishDir)\**\*"
-             Exclude="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" />
-    </ComponentGroup>
-
-    <ComponentGroup Id="ConnectorTrayFiles" Directory="TrayInstallDir">
-      <Files Include="$(var.TrayPublishDir)\**\*" />
-    </ComponentGroup>
-
-    <Component Id="ConnectorServiceExeComponent" Directory="ServiceInstallDir" Guid="*">
-      <File Id="ServiceExe" Source="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" KeyPath="yes" />
+    <Component Id="ConnectorServiceExeComponent" Directory="ServiceInstallDir">
+      <File Id="ServiceExe" Source="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" />
       <ServiceInstall Id="ConnectorServiceInstall"
                       Name="AICFO Connector Service"
                       DisplayName="AICFO Connector Service"
@@ -49,20 +45,18 @@
                       Wait="yes" />
     </Component>
 
-    <Component Id="ProgramDataConfigFolderComponent" Directory="ProgramDataConfig" Guid="*">
-      <CreateFolder KeyPath="yes" />
+    <Component Id="ProgramDataConfigFolderComponent" Directory="ProgramDataConfig">
+      <CreateFolder />
     </Component>
 
-    <Component Id="ProgramDataLogsFolderComponent" Directory="ProgramDataLogs" Guid="*">
-      <CreateFolder KeyPath="yes" />
+    <Component Id="ProgramDataLogsFolderComponent" Directory="ProgramDataLogs">
+      <CreateFolder />
     </Component>
 
     <Feature Id="MainFeature" Title="AI CFO Connector" Level="1">
       <ComponentRef Id="ConnectorServiceExeComponent" />
       <ComponentRef Id="ProgramDataConfigFolderComponent" />
       <ComponentRef Id="ProgramDataLogsFolderComponent" />
-      <ComponentGroupRef Id="ConnectorServiceFiles" />
-      <ComponentGroupRef Id="ConnectorTrayFiles" />
     </Feature>
   </Package>
 </Wix>
