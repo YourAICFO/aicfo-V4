@@ -74,7 +74,7 @@ const ModernLayout: React.FC = () => {
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 transform bg-white shadow-lg transition-transform duration-300 ease-in-out dark:bg-gray-800',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-          'lg:static lg:translate-x-0 lg:shadow-none'
+          'lg:translate-x-0 lg:shadow-none'
         )}
       >
         <div className="flex h-full flex-col">

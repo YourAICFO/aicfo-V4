@@ -5,31 +5,37 @@ function trimTrailingSlash(value: string): string {
 }
 
 function stripApiSuffix(value: string): string {
-  return value.endsWith('/api') ? value.slice(0, -4) : value;
+  const trimmed = trimTrailingSlash(value);
+  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+}
+
+function normalizeUrl(value: string): string {
+  return trimTrailingSlash(value.trim());
 }
 
 export function getBackendBaseUrl(): string {
   const backendBase = import.meta.env.VITE_API_BASE_URL;
   const apiBase = import.meta.env.VITE_API_URL;
 
-  if (backendBase) {
-    return trimTrailingSlash(backendBase);
+  if (backendBase && backendBase.trim()) {
+    return stripApiSuffix(normalizeUrl(backendBase));
   }
 
-  if (apiBase) {
-    return trimTrailingSlash(stripApiSuffix(apiBase));
+  if (apiBase && apiBase.trim()) {
+    return stripApiSuffix(normalizeUrl(apiBase));
   }
 
   return DEFAULT_BACKEND_BASE_URL;
 }
 
 export function getApiBaseUrl(): string {
+  const safeComputedApiBase = `${getBackendBaseUrl()}/api`;
   const apiBase = import.meta.env.VITE_API_URL;
-  if (apiBase) {
-    return trimTrailingSlash(apiBase);
-  }
+  if (!apiBase || !apiBase.trim()) return safeComputedApiBase;
 
-  return `${getBackendBaseUrl()}/api`;
+  const normalized = normalizeUrl(apiBase);
+  if (normalized.endsWith('/api')) return normalized;
+  return safeComputedApiBase;
 }
 
 export function getConnectorDownloadUrl(): string {

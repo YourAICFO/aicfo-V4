@@ -410,9 +410,9 @@ const SEOOptimizedHome: React.FC = () => {
               <Link to="/terms" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
                 Terms of Service
               </Link>
-              <Link to="/support" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
+              <a href="mailto:support@aicfo.in" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
                 Support
-              </Link>
+              </a>
             </div>
             <p className="mt-4">© 2024 AI CFO. All rights reserved.</p>
           </div>

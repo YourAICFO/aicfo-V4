@@ -29,8 +29,10 @@ const DarkModeToggle: React.FC<DarkModeToggleProps> = ({
     // Apply theme to document
     if (initialTheme) {
       document.documentElement.classList.add('dark');
+      document.documentElement.dataset.theme = 'dark';
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.dataset.theme = 'light';
     }
     
     setMounted(true);
@@ -44,9 +46,11 @@ const DarkModeToggle: React.FC<DarkModeToggleProps> = ({
     // Apply to document
     if (newTheme) {
       document.documentElement.classList.add('dark');
+      document.documentElement.dataset.theme = 'dark';
       localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.dataset.theme = 'light';
       localStorage.setItem('theme', 'light');
     }
     

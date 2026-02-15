@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/Button';
 import { dashboardApi, syncApi } from '../../services/api';
 import { formatCurrency } from '../../lib/utils';
-import GlobalDarkModeStyles from '../ui/DarkModeToggle';
+import { GlobalDarkModeStyles } from '../ui/DarkModeToggle';
 import { useAuthStore } from '../../store/authStore';
 import { useSubscriptionStore } from '../../store/subscriptionStore';
 import DashboardSkeleton from './DashboardSkeleton';
