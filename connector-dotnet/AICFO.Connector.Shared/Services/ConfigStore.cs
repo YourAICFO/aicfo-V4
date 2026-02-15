@@ -23,6 +23,7 @@ public sealed class ConfigStore : IConfigStore
 
         var json = File.ReadAllText(ConnectorPaths.ConfigFile);
         var config = JsonSerializer.Deserialize<ConnectorConfig>(json, JsonOptions);
+        config?.EnsureCompatibility();
         return config;
     }
 

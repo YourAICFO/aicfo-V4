@@ -9,6 +9,7 @@ namespace AICFO.Connector.Shared.Services;
 
 public interface IAicfoApiClient
 {
+    Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken);
     Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
     Task SendHeartbeatAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
     Task<string?> StartSyncRunAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
@@ -22,6 +23,14 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     {
         PropertyNameCaseInsensitive = true
     };
+
+    public async Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(apiUrl)) return false;
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{apiUrl.TrimEnd('/')}/health"));
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
 
     public async Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken)
     {

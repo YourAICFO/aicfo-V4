@@ -43,6 +43,20 @@ jobs:
           }
           Write-Host "MSI found at $($msi.FullName)"
 
+      - name: Connector smoke checks
+        shell: pwsh
+        run: |
+          $serviceExe = "connector-dotnet/publish/service/AICFO.Connector.Service.exe"
+          $trayExe = "connector-dotnet/publish/tray/AICFO.Connector.Tray.exe"
+          if (-not (Test-Path $serviceExe)) { throw "Missing service publish output: $serviceExe" }
+          if (-not (Test-Path $trayExe)) { throw "Missing tray publish output: $trayExe" }
+
+          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
+          if ($msi.Length -lt 5MB) {
+            throw "MSI artifact looks unexpectedly small ($($msi.Length) bytes)."
+          }
+          Write-Host "Smoke check passed. MSI size: $($msi.Length) bytes"
+
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
         with:

@@ -9,33 +9,51 @@ namespace AICFO.Connector.Shared.Services;
 public interface ITallyXmlClient
 {
     Task<bool> TestConnectionAsync(ConnectorConfig config, CancellationToken cancellationToken);
-    Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, CancellationToken cancellationToken);
+    Task<bool> TestConnectionAsync(string host, int port, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken);
+    Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, string? tallyCompanyName, CancellationToken cancellationToken);
 }
 
 public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient> logger) : ITallyXmlClient
 {
     public async Task<bool> TestConnectionAsync(ConnectorConfig config, CancellationToken cancellationToken)
+        => await TestConnectionAsync(config.TallyHost, config.TallyPort, cancellationToken);
+
+    public async Task<bool> TestConnectionAsync(string host, int port, CancellationToken cancellationToken)
     {
         try
         {
-            var xml = BuildCompanyInfoRequest();
-            var response = await PostXmlAsync(config, xml, cancellationToken);
+            var response = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
             return response.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Tally connection test failed");
+            logger.LogWarning(ex, "Tally connection test failed host={Host} port={Port}", host, port);
             return false;
         }
     }
 
-    public async Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken)
     {
-        var companyResponse = await PostXmlAsync(config, BuildCompanyInfoRequest(), cancellationToken);
+        var response = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
+        var doc = XDocument.Parse(response);
+        var names = doc
+            .Descendants()
+            .Where(e => string.Equals(e.Name.LocalName, "COMPANYNAME", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Value?.Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return names;
+    }
+
+    public async Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, string? tallyCompanyName, CancellationToken cancellationToken)
+    {
+        _ = await PostXmlAsync(config.TallyHost, config.TallyPort, BuildCompanyInfoRequest(), cancellationToken);
         var currentMonthKey = DateTime.UtcNow.ToString("yyyy-MM");
 
-        var groupsResponse = await PostXmlAsync(config, BuildGroupRequest(), cancellationToken);
-        var ledgersResponse = await PostXmlAsync(config, BuildLedgerRequest(), cancellationToken);
+        var groupsResponse = await PostXmlAsync(config.TallyHost, config.TallyPort, BuildGroupRequest(tallyCompanyName), cancellationToken);
+        var ledgersResponse = await PostXmlAsync(config.TallyHost, config.TallyPort, BuildLedgerRequest(tallyCompanyName), cancellationToken);
 
         var groups = ParseGroups(groupsResponse);
         var ledgers = ParseLedgers(ledgersResponse);
@@ -58,9 +76,9 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         };
     }
 
-    private async Task<string> PostXmlAsync(ConnectorConfig config, string body, CancellationToken cancellationToken)
+    private async Task<string> PostXmlAsync(string host, int port, string body, CancellationToken cancellationToken)
     {
-        var url = $"http://{config.TallyHost}:{config.TallyPort}";
+        var url = $"http://{host}:{port}";
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(body, Encoding.UTF8, "text/xml")
@@ -90,8 +108,13 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         </ENVELOPE>
         """;
 
-    private static string BuildGroupRequest() =>
-        """
+    private static string BuildGroupRequest(string? companyName)
+    {
+        var companyVariable = string.IsNullOrWhiteSpace(companyName)
+            ? string.Empty
+            : $"<SVCURRENTCOMPANY>{System.Security.SecurityElement.Escape(companyName)}</SVCURRENTCOMPANY>";
+
+        return $"""
         <ENVELOPE>
           <HEADER>
             <VERSION>1</VERSION>
@@ -102,15 +125,22 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
           <BODY>
             <DESC>
               <STATICVARIABLES>
+                {companyVariable}
                 <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
               </STATICVARIABLES>
             </DESC>
           </BODY>
         </ENVELOPE>
         """;
+    }
 
-    private static string BuildLedgerRequest() =>
-        """
+    private static string BuildLedgerRequest(string? companyName)
+    {
+        var companyVariable = string.IsNullOrWhiteSpace(companyName)
+            ? string.Empty
+            : $"<SVCURRENTCOMPANY>{System.Security.SecurityElement.Escape(companyName)}</SVCURRENTCOMPANY>";
+
+        return $"""
         <ENVELOPE>
           <HEADER>
             <VERSION>1</VERSION>
@@ -121,12 +151,14 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
           <BODY>
             <DESC>
               <STATICVARIABLES>
+                {companyVariable}
                 <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
               </STATICVARIABLES>
             </DESC>
           </BODY>
         </ENVELOPE>
         """;
+    }
 
     private static List<TallyGroup> ParseGroups(string xml)
     {

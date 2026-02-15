@@ -11,7 +11,7 @@ Production-grade Windows connector for Tally -> AI CFO sync.
 ## Runtime paths
 - Config: `C:\ProgramData\AICFO\config\config.json`
 - Logs: `C:\ProgramData\AICFO\logs\agent.log`
-- Token storage: Windows Credential Manager (generic credential key `AICFO_CONNECTOR_TOKEN_<company_id>`)
+- Token storage: Windows Credential Manager (generic credential keys `AICFO_CONNECTOR_TOKEN_MAPPING_<mapping_id>`)
 
 ## Backend contract
 Payload strictly follows backend contract in:
@@ -23,6 +23,23 @@ Service sends:
 - `POST /api/connector/sync/start`
 - `POST /api/connector/sync`
 - `POST /api/connector/sync/complete`
+
+## Connector Control Panel (multi-company mapping)
+Open **AI CFO Connector** from desktop/start menu/tray icon.
+
+Tabs:
+- **Status**
+  - Shows backend reachability, Tally reachability, last heartbeat, last sync, last result, last error.
+  - Actions: `Test Backend`, `Detect Tally`, `Test Tally`, `Sync Now`, `Sync All`, `Open Logs`.
+- **Company Mapping**
+  - Detect Tally companies from configured host/port.
+  - Link mapping by pasting:
+    - `company_id`
+    - `connector_token`
+    - selecting a Tally company name
+  - View current mappings and trigger per-mapping sync or remove mapping.
+
+Manual linking is used for MVP. One connector install can manage multiple mappings.
 
 ## Build on Windows
 Prerequisites:
@@ -45,8 +62,8 @@ After build, rename/copy artifact to backend download location:
 - `backend/downloads/AICFOConnectorSetup.msi`
 
 ## Service behavior
-- Heartbeat every 30 seconds (configurable)
-- Scheduled sync every 15 minutes (configurable)
+- Heartbeat every 30 seconds per mapping (configurable)
+- Scheduled sync every 15 minutes per mapping (configurable)
 - Manual sync via named pipe (`AICFOConnectorSyncNow`) from tray app
 - Exponential backoff with jitter, capped at 10 minutes
 
@@ -58,6 +75,10 @@ After build, rename/copy artifact to backend download location:
 ## Operational checks
 1. Install MSI.
 2. Verify **AICFO Connector Service** exists and is running in `services.msc`.
-3. Open tray app -> Configure -> Save `api_url`, `company_id`, `connector_token`, `tally_port`.
-4. Verify logs in `C:\ProgramData\AICFO\logs\agent.log`.
-5. Trigger **Sync Now** from tray and confirm backend sync status updates.
+3. Open **AI CFO Connector Control Panel** from desktop/start menu.
+4. In **Status** tab save `api_url`, `tally_host`, `tally_port`, heartbeat/sync intervals.
+5. In **Company Mapping** tab click **Detect Tally Companies**.
+6. Paste `company_id` + `connector_token`, select Tally company, click **Link Mapping**.
+7. Verify mapping appears in current mappings list.
+8. Trigger **Sync Selected** or **Sync All** and confirm backend sync status updates.
+9. Verify logs in `C:\ProgramData\AICFO\logs\agent.log`.

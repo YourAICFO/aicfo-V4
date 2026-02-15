@@ -24,6 +24,20 @@ public sealed class SyncNowPipeListener(ILogger<SyncNowPipeListener> logger, Syn
                     logger.LogInformation("Manual sync-now signal received from tray");
                     signal.Trigger();
                 }
+                else if (string.Equals(message, "sync-all", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation("Manual sync-all signal received from tray");
+                    signal.Trigger(null);
+                }
+                else if (message.StartsWith("sync-now:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var mappingId = message["sync-now:".Length..].Trim();
+                    if (!string.IsNullOrWhiteSpace(mappingId))
+                    {
+                        logger.LogInformation("Manual sync-now signal received for mapping {MappingId}", mappingId);
+                        signal.Trigger(mappingId);
+                    }
+                }
             }
             catch (OperationCanceledException)
             {

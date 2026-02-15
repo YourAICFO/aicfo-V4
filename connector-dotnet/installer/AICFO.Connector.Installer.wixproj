@@ -6,6 +6,7 @@
     <ServicePublishDir>$(MSBuildThisFileDirectory)..\publish\service</ServicePublishDir>
     <TrayPublishDir>$(MSBuildThisFileDirectory)..\publish\tray</TrayPublishDir>
     <ServiceHarvestTransform>$(BaseIntermediateOutputPath)ExcludeServiceExe.xslt</ServiceHarvestTransform>
+    <TrayHarvestTransform>$(BaseIntermediateOutputPath)ExcludeTrayExe.xslt</TrayHarvestTransform>
     <DefineConstants>
       ServicePublishDir=$(ServicePublishDir);
       TrayPublishDir=$(TrayPublishDir)
@@ -28,13 +29,18 @@
       <SuppressCom>true</SuppressCom>
       <SuppressRegistry>true</SuppressRegistry>
       <PreprocessorVariable>TrayPublishDir</PreprocessorVariable>
+      <Transforms>$(TrayHarvestTransform)</Transforms>
     </HarvestDirectory>
   </ItemGroup>
-  <Target Name="WriteServiceHarvestTransform" BeforeTargets="HarvestDirectory;Build">
+  <Target Name="WriteHarvestTransforms" BeforeTargets="HarvestDirectory;Build">
     <WriteLinesToFile
       File="$(ServiceHarvestTransform)"
       Overwrite="true"
       Lines="&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:wix=&quot;http://wixtoolset.org/schemas/v4/wxs&quot;&gt;&#x0A;  &lt;xsl:output method=&quot;xml&quot; indent=&quot;yes&quot;/&gt;&#x0A;  &lt;xsl:key name=&quot;svcCompIds&quot; match=&quot;wix:Component[wix:File[contains(@Source,'AICFO.Connector.Service.exe')]]&quot; use=&quot;@Id&quot;/&gt;&#x0A;  &lt;xsl:template match=&quot;@*|node()&quot;&gt;&#x0A;    &lt;xsl:copy&gt;&#x0A;      &lt;xsl:apply-templates select=&quot;@*|node()&quot;/&gt;&#x0A;    &lt;/xsl:copy&gt;&#x0A;  &lt;/xsl:template&gt;&#x0A;  &lt;xsl:template match=&quot;wix:Component[wix:File[contains(@Source,'AICFO.Connector.Service.exe')]]&quot;/&gt;&#x0A;  &lt;xsl:template match=&quot;wix:ComponentRef[key('svcCompIds', @Id)]&quot;/&gt;&#x0A;&lt;/xsl:stylesheet&gt;" />
+    <WriteLinesToFile
+      File="$(TrayHarvestTransform)"
+      Overwrite="true"
+      Lines="&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:wix=&quot;http://wixtoolset.org/schemas/v4/wxs&quot;&gt;&#x0A;  &lt;xsl:output method=&quot;xml&quot; indent=&quot;yes&quot;/&gt;&#x0A;  &lt;xsl:key name=&quot;trayCompIds&quot; match=&quot;wix:Component[wix:File[contains(@Source,'AICFO.Connector.Tray.exe')]]&quot; use=&quot;@Id&quot;/&gt;&#x0A;  &lt;xsl:template match=&quot;@*|node()&quot;&gt;&#x0A;    &lt;xsl:copy&gt;&#x0A;      &lt;xsl:apply-templates select=&quot;@*|node()&quot;/&gt;&#x0A;    &lt;/xsl:copy&gt;&#x0A;  &lt;/xsl:template&gt;&#x0A;  &lt;xsl:template match=&quot;wix:Component[wix:File[contains(@Source,'AICFO.Connector.Tray.exe')]]&quot;/&gt;&#x0A;  &lt;xsl:template match=&quot;wix:ComponentRef[key('trayCompIds', @Id)]&quot;/&gt;&#x0A;&lt;/xsl:stylesheet&gt;" />
   </Target>
   <ItemGroup>
     <PackageReference Include="WixToolset.Heat" Version="4.0.4" />
