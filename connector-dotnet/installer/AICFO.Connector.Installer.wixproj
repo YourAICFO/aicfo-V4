@@ -9,6 +9,18 @@
     </DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <HarvestDirectory Include="..\publish\service">
+      <ComponentGroupName>ServicePublishFiles</ComponentGroupName>
+      <DirectoryRefId>SERVICEFOLDER</DirectoryRefId>
+      <SuppressRootDirectory>true</SuppressRootDirectory>
+    </HarvestDirectory>
+    <HarvestDirectory Include="..\publish\tray">
+      <ComponentGroupName>TrayPublishFiles</ComponentGroupName>
+      <DirectoryRefId>TRAYFOLDER</DirectoryRefId>
+      <SuppressRootDirectory>true</SuppressRootDirectory>
+    </HarvestDirectory>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
   </ItemGroup>
 </Project>
