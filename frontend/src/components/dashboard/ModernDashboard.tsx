@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { dashboardApi, syncApi } from '../../services/api';
 import { formatCurrency } from '../../lib/utils';
 import GlobalDarkModeStyles from '../ui/DarkModeToggle';
+import { useAuthStore } from '../../store/authStore';
+import { useSubscriptionStore } from '../../store/subscriptionStore';
+import DashboardSkeleton from './DashboardSkeleton';
 
 interface OverviewData {
   cashPosition: {
@@ -32,17 +36,10 @@ interface OverviewData {
   };
 }
 
-interface ModernDashboardProps {
-  selectedCompanyId: string;
-  isTrial: boolean;
-  trialEndsInDays: number | null;
-}
-
-const ModernDashboard: React.FC<ModernDashboardProps> = ({
-  selectedCompanyId,
-  isTrial,
-  trialEndsInDays,
-}) => {
+const ModernDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const { isTrial, trialEndsInDays } = useSubscriptionStore();
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'processing' | 'ready' | 'failed'>('syncing');
@@ -148,11 +145,7 @@ const ModernDashboard: React.FC<ModernDashboardProps> = ({
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const inflow = data?.runway.avgMonthlyInflow || 0;
@@ -226,6 +219,17 @@ const ModernDashboard: React.FC<ModernDashboardProps> = ({
               <Button variant="primary" size="sm" onClick={handleRefresh}>
                 Refresh Now
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {!data && syncStatus === 'ready' && (
+          <Card variant="warning">
+            <CardContent className="p-6">
+              <p className="font-medium text-gray-900 dark:text-gray-100">No dashboard data available yet.</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Connect your accounting software and run a sync to populate metrics.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -450,13 +454,13 @@ const ModernDashboard: React.FC<ModernDashboardProps> = ({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Button variant="outline" size="sm" leftIcon={<TrendingUp className="h-4 w-4" />}>
+              <Button variant="outline" size="sm" leftIcon={<TrendingUp className="h-4 w-4" />} onClick={() => navigate('/revenue')}>
                 View Revenue Trends
               </Button>
-              <Button variant="outline" size="sm" leftIcon={<Wallet className="h-4 w-4" />}>
+              <Button variant="outline" size="sm" leftIcon={<Wallet className="h-4 w-4" />} onClick={() => navigate('/cashflow')}>
                 Check Cash Position
               </Button>
-              <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="h-4 w-4" />}>
+              <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="h-4 w-4" />} onClick={() => navigate('/ai-insights')}>
                 Review Alerts
               </Button>
             </div>

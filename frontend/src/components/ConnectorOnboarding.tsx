@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CheckCircle, AlertCircle, RefreshCw, Settings, Download, Plug } from 'lucide-react';
 import { connectorApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { getConnectorDownloadUrl } from '../lib/env';
 
 interface ConnectorStatus {
   isConnected: boolean;
@@ -24,8 +25,7 @@ export default function ConnectorOnboarding() {
   const [error, setError] = useState<string | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+  const connectorDownloadUrl = getConnectorDownloadUrl();
 
   useEffect(() => {
     if (selectedCompanyId) {

@@ -3,6 +3,7 @@ import { Plug, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { integrationApi } from '../services/api';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import ConnectorOnboarding from '../components/ConnectorOnboarding';
+import { getConnectorDownloadUrl } from '../lib/env';
 
 interface Integration {
   id: string;
@@ -42,8 +43,7 @@ export default function Integrations() {
   const [tallyConfig, setTallyConfig] = useState({ serverUrl: '', companyName: '' });
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const { isExpired, refresh } = useSubscriptionStore();
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+  const connectorDownloadUrl = getConnectorDownloadUrl();
 
   useEffect(() => {
     loadIntegrations();

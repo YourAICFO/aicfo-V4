@@ -6,7 +6,7 @@ import { authApi, companyApi } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setAuth, isAuthenticated, setSelectedCompany } = useAuthStore();
+  const { setAuth, setSelectedCompany } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

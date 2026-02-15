@@ -10,6 +10,7 @@ import {
   Zap,
   Monitor,
 } from 'lucide-react';
+import { getBackendBaseUrl, getConnectorDownloadUrl } from '../lib/env';
 
 interface DownloadInfo {
   filename: string;
@@ -36,7 +37,7 @@ export default function Download() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  const backendUrl = getBackendBaseUrl();
 
   useEffect(() => {
     fetchDownloadInfo();
@@ -81,7 +82,7 @@ export default function Download() {
 
       // Use direct browser download by creating a direct link to the backend
       // This bypasses any SPA routing and lets the browser handle the download
-      const downloadUrl = `${backendUrl}/download/connector`;
+      const downloadUrl = getConnectorDownloadUrl();
       
       // Create a direct download link
       const link = document.createElement('a');

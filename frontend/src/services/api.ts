@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { getApiBaseUrl } from '../lib/env';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_URL,
@@ -49,6 +50,8 @@ export const authApi = {
   getMe: () => api.get('/auth/me'),
   updateProfile: (data: Partial<{ firstName: string; lastName: string; phone: string }>) =>
     api.put('/auth/profile', data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { currentPassword, newPassword }),
 };
 
 // Company API

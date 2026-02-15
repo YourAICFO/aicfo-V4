@@ -5,6 +5,7 @@ import { dashboardApi, syncApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { useSubscriptionStore } from '../store/subscriptionStore';
+import { getConnectorDownloadUrl } from '../lib/env';
 
 interface OverviewData {
   cashPosition: {
@@ -40,8 +41,7 @@ export default function Dashboard() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const { isTrial, trialEndsInDays } = useSubscriptionStore();
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+  const connectorDownloadUrl = getConnectorDownloadUrl();
 
   useEffect(() => {
     if (!selectedCompanyId) return;

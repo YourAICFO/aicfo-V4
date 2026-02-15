@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Building2, Download } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { companyApi } from '../services/api';
+import { getConnectorDownloadUrl } from '../lib/env';
 
 interface Company {
   id: string;
@@ -16,8 +16,7 @@ export default function Header() {
   const { user, logout, selectedCompanyId, setSelectedCompany } = useAuthStore();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+  const connectorDownloadUrl = getConnectorDownloadUrl();
 
   useEffect(() => {
     loadCompanies();

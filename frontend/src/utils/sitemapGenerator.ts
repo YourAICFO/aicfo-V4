@@ -237,7 +237,6 @@ export const generateDynamicSitemap = (userContent: {
   companies?: Array<{ id: string; updatedAt: string }>;
 }): SitemapEntry[] => {
   const entries: SitemapEntry[] = [];
-  const currentDate = new Date().toISOString().split('T')[0];
 
   // Add blog posts
   if (userContent.blogPosts) {

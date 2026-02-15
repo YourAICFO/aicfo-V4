@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, AlertTriangle, CheckCircle, AlertCircle, Clock, WifiOff } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { syncApi } from '../../services/api';
+import { connectorApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 
 interface SyncStatusData {
@@ -40,9 +40,15 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
   }, [selectedCompanyId]);
 
   const loadSyncStatus = async () => {
+    if (!selectedCompanyId) {
+      setSyncStatus(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await syncApi.getConnectorStatus(selectedCompanyId!);
+      const response = await connectorApi.getStatus(selectedCompanyId);
       if (response?.data?.success) {
         setSyncStatus(response.data.data);
       }
@@ -210,7 +216,7 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex justify-between">
             <span>Last sync:</span>
-            <span>{formatDate(syncStatus?.lastSyncAt)}</span>
+            <span>{formatDate(syncStatus ? syncStatus.lastSyncAt : null)}</span>
           </div>
           <div className="flex justify-between">
             <span>Connector:</span>

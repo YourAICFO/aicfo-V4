@@ -17,7 +17,7 @@ interface Company {
 }
 
 export default function Settings() {
-  const { user, setAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [profileData, setProfileData] = useState({

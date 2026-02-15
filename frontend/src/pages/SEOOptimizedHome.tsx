@@ -2,8 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, LineChart, Wallet, PlugZap, CheckCircle2, ArrowRight, Star, Users, TrendingUp } from 'lucide-react';
 import SEOMetaTags from '../components/seo/SEOMetaTags';
-import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 
 const SEOOptimizedHome: React.FC = () => {
   // Structured data for better SEO

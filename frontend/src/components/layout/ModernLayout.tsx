@@ -1,29 +1,50 @@
 import React, { useState } from 'react';
-import { Menu, X, Bell, User, Settings, LogOut, Moon, Sun } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Menu, X, Bell, Settings, LogOut } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import DarkModeToggle, { useDarkMode } from '../ui/DarkModeToggle';
+import DarkModeToggle from '../ui/DarkModeToggle';
 import { Button } from '../ui/Button';
+import { useAuthStore } from '../../store/authStore';
+import { companyApi } from '../../services/api';
 
-interface ModernLayoutProps {
-  children: React.ReactNode;
-  userName: string;
-  userEmail: string;
-  companyName: string;
-  onLogout: () => void;
+interface Company {
+  id: string;
+  name: string;
 }
 
-const ModernLayout: React.FC<ModernLayoutProps> = ({
-  children,
-  userName,
-  userEmail,
-  companyName,
-  onLogout,
-}) => {
+const ModernLayout: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, logout, selectedCompanyId } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const location = useLocation();
-  const { isDark } = useDarkMode();
+  const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
+  const userEmail = user?.email || '';
+  const companyName = companies.find((item) => item.id === selectedCompanyId)?.name || 'AI CFO';
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadCompanies = async () => {
+      try {
+        const response = await companyApi.getAll();
+        const items = response?.data?.data || [];
+        if (!mounted) return;
+        setCompanies(items);
+      } catch (error) {
+        console.error('Failed to load companies for layout', error);
+      }
+    };
+    loadCompanies();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: '📊' },
@@ -191,16 +212,16 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({
 
             {/* Settings dropdown */}
             <div className="relative">
-              <button className="rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Link to="/settings" className="rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 block">
                 <Settings className="h-5 w-5" />
-              </button>
+              </Link>
             </div>
 
             {/* Logout */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={onLogout}
+              onClick={handleLogout}
               className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             >
               <LogOut className="h-4 w-4" />
@@ -211,7 +232,7 @@ const ModernLayout: React.FC<ModernLayoutProps> = ({
         {/* Main content area */}
         <main className="flex-1 p-4 lg:p-6">
           <div className="mx-auto max-w-7xl">
-            {children}
+            <Outlet />
           </div>
         </main>
       </div>

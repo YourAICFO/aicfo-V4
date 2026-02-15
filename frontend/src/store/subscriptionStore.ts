@@ -23,7 +23,7 @@ const deriveFlags = (status: SubscriptionStatus | null) => ({
   isExpired: status === 'expired'
 });
 
-export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
+export const useSubscriptionStore = create<SubscriptionState>((set) => ({
   status: null,
   trialEndDate: null,
   trialEndsInDays: null,

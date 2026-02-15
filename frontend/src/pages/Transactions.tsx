@@ -111,7 +111,6 @@ export default function Transactions() {
     {} as Record<string, { revenue: number; expense: number }>
   );
 
-  const sortedMonths = Object.keys(monthTotals).sort();
   const latestMonthKey = getLatestClosedMonthKey();
   const prevMonthKey = (() => {
     const [year, month] = latestMonthKey.split('-').map(Number);

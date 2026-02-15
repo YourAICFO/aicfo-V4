@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, LineChart, Wallet, PlugZap, CheckCircle2 } from 'lucide-react';
 import VersionDisplay from '../components/VersionDisplay';
+import { getConnectorDownloadUrl } from '../lib/env';
 
 export default function Home() {
-  const backendUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const connectorDownloadUrl = `${backendUrl}/download/connector`;
+  const connectorDownloadUrl = getConnectorDownloadUrl();
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">

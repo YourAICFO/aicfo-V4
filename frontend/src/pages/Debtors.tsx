@@ -132,7 +132,7 @@ export default function Debtors() {
                   <td colSpan={3} className="text-center py-8 text-gray-500">No data</td>
                 </tr>
               ) : (
-                top10.map((row) => (
+                top10.map((row: any) => (
                   <tr key={row.guid || row.name} className="border-b border-gray-100">
                     <td className="py-3 px-4">{row.name}</td>
                     <td className="py-3 px-4 text-right">{formatCurrency(row.balance)}</td>

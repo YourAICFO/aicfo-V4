@@ -1,9 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
-import Layout from './components/Layout';
+import ModernLayout from './components/layout/ModernLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
 import Revenue from './pages/Revenue';
 import Expenses from './pages/Expenses';
 import Cashflow from './pages/Cashflow';
@@ -21,6 +20,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminControlTower from './pages/AdminControlTower';
 import Download from './pages/Download';
 import UserProfileLoader from './components/UserProfileLoader';
+import SEOOptimizedHome from './pages/SEOOptimizedHome';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import ModernDashboard from './components/dashboard/ModernDashboard';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -29,13 +32,16 @@ function App() {
     <>
       <UserProfileLoader />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<SEOOptimizedHome />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/download" element={<Download />} />
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
-          <Route element={<Layout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
+          <Route element={<ModernLayout />}>
+            <Route path="/dashboard" element={<ModernDashboard />} />
             <Route path="/revenue" element={<Revenue />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/cashflow" element={<Cashflow />} />
