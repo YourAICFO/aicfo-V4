@@ -25,6 +25,7 @@
     </HarvestDirectory>
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="WixToolset.Heat" Version="4.0.4" />
     <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
   </ItemGroup>
 </Project>
