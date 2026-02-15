@@ -3,15 +3,26 @@
     <OutputType>Package</OutputType>
     <InstallerPlatform>x64</InstallerPlatform>
     <OutputName>AICFOConnectorSetup</OutputName>
+    <ServicePublishDir>$(MSBuildThisFileDirectory)..\publish\service</ServicePublishDir>
+    <TrayPublishDir>$(MSBuildThisFileDirectory)..\publish\tray</TrayPublishDir>
     <DefineConstants>
-      ServicePublishDir=$(MSBuildThisFileDirectory)..\publish\service;
-      TrayPublishDir=$(MSBuildThisFileDirectory)..\publish\tray
+      ServicePublishDir=$(ServicePublishDir);
+      TrayPublishDir=$(TrayPublishDir)
     </DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Harvest.Service.wxs;Harvest.Tray.wxs" />
-    <Compile Include="Harvest.Service.wxs" />
-    <Compile Include="Harvest.Tray.wxs" />
+    <HarvestDirectory Include="$(ServicePublishDir)">
+      <ComponentGroupName>ServicePublishFiles</ComponentGroupName>
+      <DirectoryRefId>SERVICEFOLDER</DirectoryRefId>
+      <SuppressRootDirectory>true</SuppressRootDirectory>
+      <PreprocessorVariable>ServicePublishDir</PreprocessorVariable>
+    </HarvestDirectory>
+    <HarvestDirectory Include="$(TrayPublishDir)">
+      <ComponentGroupName>TrayPublishFiles</ComponentGroupName>
+      <DirectoryRefId>TRAYFOLDER</DirectoryRefId>
+      <SuppressRootDirectory>true</SuppressRootDirectory>
+      <PreprocessorVariable>TrayPublishDir</PreprocessorVariable>
+    </HarvestDirectory>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
