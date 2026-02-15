@@ -24,12 +24,14 @@ import SEOOptimizedHome from './pages/SEOOptimizedHome';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ModernDashboard from './components/dashboard/ModernDashboard';
+import { GlobalDarkModeStyles } from './components/ui/DarkModeToggle';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   return (
     <>
+      <GlobalDarkModeStyles />
       <UserProfileLoader />
       <Routes>
         <Route path="/" element={<SEOOptimizedHome />} />

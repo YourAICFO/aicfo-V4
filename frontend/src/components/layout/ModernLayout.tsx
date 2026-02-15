@@ -54,6 +54,7 @@ const ModernLayout: React.FC = () => {
     { name: 'Debtors', href: '/debtors', icon: '👥' },
     { name: 'Creditors', href: '/creditors', icon: '🏢' },
     { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
+    { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
     { name: 'Integrations', href: '/integrations', icon: '🔗' },
   ];
 
@@ -135,7 +136,7 @@ const ModernLayout: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="text-gray-900 dark:text-slate-100 lg:pl-64">
         {/* Top navigation */}
         <div className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="flex items-center">
@@ -230,7 +231,7 @@ const ModernLayout: React.FC = () => {
         </div>
 
         {/* Main content area */}
-        <main className="flex-1 p-4 lg:p-6">
+        <main className="flex-1 bg-gray-50 p-4 text-gray-900 dark:bg-slate-900 dark:text-slate-100 lg:p-6">
           <div className="mx-auto max-w-7xl">
             <Outlet />
           </div>
