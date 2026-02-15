@@ -20,29 +20,20 @@ const CONNECTOR_CONFIG = {
  */
 router.get('/connector', async (req, res) => {
   try {
-    // Check if connector file exists
-    try {
-      await fs.access(CONNECTOR_CONFIG.filePath);
-    } catch (error) {
-      logger.error({ error }, 'Connector installer not found');
-      return res.status(404).json({
-        success: false,
-        error: 'Connector installer not found',
-        message: 'The connector installer is currently being prepared. Please try again in a few minutes.',
-      });
+    const redirectUrl = process.env.CONNECTOR_DOWNLOAD_URL;
+    if (redirectUrl) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.redirect(302, redirectUrl);
     }
 
-    // Get file stats for content-length
+    await fs.access(CONNECTOR_CONFIG.filePath);
     const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
-    
-    // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_CONFIG.filename}"`);
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Connector-Version', CONNECTOR_CONFIG.version);
     res.setHeader('Access-Control-Expose-Headers', 'X-Connector-Version, Content-Disposition');
-    
-    // Send the file
+
     res.sendFile(CONNECTOR_CONFIG.filePath, (err) => {
       if (err) {
         logger.error({ error: err }, 'Error sending connector file');
@@ -61,8 +52,16 @@ router.get('/connector', async (req, res) => {
         }, 'Connector downloaded successfully');
       }
     });
-
   } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      logger.error({ error }, 'Connector installer not found');
+      return res.status(404).json({
+        success: false,
+        error: 'Connector installer not available',
+        message: 'Set CONNECTOR_DOWNLOAD_URL to a GitHub release asset URL, or upload backend/downloads/AICFOConnectorSetup.msi',
+      });
+    }
+
     logger.error({ error }, 'Error handling connector download');
     if (!res.headersSent) {
       res.status(500).json({
