@@ -9,9 +9,9 @@ namespace AICFO.Connector.Shared.Services;
 
 public interface IAicfoApiClient
 {
-    Task<LoginResponse> LoginAsync(string email, string password, CancellationToken cancellationToken);
-    Task<List<WebCompany>> GetCompaniesAsync(string userJwt, CancellationToken cancellationToken);
-    Task<RegisterDeviceResponse> RegisterDeviceAsync(string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken);
+    Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken);
+    Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken);
+    Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken);
     Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken);
     Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
     Task SendHeartbeatAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
@@ -26,6 +26,112 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     {
         PropertyNameCaseInsensitive = true
     };
+
+    public async Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/login"))
+        {
+            Content = JsonContent.Create(new { email, password })
+        };
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Login failed.");
+        }
+        if (!envelope.data.HasValue || !envelope.data.Value.TryGetProperty("token", out var tokenElement))
+        {
+            throw new InvalidOperationException("Login failed: missing token in response.");
+        }
+        var token = tokenElement.GetString();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("Login failed: empty token in response.");
+        }
+
+        return new LoginResponse { Token = token };
+    }
+
+    public async Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/companies"));
+        request.Headers.Authorization = new("Bearer", userJwt);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Failed to fetch companies.");
+        }
+        if (!envelope.data.HasValue || envelope.data.Value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var companies = new List<WebCompany>();
+        foreach (var item in envelope.data.Value.EnumerateArray())
+        {
+            if (!item.TryGetProperty("id", out var idElement) || !item.TryGetProperty("name", out var nameElement))
+            {
+                continue;
+            }
+            var id = idElement.GetString();
+            var name = nameElement.GetString();
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+            companies.Add(new WebCompany
+            {
+                Id = id,
+                Name = name,
+                Currency = item.TryGetProperty("currency", out var currencyElement) ? currencyElement.GetString() : null
+            });
+        }
+
+        return companies;
+    }
+
+    public async Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/register-device"))
+        {
+            Content = JsonContent.Create(new { companyId, deviceId, deviceName })
+        };
+        request.Headers.Authorization = new("Bearer", userJwt);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Register device failed.");
+        }
+        if (!envelope.data.HasValue)
+        {
+            throw new InvalidOperationException("Register device failed: missing response data.");
+        }
+
+        var data = envelope.data.Value;
+        var deviceToken = data.TryGetProperty("deviceToken", out var tokenElement) ? tokenElement.GetString() : null;
+        var returnedCompanyId = data.TryGetProperty("companyId", out var companyElement) ? companyElement.GetString() : null;
+        var returnedDeviceId = data.TryGetProperty("deviceId", out var deviceElement) ? deviceElement.GetString() : null;
+        var status = data.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+
+        if (string.IsNullOrWhiteSpace(deviceToken) || string.IsNullOrWhiteSpace(returnedCompanyId) || string.IsNullOrWhiteSpace(returnedDeviceId) || string.IsNullOrWhiteSpace(status))
+        {
+            throw new InvalidOperationException("Register device failed: incomplete response payload.");
+        }
+
+        return new RegisterDeviceResponse
+        {
+            DeviceToken = deviceToken,
+            CompanyId = returnedCompanyId,
+            DeviceId = returnedDeviceId,
+            Status = status,
+            ExpiresInDays = data.TryGetProperty("expiresInDays", out var expiryElement) ? expiryElement.GetInt32() : 0
+        };
+    }
 
     public async Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken)
     {
@@ -119,61 +225,30 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         return request;
     }
 
-    private static string GetConfiguredApiBaseUrl()
+    private static (bool success, T? data, string? error) ParseEnvelope<T>(string json)
     {
-        var config = new ConfigStore().Load();
-        var apiUrl = config?.ApiUrl?.Trim().TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(apiUrl))
+        if (string.IsNullOrWhiteSpace(json))
         {
-            throw new InvalidOperationException($"api_url is required in {ConnectorPaths.ConfigFile} before using connector onboarding.");
+            return (false, default, "Empty response from backend.");
         }
-        return apiUrl;
-    }
 
-    private static T? ReadEnvelopeData<T>(string body)
-    {
-        using var document = JsonDocument.Parse(body);
-        if (!document.RootElement.TryGetProperty("data", out var data))
+        try
         {
-            return default;
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var success = root.TryGetProperty("success", out var successElement) && successElement.ValueKind == JsonValueKind.True;
+            var error = root.TryGetProperty("error", out var errorElement) ? errorElement.GetString() : null;
+            if (!root.TryGetProperty("data", out var dataElement))
+            {
+                return (success, default, error);
+            }
+
+            var data = JsonSerializer.Deserialize<T>(dataElement.GetRawText(), JsonOptions);
+            return (success, data, error);
         }
-        return JsonSerializer.Deserialize<T>(data.GetRawText(), JsonOptions);
+        catch (JsonException)
+        {
+            return (false, default, "Invalid JSON response from backend.");
+        }
     }
 }
-    public async Task<LoginResponse> LoginAsync(string email, string password, CancellationToken cancellationToken)
-    {
-        var baseUri = GetConfiguredApiBaseUrl();
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUri}/api/connector/login"))
-        {
-            Content = JsonContent.Create(new { email, password })
-        };
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ReadEnvelopeData<LoginResponse>(body) ?? throw new InvalidOperationException("Invalid login response from backend.");
-    }
-
-    public async Task<List<WebCompany>> GetCompaniesAsync(string userJwt, CancellationToken cancellationToken)
-    {
-        var baseUri = GetConfiguredApiBaseUrl();
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{baseUri}/api/connector/companies"));
-        request.Headers.Authorization = new("Bearer", userJwt);
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ReadEnvelopeData<List<WebCompany>>(body) ?? [];
-    }
-
-    public async Task<RegisterDeviceResponse> RegisterDeviceAsync(string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken)
-    {
-        var baseUri = GetConfiguredApiBaseUrl();
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUri}/api/connector/register-device"))
-        {
-            Content = JsonContent.Create(new { companyId, deviceId, deviceName })
-        };
-        request.Headers.Authorization = new("Bearer", userJwt);
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ReadEnvelopeData<RegisterDeviceResponse>(body) ?? throw new InvalidOperationException("Invalid register-device response from backend.");
-    }

@@ -153,8 +153,8 @@ internal sealed class ConnectorControlPanel : Form
     private readonly TextBox _loginEmail = new() { Width = 360 };
     private readonly TextBox _loginPassword = new() { Width = 360, UseSystemPasswordChar = true };
     private readonly ComboBox _webCompanyCombo = new() { Width = 360, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
-    private readonly TextBox _deviceId = new() { Width = 360, Text = Environment.MachineName };
-    private readonly TextBox _deviceName = new() { Width = 360, Text = Environment.MachineName };
+    private readonly TextBox _deviceId = new() { Width = 360 };
+    private readonly TextBox _deviceName = new() { Width = 360 };
     private readonly TextBox _companyId = new() { Width = 360 };
     private readonly TextBox _connectorToken = new() { Width = 360, UseSystemPasswordChar = true };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true };
@@ -189,6 +189,10 @@ internal sealed class ConnectorControlPanel : Form
         _tabs.TabPages.Add(BuildStatusTab());
         _tabs.TabPages.Add(BuildMappingTab());
         Controls.Add(_tabs);
+
+        var stableDeviceId = DeviceIdentityStore.GetOrCreateDeviceId();
+        _deviceId.Text = stableDeviceId;
+        _deviceName.Text = Environment.MachineName;
 
         _statusMappingCombo.SelectedIndexChanged += (_, _) => RefreshStatusView();
         _mappingsList.SelectedIndexChanged += (_, _) => SyncSelectionToStatusMapping();
@@ -311,11 +315,13 @@ internal sealed class ConnectorControlPanel : Form
         detectButton.Click += async (_, _) => await DetectTallyAsync();
         var linkButton = new Button { Text = "Link Mapping", Width = 120 };
         linkButton.Click += (_, _) => LinkMapping();
-        var removeButton = new Button { Text = "Remove Mapping", Width = 120 };
+        var removeButton = new Button { Text = "Unlink Mapping", Width = 120 };
         removeButton.Click += (_, _) => RemoveSelectedMapping();
+        var reRegisterButton = new Button { Text = "Re-register Token", Width = 140 };
+        reRegisterButton.Click += async (_, _) => await ReRegisterSelectedMappingAsync();
         var syncButton = new Button { Text = "Sync Selected", Width = 120 };
         syncButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
-        mappingButtons.Controls.AddRange([detectButton, linkButton, removeButton, syncButton]);
+        mappingButtons.Controls.AddRange([detectButton, linkButton, removeButton, reRegisterButton, syncButton]);
         panel.Controls.Add(mappingButtons, 0, 12);
         panel.SetColumnSpan(mappingButtons, 2);
 
@@ -383,6 +389,12 @@ internal sealed class ConnectorControlPanel : Form
     private async Task LoginRecommendedAsync()
     {
         SaveGlobalSettings();
+        var apiBaseUrl = _config.ApiUrl.Trim();
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+        {
+            MessageBox.Show("Please set Backend API URL first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         var email = _loginEmail.Text.Trim();
         var password = _loginPassword.Text;
 
@@ -394,7 +406,7 @@ internal sealed class ConnectorControlPanel : Form
 
         try
         {
-            var login = await _apiClient.LoginAsync(email, password, CancellationToken.None);
+            var login = await _apiClient.LoginAsync(apiBaseUrl, email, password, CancellationToken.None);
             if (string.IsNullOrWhiteSpace(login.Token))
             {
                 MessageBox.Show("Login failed: token missing.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -402,7 +414,7 @@ internal sealed class ConnectorControlPanel : Form
             }
 
             _onboardingJwt = login.Token;
-            var companies = await _apiClient.GetCompaniesAsync(_onboardingJwt, CancellationToken.None);
+            var companies = await _apiClient.GetCompaniesAsync(apiBaseUrl, _onboardingJwt, CancellationToken.None);
             _webCompanyCombo.Items.Clear();
             foreach (var company in companies)
             {
@@ -432,6 +444,12 @@ internal sealed class ConnectorControlPanel : Form
     private async Task RegisterAndSaveMappingAsync()
     {
         SaveGlobalSettings();
+        var apiBaseUrl = _config.ApiUrl.Trim();
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+        {
+            MessageBox.Show("Please set Backend API URL first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         if (string.IsNullOrWhiteSpace(_onboardingJwt))
         {
             MessageBox.Show("Please login first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -462,6 +480,7 @@ internal sealed class ConnectorControlPanel : Form
         try
         {
             var registration = await _apiClient.RegisterDeviceAsync(
+                apiBaseUrl,
                 _onboardingJwt,
                 companyItem.Company.Id,
                 deviceId,
@@ -617,6 +636,58 @@ internal sealed class ConnectorControlPanel : Form
         _credentialStore.DeleteMappingToken(mapping.Id);
         _configStore.Save(_config);
         LoadConfig();
+    }
+
+    private async Task ReRegisterSelectedMappingAsync()
+    {
+        var mapping = GetSelectedMapping();
+        if (mapping is null)
+        {
+            MessageBox.Show("Select a mapping first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        SaveGlobalSettings();
+        var apiBaseUrl = _config.ApiUrl.Trim();
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+        {
+            MessageBox.Show("Please set Backend API URL first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_onboardingJwt))
+        {
+            MessageBox.Show("Please login in the recommended section first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var deviceId = _deviceId.Text.Trim();
+        var deviceName = _deviceName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(deviceName))
+        {
+            MessageBox.Show("Please provide Device ID and Device Name.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            var registration = await _apiClient.RegisterDeviceAsync(
+                apiBaseUrl,
+                _onboardingJwt,
+                mapping.CompanyId,
+                deviceId,
+                deviceName,
+                CancellationToken.None);
+
+            _credentialStore.SaveMappingToken(mapping.Id, registration.DeviceToken);
+            mapping.AuthMethod = "device_token";
+            _configStore.Save(_config);
+            LoadConfig();
+            MessageBox.Show("Device token re-registered successfully.", "AI CFO Connector");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Re-register failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void LoadConfig()
