@@ -19,6 +19,7 @@ const {
   CFOAlert,
   CFOMetric,
   AccountingTermMapping,
+  AdminUsageEvent,
   sequelize
 } = require('../models');
 const { normalizeAccountHead } = require('./accountHeadNormalizer');
@@ -197,6 +198,30 @@ const deriveCurrentBalancesFromLedger = async (companyId, preferredMonthKey, tra
     creditors: toPayloadRows(rows.filter(isCreditorCategory), 'creditor_name', 'creditor'),
     loans: toPayloadRows(rows.filter(isLoanCategory), 'loan_name', 'loan')
   };
+};
+
+const logSnapshotComputationSource = async (companyId, monthKey, computedFrom, transaction) => {
+  await AdminUsageEvent.create({
+    companyId,
+    userId: null,
+    eventType: 'snapshot_computed_from',
+    metadata: {
+      monthKey,
+      computedFrom
+    }
+  }, { transaction });
+};
+
+const logCurrentBalancesSource = async (companyId, monthKey, source, transaction) => {
+  await AdminUsageEvent.create({
+    companyId,
+    userId: null,
+    eventType: 'current_balances_source',
+    metadata: {
+      monthKey,
+      source
+    }
+  }, { transaction });
 };
 
 const resolveTermMapping = async (sourceSystem, sourceTerm, normalizedType, transaction) => {
@@ -727,6 +752,7 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
       transaction
     });
     console.info({ companyId, monthKey }, 'snapshot: computed from transactions');
+    await logSnapshotComputationSource(companyId, monthKey, 'transactions', transaction);
   } else {
     const balanceRows = await LedgerMonthlyBalance.findAll({
       where: { companyId, monthKey },
@@ -747,6 +773,7 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
     revenue = revenueByName.reduce((sum, row) => sum + toNumber(row.total), 0);
     expenses = expenseByName.reduce((sum, row) => sum + toNumber(row.total), 0);
     console.info({ companyId, monthKey }, 'snapshot: computed from balances');
+    await logSnapshotComputationSource(companyId, monthKey, 'balances', transaction);
   }
 
   const netProfit = revenue - expenses;
@@ -813,6 +840,7 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
 };
 
 const updateCurrentBalances = async (companyId, payload, transaction, preferredMonthKey = null) => {
+  const source = payload ? 'payload' : 'ledger_monthly_balances';
   const derivedPayload = payload || await deriveCurrentBalancesFromLedger(companyId, preferredMonthKey, transaction);
   if (!derivedPayload) return;
   const { cashBalances, debtors, creditors, loans } = derivedPayload;
@@ -860,6 +888,8 @@ const updateCurrentBalances = async (companyId, payload, transaction, preferredM
       }, { transaction });
     }
   }
+
+  await logCurrentBalancesSource(companyId, preferredMonthKey, source, transaction);
 };
 
 const computeLiquidityMetrics = async (companyId, transaction) => {
