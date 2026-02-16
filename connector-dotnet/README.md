@@ -13,6 +13,13 @@ Production-grade Windows connector for Tally -> AI CFO sync.
 - Logs: `C:\ProgramData\AICFO\logs\agent.log`
 - Token storage: Windows Credential Manager (generic credential keys `AICFO_CONNECTOR_TOKEN_MAPPING_<mapping_id>`)
 
+## Advanced config (optional)
+`config.json` supports:
+- `historical_months_to_sync` (default `24`)
+- `tally_request_timeout_seconds` (default `30`)
+- `tally_request_max_retries` (default `3`)
+- `max_ledger_count_warning` (default `50000`)
+
 ## Backend contract
 Payload strictly follows backend contract in:
 - `backend/docs/INTEGRATION_COA_CONTRACT.md`
@@ -23,6 +30,12 @@ Service sends:
 - `POST /api/connector/sync/start`
 - `POST /api/connector/sync`
 - `POST /api/connector/sync/complete`
+
+Payload includes:
+- `chartOfAccounts.groups`, `chartOfAccounts.ledgers`
+- `balances.current`
+- `balances.closedMonths` (last `historical_months_to_sync` closed months; default 24)
+- optional `partyBalances`, `loans`, `interestSummary`, `metadata.missingMonths`
 
 ## Connector Control Panel (multi-company mapping)
 Open **AI CFO Connector** from desktop/start menu/tray icon.
@@ -66,6 +79,7 @@ After build, rename/copy artifact to backend download location:
 - Scheduled sync every 15 minutes per mapping (configurable)
 - Manual sync via named pipe (`AICFOConnectorSyncNow`) from tray app
 - Exponential backoff with jitter, capped at 10 minutes
+- If one or more historical months fail to fetch, sync completes as `partial`
 
 ## Security
 - Raw connector token is never written to logs

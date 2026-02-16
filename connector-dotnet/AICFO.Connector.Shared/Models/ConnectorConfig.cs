@@ -19,6 +19,18 @@ public sealed class ConnectorConfig
     [JsonPropertyName("sync_interval_minutes")]
     public int SyncIntervalMinutes { get; set; } = 15;
 
+    [JsonPropertyName("historical_months_to_sync")]
+    public int HistoricalMonthsToSync { get; set; } = 24;
+
+    [JsonPropertyName("tally_request_timeout_seconds")]
+    public int TallyRequestTimeoutSeconds { get; set; } = 30;
+
+    [JsonPropertyName("tally_request_max_retries")]
+    public int TallyRequestMaxRetries { get; set; } = 3;
+
+    [JsonPropertyName("max_ledger_count_warning")]
+    public int MaxLedgerCountWarning { get; set; } = 50000;
+
     [JsonPropertyName("mappings")]
     public List<ConnectorMapping> Mappings { get; set; } = [];
 
@@ -41,6 +53,10 @@ public sealed class ConnectorConfig
         if (TallyPort <= 0) throw new InvalidOperationException("tally_port must be positive");
         if (HeartbeatIntervalSeconds < 10) throw new InvalidOperationException("heartbeat_interval_seconds must be >= 10");
         if (SyncIntervalMinutes < 1) throw new InvalidOperationException("sync_interval_minutes must be >= 1");
+        if (HistoricalMonthsToSync < 1 || HistoricalMonthsToSync > 120) throw new InvalidOperationException("historical_months_to_sync must be between 1 and 120");
+        if (TallyRequestTimeoutSeconds < 5 || TallyRequestTimeoutSeconds > 300) throw new InvalidOperationException("tally_request_timeout_seconds must be between 5 and 300");
+        if (TallyRequestMaxRetries < 0 || TallyRequestMaxRetries > 10) throw new InvalidOperationException("tally_request_max_retries must be between 0 and 10");
+        if (MaxLedgerCountWarning < 1000) throw new InvalidOperationException("max_ledger_count_warning must be >= 1000");
         foreach (var mapping in Mappings)
         {
             mapping.Validate();

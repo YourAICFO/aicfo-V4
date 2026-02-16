@@ -47,6 +47,7 @@ public sealed class TallyPayloadBuilder : ITallyPayloadBuilder
             ClosedMonths = snapshot.ClosedMonths.Select(month => new CoaClosedMonthDto
             {
                 MonthKey = month.MonthKey,
+                AsOfDate = MonthWindowHelper.GetMonthEnd(month.MonthKey).ToString("yyyy-MM-dd"),
                 Items = month.Items.Select(item => new CoaBalanceItemDto
                 {
                     LedgerGuid = item.LedgerGuid,
@@ -54,6 +55,43 @@ public sealed class TallyPayloadBuilder : ITallyPayloadBuilder
                 }).ToList()
             }).ToList()
         };
+
+        var partyBalances = snapshot.PartyBalances is null
+            ? null
+            : new CoaPartyBalancesDto
+            {
+                AsOfDate = snapshot.PartyBalances.AsOfDate.ToString("yyyy-MM-dd"),
+                Debtors = snapshot.PartyBalances.Debtors
+                    .Select(item => new CoaPartyAmountDto { Name = item.Name, Amount = item.Amount })
+                    .ToList(),
+                Creditors = snapshot.PartyBalances.Creditors
+                    .Select(item => new CoaPartyAmountDto { Name = item.Name, Amount = item.Amount })
+                    .ToList(),
+                DebtorsTotalCount = snapshot.PartyBalances.DebtorsTotalCount,
+                CreditorsTotalCount = snapshot.PartyBalances.CreditorsTotalCount
+            };
+
+        var loans = snapshot.Loans.Count == 0
+            ? null
+            : new CoaLoansDto
+            {
+                AsOfDate = asOfDate,
+                Items = snapshot.Loans.Select(loan => new CoaLoanItemDto
+                {
+                    LedgerGuid = loan.LedgerGuid,
+                    Name = loan.Name,
+                    Parent = loan.Parent,
+                    Balance = loan.Balance
+                }).ToList()
+            };
+
+        var interestSummary = snapshot.InterestSummary is null
+            ? null
+            : new CoaInterestSummaryDto
+            {
+                MonthKey = snapshot.InterestSummary.MonthKey,
+                LatestMonthAmount = snapshot.InterestSummary.LatestMonthAmount
+            };
 
         return new CoaContractPayload
         {
@@ -65,6 +103,17 @@ public sealed class TallyPayloadBuilder : ITallyPayloadBuilder
                 Groups = groups,
                 Ledgers = ledgers,
                 Balances = balances
+            },
+            PartyBalances = partyBalances,
+            Loans = loans,
+            InterestSummary = interestSummary,
+            Metadata = new CoaPayloadMetadataDto
+            {
+                HistoricalMonthsRequested = snapshot.RequestedClosedMonths > 0
+                    ? snapshot.RequestedClosedMonths
+                    : snapshot.ClosedMonths.Count + snapshot.MissingClosedMonths.Count,
+                HistoricalMonthsSynced = snapshot.ClosedMonths.Count,
+                MissingMonths = snapshot.MissingClosedMonths
             }
         };
     }

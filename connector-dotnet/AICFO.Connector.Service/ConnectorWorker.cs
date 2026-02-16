@@ -137,21 +137,28 @@ public sealed class ConnectorWorker(
                     var snapshot = await tallyClient.FetchSnapshotAsync(config, mapping.TallyCompanyName, cancellationToken);
                     var payload = payloadBuilder.BuildPayload(snapshot);
                     await apiClient.SendSyncPayloadAsync(config, token, payload, cancellationToken);
-                    await apiClient.CompleteSyncRunAsync(config, token, runId, "success", null, cancellationToken);
+                    var hasMissingMonths = snapshot.MissingClosedMonths.Count > 0;
+                    var completionStatus = hasMissingMonths ? "partial" : "success";
+                    var completionError = hasMissingMonths
+                        ? $"Historical months missing: {string.Join(", ", snapshot.MissingClosedMonths)}"
+                        : null;
+                    await apiClient.CompleteSyncRunAsync(config, token, runId, completionStatus, completionError, cancellationToken);
 
                     await PersistMappingState(mapping.Id, m =>
                     {
                         m.LastSyncAt = DateTimeOffset.UtcNow;
-                        m.LastSyncResult = "Success";
-                        m.LastError = null;
+                        m.LastSyncResult = hasMissingMonths ? "Partial" : "Success";
+                        m.LastError = completionError;
                     });
 
                     logger.LogInformation(
-                        "Sync completed reason={Reason} mapping={MappingId} companyId={CompanyId} ledgers={LedgerCount}",
+                        "Sync completed reason={Reason} mapping={MappingId} companyId={CompanyId} ledgers={LedgerCount} closedMonths={ClosedMonths} missingMonths={MissingMonths}",
                         reason,
                         mapping.Id,
                         mapping.CompanyId,
-                        snapshot.Ledgers.Count);
+                        snapshot.Ledgers.Count,
+                        snapshot.ClosedMonths.Count,
+                        snapshot.MissingClosedMonths.Count);
                 }
                 catch (Exception ex)
                 {
@@ -263,4 +270,3 @@ public sealed class ConnectorWorker(
         return Task.CompletedTask;
     }
 }
-
