@@ -201,27 +201,35 @@ const deriveCurrentBalancesFromLedger = async (companyId, preferredMonthKey, tra
 };
 
 const logSnapshotComputationSource = async (companyId, monthKey, computedFrom, transaction) => {
-  await AdminUsageEvent.create({
-    companyId,
-    userId: null,
-    eventType: 'snapshot_computed_from',
-    metadata: {
-      monthKey,
-      computedFrom
-    }
-  }, { transaction });
+  try {
+    await AdminUsageEvent.create({
+      companyId,
+      userId: null,
+      eventType: 'snapshot_computed_from',
+      metadata: {
+        monthKey,
+        computedFrom
+      }
+    }, { transaction });
+  } catch (error) {
+    console.warn('Snapshot computation source log failed:', error.message);
+  }
 };
 
 const logCurrentBalancesSource = async (companyId, monthKey, source, transaction) => {
-  await AdminUsageEvent.create({
-    companyId,
-    userId: null,
-    eventType: 'current_balances_source',
-    metadata: {
-      monthKey,
-      source
-    }
-  }, { transaction });
+  try {
+    await AdminUsageEvent.create({
+      companyId,
+      userId: null,
+      eventType: 'current_balances_source',
+      metadata: {
+        monthKey,
+        source
+      }
+    }, { transaction });
+  } catch (error) {
+    console.warn('Current balances source log failed:', error.message);
+  }
 };
 
 const resolveTermMapping = async (sourceSystem, sourceTerm, normalizedType, transaction) => {

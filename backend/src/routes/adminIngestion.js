@@ -29,6 +29,7 @@ router.get('/health', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, error: 'companyId query parameter is required' });
     }
 
+    // Company model exposes ownerId (mapped to owner_id in DB).
     const company = await Company.findOne({
       where: {
         id: companyId,
@@ -75,12 +76,13 @@ router.get('/health', authenticate, async (req, res) => {
 
     const latestSnapshotEvent = markerEvents.find((event) => (
       event.eventType === 'snapshot_computed_from'
-      && (!latestSnapshot || event.metadata?.monthKey === latestSnapshot.month)
-    )) || markerEvents.find((event) => event.eventType === 'snapshot_computed_from');
+      && latestSnapshot
+      && event.metadata?.monthKey === latestSnapshot.month
+    )) || null;
 
     const latestCurrentBalanceEvent = markerEvents.find((event) => event.eventType === 'current_balances_source');
 
-    const coverageMonthKey = latestSnapshot?.month || latestSnapshotEvent?.metadata?.monthKey || null;
+    const coverageMonthKey = latestSnapshot?.month || null;
 
     const coverageRows = coverageMonthKey
       ? await LedgerMonthlyBalance.findAll({
@@ -159,4 +161,3 @@ router.get('/health', authenticate, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -1,44 +1,13 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 
-const { syncStatusService, integrationService } = require('../services');
-const { IntegrationSyncRun, Company } = require('../models');
+const { integrationService, authService } = require('../services');
+const syncStatusService = require('../services/syncStatusService');
+const { IntegrationSyncRun, Company, ConnectorDevice } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
-
-/**
- * Middleware to authenticate connector requests
- */
-const authenticateConnector = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing or invalid authorization header'
-      });
-    }
-
-    const token = authHeader.substring(7);
-    const payload = syncStatusService.verifyConnectorToken(token);
-    
-    if (payload.type !== 'connector') {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid token type'
-      });
-    }
-
-    req.connectorClientId = payload.clientId;
-    req.companyId = payload.companyId;
-    next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
 
 /* ===============================
    TEST ROUTE
@@ -126,10 +95,139 @@ router.post('/auth', async (req, res) => {
 });
 
 /* ===============================
+   POST /api/connector/login
+   Purpose: connector installer gets normal short-lived user JWT
+================================ */
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'email and password are required'
+      });
+    }
+
+    const result = await authService.login(email, password);
+    return res.json({
+      success: true,
+      data: {
+        token: result.token,
+        user: result.user
+      }
+    });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   GET /api/connector/companies
+   Purpose: list companies owned by current user
+================================ */
+router.get('/companies', authenticate, async (req, res) => {
+  try {
+    const companies = await Company.findAll({
+      where: { ownerId: req.userId },
+      attributes: ['id', 'name', 'currency', 'createdAt'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({
+      success: true,
+      data: companies
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   POST /api/connector/register-device
+   Purpose: issue revocable long-lived device token
+================================ */
+router.post('/register-device', authenticate, async (req, res) => {
+  try {
+    const { companyId, deviceId, deviceName } = req.body || {};
+    if (!companyId || !deviceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'companyId and deviceId are required'
+      });
+    }
+
+    const company = await Company.findOne({
+      where: {
+        id: companyId,
+        ownerId: req.userId
+      }
+    });
+
+    if (!company) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this company'
+      });
+    }
+
+    // New auth flow rationale:
+    // - raw device token is long-lived for installed connectors
+    // - only SHA-256 hash is stored server-side
+    // - revocation is done via status=revoked
+    const rawDeviceToken = `aicfo_dev_${crypto.randomBytes(48).toString('hex')}`;
+    const deviceTokenHash = hashToken(rawDeviceToken);
+
+    const [device, created] = await ConnectorDevice.findOrCreate({
+      where: { companyId, deviceId },
+      defaults: {
+        companyId,
+        userId: req.userId,
+        deviceId,
+        deviceName: deviceName || null,
+        deviceTokenHash,
+        status: 'active',
+        lastSeenAt: null
+      }
+    });
+
+    if (!created) {
+      await device.update({
+        userId: req.userId,
+        deviceName: deviceName || device.deviceName,
+        deviceTokenHash,
+        status: 'active'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        deviceToken: rawDeviceToken,
+        companyId: device.companyId,
+        deviceId: device.deviceId,
+        status: device.status,
+        expiresInDays: 365
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
    POST /api/connector/sync/start
    Auth: Bearer <connectorToken>
 ================================ */
-router.post('/sync/start', authenticateConnector, async (req, res) => {
+router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const { companyId } = req;
     
@@ -172,7 +270,7 @@ router.post('/sync/start', authenticateConnector, async (req, res) => {
    POST /api/connector/sync
    Auth: Bearer <connectorToken>
 ================================ */
-router.post('/sync', authenticateConnector, async (req, res) => {
+router.post('/sync', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const validation = validateChartOfAccountsPayload(req.body || {});
     if (!validation.ok) {
@@ -198,7 +296,7 @@ router.post('/sync', authenticateConnector, async (req, res) => {
    POST /api/connector/sync/progress
    Auth: Bearer <connectorToken>
 ================================ */
-router.post('/sync/progress', authenticateConnector, async (req, res) => {
+router.post('/sync/progress', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const { runId, stage, progress, stats, message } = req.body;
 
@@ -268,7 +366,7 @@ router.post('/sync/progress', authenticateConnector, async (req, res) => {
    POST /api/connector/sync/complete
    Auth: Bearer <connectorToken>
 ================================ */
-router.post('/sync/complete', authenticateConnector, async (req, res) => {
+router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const { runId, status, finishedAt, lastError } = req.body;
 
@@ -337,7 +435,7 @@ router.post('/sync/complete', authenticateConnector, async (req, res) => {
    POST /api/connector/heartbeat
    Auth: Bearer <connectorToken>
 ================================ */
-router.post('/heartbeat', authenticateConnector, async (req, res) => {
+router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const { companyId, connectorClientId } = req;
 
@@ -371,7 +469,7 @@ router.post('/heartbeat', authenticateConnector, async (req, res) => {
    GET /api/connector/status/connector
    Auth: connector token
 ================================ */
-router.get('/status/connector', authenticateConnector, async (req, res) => {
+router.get('/status/connector', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const status = await syncStatusService.getSyncStatus(req.companyId);
     res.json({
