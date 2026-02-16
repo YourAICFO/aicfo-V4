@@ -11,7 +11,6 @@
     <UIRef Id="WixUI_Minimal" />
 
     <!-- Installer UX: default ON. WixUI checkbox can toggle this at install time. -->
-    <Property Id="START_WITH_WINDOWS" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start AICFO Connector at login" />
 
@@ -76,7 +75,7 @@
 
     <!-- Per-user auto-start registry component is isolated from file/shortcut components to avoid ICE43/ICE57. -->
     <Component Id="ConnectorTrayAutoStartRunKey" Directory="INSTALLFOLDER" Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}">
-      <Condition><![CDATA[WIXUI_EXITDIALOGOPTIONALCHECKBOX = "1"]]></Condition>
+      <Condition><![CDATA[WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1]]></Condition>
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayAutoStart" Type="integer" Value="1" KeyPath="yes" />
       <RegistryValue Root="HKCU"
                      Key="Software\Microsoft\Windows\CurrentVersion\Run"
