@@ -1,6 +1,5 @@
 const express = require('express');
 const crypto = require('crypto');
-const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
 const { integrationService, authService } = require('../services');
@@ -10,12 +9,30 @@ const { authenticate } = require('../middleware/auth');
 const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
 
-const connectorLoginLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false
-});
+const connectorLoginAttempts = new Map();
+const connectorLoginLimiter = (req, res, next) => {
+  const windowMs = 60 * 1000;
+  const max = 5;
+  const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const now = Date.now();
+  const current = connectorLoginAttempts.get(key);
+
+  if (!current || (now - current.windowStart) > windowMs) {
+    connectorLoginAttempts.set(key, { count: 1, windowStart: now });
+    return next();
+  }
+
+  if (current.count >= max) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many login attempts. Please try again in a minute.'
+    });
+  }
+
+  current.count += 1;
+  connectorLoginAttempts.set(key, current);
+  return next();
+};
 
 /* ===============================
    TEST ROUTE
