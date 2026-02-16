@@ -8,6 +8,12 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <UIRef Id="WixUI_Minimal" />
+
+    <!-- Installer UX: default ON. WixUI checkbox can toggle this at install time. -->
+    <Property Id="START_WITH_WINDOWS" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start AICFO Connector at login" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="AICFOConnector">
@@ -68,13 +74,15 @@
                 WorkingDirectory="TRAYFOLDER" />
     </Component>
 
-    <Component Id="ConnectorTrayStartupShortcut" Directory="StartupFolder" Guid="{3707C3A2-F8F0-4F4E-B5AC-0F4C8DF10A9A}">
-      <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayStartupShortcut" Type="integer" Value="1" KeyPath="yes" />
-      <Shortcut Id="AicfoTrayStartup"
-                Name="AI CFO Connector"
-                Description="Start AI CFO Connector Control Panel"
-                Target="[TRAYFOLDER]AICFO.Connector.Tray.exe"
-                WorkingDirectory="TRAYFOLDER" />
+    <!-- Per-user auto-start registry component is isolated from file/shortcut components to avoid ICE43/ICE57. -->
+    <Component Id="ConnectorTrayAutoStartRunKey" Directory="INSTALLFOLDER" Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}">
+      <Condition><![CDATA[WIXUI_EXITDIALOGOPTIONALCHECKBOX = "1"]]></Condition>
+      <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayAutoStart" Type="integer" Value="1" KeyPath="yes" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="AICFOConnectorTray"
+                     Type="string"
+                     Value="&quot;[TRAYFOLDER]AICFO.Connector.Tray.exe&quot;" />
     </Component>
 
     <Component Id="ProgramDataConfigFolderComponent" Directory="ProgramDataConfig" Guid="{1E92F7D1-5F14-4E48-8C2B-2A9582CE1AF0}">
@@ -90,7 +98,7 @@
       <ComponentRef Id="ConnectorTrayExeComponent" />
       <ComponentRef Id="ConnectorTrayStartMenuShortcut" />
       <ComponentRef Id="ConnectorTrayDesktopShortcut" />
-      <ComponentRef Id="ConnectorTrayStartupShortcut" />
+      <ComponentRef Id="ConnectorTrayAutoStartRunKey" />
       <ComponentRef Id="ProgramDataConfigFolderComponent" />
       <ComponentRef Id="ProgramDataLogsFolderComponent" />
       <ComponentGroupRef Id="ServicePublishFiles" />
