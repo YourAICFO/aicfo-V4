@@ -1,8 +1,9 @@
-const { Integration, Subscription, FinancialTransaction } = require('../models');
+const { Integration, Subscription, FinancialTransaction, LedgerMonthlyBalance } = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { normalizeMonth } = require('../utils/monthKeyUtils');
 const { normalizeCoaPayload } = require('./tallyCoaAdapter');
 const { upsertSourceLedgersFromChartOfAccounts, upsertSourceLedgersFromTransactions } = require('./sourceNormalizationService');
+const { mapLedgersToCFOTotals } = require('./cfoAccountMappingService');
 const { TallyClient } = require('./tallyClient');
 const { logger } = require('../utils/logger');
 
@@ -406,6 +407,13 @@ const processConnectorPayload = async (companyId, payload) => {
     // Process ledgers and balances
     const ledgers = chartOfAccounts.ledgers || [];
     const balances = chartOfAccounts.balances?.current?.items || [];
+    // Ingest-time classification is fallback-only for balances-first ingestion.
+    // Canonical classification still happens in monthlySnapshotService.writeLedgerMonthlyBalances,
+    // which can overwrite/refine categories during snapshot recompute.
+    const { classifications } = mapLedgersToCFOTotals(ledgers, chartOfAccounts.groups || []);
+    const categoryByGuid = new Map(
+      classifications.map((row) => [String(row.ledgerGuid || ''), String(row.category || 'unclassified')])
+    );
 
     // Create ledger monthly balances from the payload
     const ledgerBalances = [];
@@ -420,6 +428,8 @@ const processConnectorPayload = async (companyId, payload) => {
           ledgerGuid: ledger.guid,
           ledgerName: ledger.name,
           parentGroup: ledger.parent,
+          // JS attribute is cfoCategory; Sequelize maps to DB column cfo_category.
+          cfoCategory: categoryByGuid.get(String(ledger.guid || '')) || 'unclassified',
           monthKey: monthKey,
           balance: balance,
           asOfDate: asOfDate || new Date().toISOString().split('T')[0],
@@ -451,6 +461,8 @@ const processConnectorPayload = async (companyId, payload) => {
               ledgerGuid: item.ledgerGuid,
               ledgerName: ledger ? ledger.name : 'Unknown',
               parentGroup: ledger ? ledger.parent : 'Unknown',
+              // JS attribute is cfoCategory; Sequelize maps to DB column cfo_category.
+              cfoCategory: categoryByGuid.get(String(item.ledgerGuid || '')) || 'unclassified',
               monthKey: closedMonth.monthKey,
               balance: item.balance,
               asOfDate: closedMonth.asOfDate || `${closedMonth.monthKey}-01`,

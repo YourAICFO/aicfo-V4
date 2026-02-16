@@ -4,6 +4,7 @@ const router = express.Router();
 const { syncStatusService, integrationService } = require('../services');
 const { IntegrationSyncRun, Company } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
 
 /**
  * Middleware to authenticate connector requests
@@ -173,6 +174,15 @@ router.post('/sync/start', authenticateConnector, async (req, res) => {
 ================================ */
 router.post('/sync', authenticateConnector, async (req, res) => {
   try {
+    const validation = validateChartOfAccountsPayload(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid connector payload',
+        errors: [validation.error]
+      });
+    }
+
     const data = await integrationService.processConnectorPayload(req.companyId, req.body || {});
     res.json({ success: true, data });
   } catch (error) {

@@ -1,0 +1,49 @@
+{
+  "asOfDate": "2026-01-31",
+  "chartOfAccounts": {
+    "groups": [
+      { "name": "Sales Accounts", "parent": "Income", "guid": "grp-sales", "type": "Group" },
+      { "name": "Direct Expenses", "parent": "Expenses", "guid": "grp-exp", "type": "Group" },
+      { "name": "Bank Accounts", "parent": "Current Assets", "guid": "grp-bank", "type": "Group" },
+      { "name": "Sundry Debtors", "parent": "Current Assets", "guid": "grp-debtors", "type": "Group" },
+      { "name": "Sundry Creditors", "parent": "Current Liabilities", "guid": "grp-creditors", "type": "Group" },
+      { "name": "Secured Loans", "parent": "Loans", "guid": "grp-loans", "type": "Group" }
+    ],
+    "ledgers": [
+      { "name": "Sales - Domestic", "parent": "Sales Accounts", "guid": "led-sales-1", "type": "Ledger" },
+      { "name": "Cost of Goods Sold", "parent": "Direct Expenses", "guid": "led-expense-1", "type": "Ledger" },
+      { "name": "HDFC Current Account", "parent": "Bank Accounts", "guid": "led-bank-1", "type": "Ledger" },
+      { "name": "Customer ABC Pvt Ltd", "parent": "Sundry Debtors", "guid": "led-debtor-1", "type": "Ledger" },
+      { "name": "Vendor XYZ Traders", "parent": "Sundry Creditors", "guid": "led-creditor-1", "type": "Ledger" },
+      { "name": "Term Loan - SBI", "parent": "Secured Loans", "guid": "led-loan-1", "type": "Ledger" }
+    ],
+    "balances": {
+      "current": {
+        "monthKey": "2026-01",
+        "asOfDate": "2026-01-31",
+        "items": [
+          { "ledgerGuid": "led-sales-1", "balance": 1500000.0 },
+          { "ledgerGuid": "led-expense-1", "balance": -950000.0 },
+          { "ledgerGuid": "led-bank-1", "balance": 325000.0 },
+          { "ledgerGuid": "led-debtor-1", "balance": 280000.0 },
+          { "ledgerGuid": "led-creditor-1", "balance": -190000.0 },
+          { "ledgerGuid": "led-loan-1", "balance": -500000.0 }
+        ]
+      },
+      "closedMonths": [
+        {
+          "monthKey": "2025-12",
+          "asOfDate": "2025-12-31",
+          "items": [
+            { "ledgerGuid": "led-sales-1", "balance": 1320000.0 },
+            { "ledgerGuid": "led-expense-1", "balance": -870000.0 },
+            { "ledgerGuid": "led-bank-1", "balance": 290000.0 },
+            { "ledgerGuid": "led-debtor-1", "balance": 250000.0 },
+            { "ledgerGuid": "led-creditor-1", "balance": -170000.0 },
+            { "ledgerGuid": "led-loan-1", "balance": -515000.0 }
+          ]
+        }
+      ]
+    }
+  }
+}

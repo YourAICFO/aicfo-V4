@@ -66,6 +66,139 @@ const DEFAULT_TERM_MAP = {
   'accounts payable': { term: 'Creditors', type: 'LIABILITY' }
 };
 
+const toNumber = (value) => {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num : 0;
+};
+
+// Sign normalization rules for balances-only fallback:
+// - revenue/expense are reported as positive magnitudes in summaries/breakdowns
+// - cash/bank keeps source sign (overdraft/negative cash should remain negative)
+// - debtor/creditor/loan uses positive magnitudes for outstanding balances
+const normalizeBalanceByKind = (value, kind) => {
+  const amount = toNumber(value);
+  switch (kind) {
+    case 'revenue':
+    case 'expense':
+    case 'debtor':
+    case 'creditor':
+    case 'loan':
+      return Math.abs(amount);
+    case 'cash':
+    default:
+      return amount;
+  }
+};
+
+const normalizeCategoryKey = (value) => (value || '').toString().trim().toLowerCase();
+
+const isRevenueCategory = (category) => {
+  const key = normalizeCategoryKey(category);
+  return key.includes('revenue') || key.includes('income') || key === 'sales';
+};
+
+const isExpenseCategory = (category) => {
+  const key = normalizeCategoryKey(category);
+  return key.includes('expense') || key.includes('cogs') || key.includes('cost');
+};
+
+const isCashCategory = (row) => {
+  const category = normalizeCategoryKey(row.cfoCategory);
+  if (category === 'cash_bank' || category.includes('cash') || category.includes('bank')) {
+    return true;
+  }
+  const group = normalizeCategoryKey(row.parentGroup);
+  return group.includes('cash') || group.includes('bank');
+};
+
+const isDebtorCategory = (row) => {
+  const category = normalizeCategoryKey(row.cfoCategory);
+  if (category === 'debtors' || category === 'debtor' || category.includes('receivable')) {
+    return true;
+  }
+  const group = normalizeCategoryKey(row.parentGroup);
+  return group.includes('debtor') || group.includes('receivable');
+};
+
+const isCreditorCategory = (row) => {
+  const category = normalizeCategoryKey(row.cfoCategory);
+  if (category === 'creditors' || category === 'creditor' || category.includes('payable')) {
+    return true;
+  }
+  const group = normalizeCategoryKey(row.parentGroup);
+  return group.includes('creditor') || group.includes('payable');
+};
+
+const isLoanCategory = (row) => {
+  const category = normalizeCategoryKey(row.cfoCategory);
+  if (category.includes('loan') || category.includes('debt') || category.includes('interest')) {
+    return true;
+  }
+  const group = normalizeCategoryKey(row.parentGroup);
+  return group.includes('loan') || group.includes('debt') || group.includes('secured') || group.includes('unsecured');
+};
+
+const summarizeByLedgerName = (rows = [], kind = 'default') => {
+  const grouped = new Map();
+  for (const row of rows) {
+    const name = row.ledgerName || row.ledger_name || 'Unknown';
+    const amount = normalizeBalanceByKind(row.balance, kind);
+    grouped.set(name, (grouped.get(name) || 0) + amount);
+  }
+  return Array.from(grouped.entries()).map(([name, total]) => ({ name, total }));
+};
+
+const deriveCurrentBalancesFromLedger = async (companyId, preferredMonthKey, transaction) => {
+  let targetMonthKey = preferredMonthKey || null;
+
+  if (targetMonthKey) {
+    const count = await LedgerMonthlyBalance.count({
+      where: { companyId, monthKey: targetMonthKey },
+      transaction
+    });
+    if (count === 0) {
+      targetMonthKey = null;
+    }
+  }
+
+  if (!targetMonthKey) {
+    const latest = await LedgerMonthlyBalance.findOne({
+      where: { companyId },
+      order: [['monthKey', 'DESC']],
+      attributes: ['monthKey'],
+      raw: true,
+      transaction
+    });
+    targetMonthKey = latest?.monthKey || null;
+  }
+
+  if (!targetMonthKey) {
+    return null;
+  }
+
+  const rows = await LedgerMonthlyBalance.findAll({
+    where: { companyId, monthKey: targetMonthKey },
+    raw: true,
+    transaction
+  });
+
+  if (!rows.length) {
+    return null;
+  }
+
+  const toPayloadRows = (items, keyName, kind) => summarizeByLedgerName(items, kind).map((item) => ({
+    [keyName]: item.name,
+    balance: item.total
+  }));
+
+  return {
+    cashBalances: toPayloadRows(rows.filter(isCashCategory), 'account_name', 'cash'),
+    debtors: toPayloadRows(rows.filter(isDebtorCategory), 'debtor_name', 'debtor'),
+    creditors: toPayloadRows(rows.filter(isCreditorCategory), 'creditor_name', 'creditor'),
+    loans: toPayloadRows(rows.filter(isLoanCategory), 'loan_name', 'loan')
+  };
+};
+
 const resolveTermMapping = async (sourceSystem, sourceTerm, normalizedType, transaction) => {
   const sourceKey = String(sourceSystem || '').toLowerCase();
   const existing = await AccountingTermMapping.findOne({
@@ -558,8 +691,64 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
     transaction
   });
 
-  const revenue = parseFloat(totals.find(t => t.type === 'REVENUE')?.total || 0);
-  const expenses = parseFloat(totals.find(t => t.type === 'EXPENSE')?.total || 0);
+  let revenueByName = [];
+  let expenseByName = [];
+  let revenue = parseFloat(totals.find(t => t.type === 'REVENUE')?.total || 0);
+  let expenses = parseFloat(totals.find(t => t.type === 'EXPENSE')?.total || 0);
+
+  if (totals.length > 0) {
+    revenueByName = await FinancialTransaction.findAll({
+      where: {
+        companyId,
+        type: 'REVENUE',
+        date: { [Sequelize.Op.gte]: monthStart, [Sequelize.Op.lt]: nextMonthStart }
+      },
+      attributes: [
+        'category',
+        [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+      ],
+      group: ['category'],
+      raw: true,
+      transaction
+    });
+
+    expenseByName = await FinancialTransaction.findAll({
+      where: {
+        companyId,
+        type: 'EXPENSE',
+        date: { [Sequelize.Op.gte]: monthStart, [Sequelize.Op.lt]: nextMonthStart }
+      },
+      attributes: [
+        'category',
+        [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
+      ],
+      group: ['category'],
+      raw: true,
+      transaction
+    });
+    console.info({ companyId, monthKey }, 'snapshot: computed from transactions');
+  } else {
+    const balanceRows = await LedgerMonthlyBalance.findAll({
+      where: { companyId, monthKey },
+      raw: true,
+      transaction
+    });
+
+    const revenueRows = balanceRows.filter((row) => (
+      isRevenueCategory(row.cfoCategory) || isRevenueCategory(row.parentGroup)
+    ));
+    const expenseRows = balanceRows.filter((row) => (
+      isExpenseCategory(row.cfoCategory) || isExpenseCategory(row.parentGroup)
+    ));
+
+    revenueByName = summarizeByLedgerName(revenueRows, 'revenue').map((row) => ({ category: row.name, total: row.total }));
+    expenseByName = summarizeByLedgerName(expenseRows, 'expense').map((row) => ({ category: row.name, total: row.total }));
+
+    revenue = revenueByName.reduce((sum, row) => sum + toNumber(row.total), 0);
+    expenses = expenseByName.reduce((sum, row) => sum + toNumber(row.total), 0);
+    console.info({ companyId, monthKey }, 'snapshot: computed from balances');
+  }
+
   const netProfit = revenue - expenses;
 
   const latestCash = await CashBalance.findOne({
@@ -590,21 +779,6 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
   await MonthlyDebtorsSnapshot.destroy({ where: { companyId, month: monthKey }, transaction });
   await MonthlyCreditorsSnapshot.destroy({ where: { companyId, month: monthKey }, transaction });
 
-  const revenueByName = await FinancialTransaction.findAll({
-    where: {
-      companyId,
-      type: 'REVENUE',
-      date: { [Sequelize.Op.gte]: monthStart, [Sequelize.Op.lt]: nextMonthStart }
-    },
-    attributes: [
-      'category',
-      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
-    ],
-    group: ['category'],
-    raw: true,
-    transaction
-  });
-
   for (const row of revenueByName) {
     const term = await resolveTermMapping('INTEGRATION', row.category || 'Revenue', 'REVENUE', transaction);
     const rawName = row.category || term.normalizedTerm;
@@ -620,21 +794,6 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
       amount: parseFloat(row.total || 0)
     }, { transaction });
   }
-
-  const expenseByName = await FinancialTransaction.findAll({
-    where: {
-      companyId,
-      type: 'EXPENSE',
-      date: { [Sequelize.Op.gte]: monthStart, [Sequelize.Op.lt]: nextMonthStart }
-    },
-    attributes: [
-      'category',
-      [Sequelize.fn('SUM', Sequelize.col('amount')), 'total']
-    ],
-    group: ['category'],
-    raw: true,
-    transaction
-  });
 
   for (const row of expenseByName) {
     const term = await resolveTermMapping('INTEGRATION', row.category || 'Expense', 'EXPENSE', transaction);
@@ -653,9 +812,10 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
   }
 };
 
-const updateCurrentBalances = async (companyId, payload, transaction) => {
-  if (!payload) return;
-  const { cashBalances, debtors, creditors, loans } = payload;
+const updateCurrentBalances = async (companyId, payload, transaction, preferredMonthKey = null) => {
+  const derivedPayload = payload || await deriveCurrentBalancesFromLedger(companyId, preferredMonthKey, transaction);
+  if (!derivedPayload) return;
+  const { cashBalances, debtors, creditors, loans } = derivedPayload;
 
   if (Array.isArray(cashBalances)) {
     await CurrentCashBalance.destroy({ where: { companyId }, transaction });
@@ -787,6 +947,8 @@ const toDateOnlyString = (value) => {
 };
 
 const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transaction) => {
+  // Canonical classification pass: this is the source of truth for cfo_category.
+  // Ingest-time categories are fallback hints only and may be overwritten here.
   const validation = validateChartOfAccountsPayload(payload);
   if (!validation.ok) {
     logUsageEvent({
@@ -935,7 +1097,8 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
       }
     }
 
-    await updateCurrentBalances(companyId, currentBalances, transaction);
+    const latestProcessedMonthKey = monthKeys[monthKeys.length - 1] || normalizeMonth(new Date());
+    await updateCurrentBalances(companyId, currentBalances, transaction, latestProcessedMonthKey);
     await computeLiquidityMetrics(companyId, transaction);
     await computeCfoMetrics(companyId, transaction);
     await upsertAlerts(companyId, transaction);
