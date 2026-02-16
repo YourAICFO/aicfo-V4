@@ -2,19 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw, AlertTriangle, CheckCircle, AlertCircle, Clock, WifiOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { connectorApi } from '../../services/api';
+import { connectorApi, type ConnectorStatusV1Data } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-
-interface SyncStatusData {
-  lastSyncAt: string | null;
-  lastStatus: string | null;
-  lastStage: string | null;
-  lastProgress: number | null;
-  lastError: string | null;
-  connectorLastSeenAt: string | null;
-  estimatedReady: boolean;
-  estimatedReadyReason: string;
-}
 
 interface SyncStatusWidgetProps {
   className?: string;
@@ -27,7 +16,7 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
   showRefresh = true,
   compact = false,
 }) => {
-  const [syncStatus, setSyncStatus] = useState<SyncStatusData | null>(null);
+  const [syncStatus, setSyncStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -48,7 +37,7 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
 
     try {
       setLoading(true);
-      const response = await connectorApi.getStatus(selectedCompanyId);
+      const response = await connectorApi.getStatusV1(selectedCompanyId);
       if (response?.data?.success) {
         setSyncStatus(response.data.data);
       }
@@ -68,11 +57,15 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
   const getStatusIcon = () => {
     if (!syncStatus) return <Clock className="w-5 h-5 text-gray-400" />;
 
-    switch (syncStatus.lastStatus) {
-      case 'running':
-        return <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />;
+    if (!syncStatus.connector.isOnline) {
+      return <WifiOff className="w-5 h-5 text-gray-400" />;
+    }
+
+    switch (syncStatus.sync.lastRunStatus) {
       case 'success':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case 'running':
+        return <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />;
       case 'failed':
         return <AlertTriangle className="w-5 h-5 text-red-500" />;
       case 'partial':
@@ -84,29 +77,32 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
 
   const getStatusText = () => {
     if (!syncStatus) return 'Loading...';
+    if (!syncStatus.connector.isOnline) return 'Offline';
+    if (!syncStatus.sync.lastRunStatus) return 'Connected';
 
-    switch (syncStatus.lastStatus) {
+    switch (syncStatus.sync.lastRunStatus) {
       case 'running':
         return 'Syncing...';
       case 'success':
-        return syncStatus.estimatedReady ? 'Ready' : 'Needs Attention';
+        return syncStatus.dataReadiness.status === 'ready' ? 'Ready' : 'Connected';
       case 'failed':
         return 'Sync Failed';
       case 'partial':
         return 'Partial Sync';
       default:
-        return 'Not Connected';
+        return 'Connected';
     }
   };
 
   const getStatusColor = () => {
     if (!syncStatus) return 'text-gray-400';
+    if (!syncStatus.connector.isOnline) return 'text-gray-400';
 
-    switch (syncStatus.lastStatus) {
+    switch (syncStatus.sync.lastRunStatus) {
       case 'running':
         return 'text-blue-600';
       case 'success':
-        return syncStatus.estimatedReady ? 'text-green-600' : 'text-amber-600';
+        return syncStatus.dataReadiness.status === 'ready' ? 'text-green-600' : 'text-amber-600';
       case 'failed':
         return 'text-red-600';
       case 'partial':
@@ -122,9 +118,9 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
   };
 
   const getConnectorStatus = () => {
-    if (!syncStatus?.connectorLastSeenAt) return 'Not connected';
+    if (!syncStatus?.connector.lastSeenAt) return 'Not connected';
     
-    const lastSeen = new Date(syncStatus.connectorLastSeenAt);
+    const lastSeen = new Date(syncStatus.connector.lastSeenAt);
     const now = new Date();
     const minutesAgo = Math.floor((now.getTime() - lastSeen.getTime()) / (1000 * 60));
     
@@ -191,51 +187,27 @@ export const SyncStatusWidget: React.FC<SyncStatusWidgetProps> = ({
           <span className={`font-medium ${getStatusColor()}`}>
             {getStatusText()}
           </span>
-          {syncStatus?.lastProgress !== null && syncStatus?.lastStatus === 'running' && (
-            <span className="text-sm text-gray-500">
-              {syncStatus.lastProgress}%
-            </span>
-          )}
         </div>
-
-        {syncStatus?.lastStatus === 'running' && syncStatus?.lastStage && (
-          <div className="text-sm text-gray-600">
-            Stage: {syncStatus.lastStage}
-          </div>
-        )}
-
-        {syncStatus?.lastProgress !== null && syncStatus?.lastStatus === 'running' && (
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${syncStatus.lastProgress}%` }}
-            />
-          </div>
-        )}
 
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex justify-between">
             <span>Last sync:</span>
-            <span>{formatDate(syncStatus ? syncStatus.lastSyncAt : null)}</span>
+            <span>{formatDate(syncStatus?.sync.lastRunCompletedAt || null)}</span>
           </div>
           <div className="flex justify-between">
             <span>Connector:</span>
             <span>{getConnectorStatus()}</span>
           </div>
+          <div className="flex justify-between">
+            <span>Readiness:</span>
+            <span>{syncStatus?.dataReadiness.status || 'never'}{syncStatus?.dataReadiness.latestMonthKey ? ` (${syncStatus.dataReadiness.latestMonthKey})` : ''}</span>
+          </div>
         </div>
 
-        {syncStatus?.lastError && (
+        {syncStatus?.sync.lastError && (
           <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
             <p className="text-sm text-red-600 dark:text-red-400">
-              Error: {syncStatus.lastError}
-            </p>
-          </div>
-        )}
-
-        {syncStatus?.estimatedReadyReason && syncStatus.lastStatus !== 'running' && (
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <p className="text-sm text-blue-600 dark:text-blue-400">
-              {syncStatus.estimatedReadyReason}
+              Error: {syncStatus.sync.lastError}
             </p>
           </div>
         )}

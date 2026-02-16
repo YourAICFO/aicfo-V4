@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, AlertCircle, RefreshCw, Settings, Download, Plug } from 'lucide-react';
-import { connectorApi } from '../services/api';
+import { connectorApi, type ConnectorStatusV1Data } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { getConnectorDownloadUrl } from '../lib/env';
-
-interface ConnectorStatus {
-  isConnected: boolean;
-  lastSeen: string | null;
-  lastSyncRun: any | null;
-  clientId: string | null;
-}
 
 interface OnboardingStep {
   id: string;
@@ -20,7 +13,7 @@ interface OnboardingStep {
 }
 
 export default function ConnectorOnboarding() {
-  const [status, setStatus] = useState<ConnectorStatus | null>(null);
+  const [status, setStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
@@ -34,10 +27,16 @@ export default function ConnectorOnboarding() {
   }, [selectedCompanyId]);
 
   const loadConnectorStatus = async () => {
+    if (!selectedCompanyId) {
+      setStatus(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const response = await connectorApi.getStatus(selectedCompanyId!);
+      const response = await connectorApi.getStatusV1(selectedCompanyId);
       setStatus(response.data.data);
     } catch (err: any) {
       console.error('Failed to load connector status:', err);
@@ -60,8 +59,8 @@ export default function ConnectorOnboarding() {
   };
 
   const getOnboardingSteps = (): OnboardingStep[] => {
-    const isConnected = status?.isConnected || false;
-    const hasSynced = status?.lastSyncRun?.status === 'success';
+    const isConnected = status?.connector?.isOnline || false;
+    const hasSynced = Boolean(status?.sync?.lastRunId);
     
     return [
       {
@@ -106,6 +105,21 @@ export default function ConnectorOnboarding() {
   const steps = getOnboardingSteps();
   const completedSteps = steps.filter(step => step.completed).length;
   const progress = (completedSteps / steps.length) * 100;
+  const isConnected = status?.connector?.isOnline || false;
+  const hasAnyRun = Boolean(status?.sync?.lastRunId);
+  const isReady = status?.dataReadiness?.status === 'ready';
+
+  const handleCopyDiagnostics = async () => {
+    try {
+      const payload = {
+        selectedCompanyId,
+        connectorStatusV1: status,
+      };
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    } catch (error) {
+      console.error('Failed to copy diagnostics:', error);
+    }
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -139,17 +153,26 @@ export default function ConnectorOnboarding() {
       </div>
 
       {/* Status Indicator */}
-      {status?.isConnected && (
+      {isConnected && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-600" />
             <div>
-              <p className="font-medium text-green-900">Connector Connected</p>
+              <p className="font-medium text-green-900">Connector Connected (Online)</p>
               <p className="text-sm text-green-700">
-                Last seen: {status.lastSeen ? new Date(status.lastSeen).toLocaleString() : 'Just now'}
+                Last seen: {status?.connector?.lastSeenAt ? new Date(status.connector.lastSeenAt).toLocaleString() : 'Just now'}
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {!isConnected && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="font-medium text-amber-900">Not connected</p>
+          <p className="text-sm text-amber-700">
+            Start the connector tray app and verify mapping is linked for this company.
+          </p>
         </div>
       )}
 
@@ -233,27 +256,43 @@ export default function ConnectorOnboarding() {
         </div>
       </div>
 
-      {/* Sync Status */}
-      {status?.lastSyncRun && (
+      {/* Status Summary */}
+      {status && (
         <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Plug className="w-5 h-5 text-gray-600" />
               <div>
-                <p className="font-medium text-gray-900">Last Sync</p>
+                <p className="font-medium text-gray-900">Connector Status</p>
                 <p className="text-sm text-gray-600">
-                  {status.lastSyncRun.status} • {new Date(status.lastSyncRun.finishedAt).toLocaleString()}
+                  Sync: {status.sync?.lastRunStatus || 'never'}{status.sync?.lastRunCompletedAt ? ` • ${new Date(status.sync.lastRunCompletedAt).toLocaleString()}` : ''}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Readiness: {status.dataReadiness?.status || 'never'}{status.dataReadiness?.latestMonthKey ? ` • ${status.dataReadiness.latestMonthKey}` : ''}
                 </p>
               </div>
             </div>
-            <span className={`px-2 py-1 text-xs rounded-full ${
-              status.lastSyncRun.status === 'success' 
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {status.lastSyncRun.status}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyDiagnostics}
+                className="px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Copy diagnostics
+              </button>
+              <span className={`px-2 py-1 text-xs rounded-full ${
+                isReady
+                  ? 'bg-green-100 text-green-700'
+                  : hasAnyRun
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-100 text-gray-700'
+              }`}>
+                {isReady ? 'Data ready' : hasAnyRun ? 'Connected' : 'Not synced'}
+              </span>
+            </div>
           </div>
+          {status.sync?.lastError && (
+            <p className="mt-2 text-sm text-red-600">Last error: {status.sync.lastError}</p>
+          )}
         </div>
       )}
     </div>

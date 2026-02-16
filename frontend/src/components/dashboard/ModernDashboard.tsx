@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { dashboardApi, syncApi } from '../../services/api';
+import { dashboardApi, syncApi, connectorApi, type ConnectorStatusV1Data } from '../../services/api';
 import { formatCurrency } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { useSubscriptionStore } from '../../store/subscriptionStore';
@@ -45,6 +45,7 @@ const ModernDashboard: React.FC = () => {
   const [lastSyncCompletedAt, setLastSyncCompletedAt] = useState<string | null>(null);
   const [lastSnapshotMonth, setLastSnapshotMonth] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [connectorStatus, setConnectorStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -66,6 +67,17 @@ const ModernDashboard: React.FC = () => {
         await loadData();
       } else {
         setData(null);
+      }
+      if (selectedCompanyId) {
+        try {
+          const connectorResponse = await connectorApi.getStatusV1(selectedCompanyId);
+          if (connectorResponse?.data?.success) {
+            setConnectorStatus(connectorResponse.data.data);
+          }
+        } catch (error) {
+          setConnectorStatus(null);
+          console.error('Failed to load connector status v1:', error);
+        }
       }
     } catch (error) {
       console.error('Failed to load sync status:', error);
@@ -89,6 +101,18 @@ const ModernDashboard: React.FC = () => {
     setRefreshing(true);
     await loadSyncStatus();
     setRefreshing(false);
+  };
+
+  const handleCopyDiagnostics = async () => {
+    try {
+      const payload = {
+        selectedCompanyId,
+        connectorStatusV1: connectorStatus,
+      };
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    } catch (error) {
+      console.error('Failed to copy diagnostics:', error);
+    }
   };
 
   const getRiskColor = (status: string) => {
@@ -219,6 +243,29 @@ const ModernDashboard: React.FC = () => {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-medium text-gray-900 dark:text-gray-100">Connector Health</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Online: {connectorStatus?.connector?.isOnline ? 'Yes' : 'No'}{connectorStatus?.connector?.lastSeenAt ? ` • Last seen ${new Date(connectorStatus.connector.lastSeenAt).toLocaleString()}` : ''}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Sync: {connectorStatus?.sync?.lastRunStatus || 'never'}{connectorStatus?.sync?.lastRunCompletedAt ? ` • ${new Date(connectorStatus.sync.lastRunCompletedAt).toLocaleString()}` : ''}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Ready: {connectorStatus?.dataReadiness?.status || 'never'}{connectorStatus?.dataReadiness?.latestMonthKey ? ` • ${connectorStatus.dataReadiness.latestMonthKey}` : ''}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                Sync = connector run status. Ready = snapshot/data readiness.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleCopyDiagnostics}>
+              Copy diagnostics
+            </Button>
+          </CardContent>
+        </Card>
 
         {!data && syncStatus === 'ready' && (
           <Card variant="warning">

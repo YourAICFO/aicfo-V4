@@ -153,4 +153,39 @@ export const adminApi = {
 // Connector API
 export const connectorApi = {
   getStatus: (companyId: string) => api.get('/connector/status', { params: { companyId } }),
+  getStatusV1: (companyId: string) =>
+    api.get<{
+      success: boolean;
+      data: ConnectorStatusV1Data;
+    }>('/connector/status/v1', {
+      params: { companyId },
+      headers: {
+        'X-Company-Id': companyId,
+      },
+    }),
 };
+
+export interface ConnectorStatusV1Data {
+  companyId: string;
+  connector: {
+    deviceId: string | null;
+    deviceName: string | null;
+    authMode: 'device_token' | 'legacy_connector_token' | null;
+    lastSeenAt: string | null;
+    isOnline: boolean;
+    onlineThresholdSeconds: number;
+  };
+  sync: {
+    lastRunId: string | null;
+    lastRunStatus: string | null;
+    lastRunStartedAt: string | null;
+    lastRunCompletedAt: string | null;
+    lastEventAt: string | null;
+    lastError: string | null;
+  };
+  dataReadiness: {
+    status: string;
+    lastValidatedAt: string | null;
+    latestMonthKey: string | null;
+  };
+}

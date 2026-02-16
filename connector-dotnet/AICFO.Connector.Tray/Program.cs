@@ -170,7 +170,17 @@ internal sealed class ConnectorControlPanel : Form
     private readonly TextBox _deviceName = new() { Width = 360 };
     private readonly TextBox _companyId = new() { Width = 360 };
     private readonly TextBox _connectorToken = new() { Width = 360, UseSystemPasswordChar = true };
+    private readonly Label _mappingWarning = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.DarkGoldenrod,
+        Text = "This mapping controls where data is synced. Double-check company selection."
+    };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true };
+    private readonly Label _linkedOnline = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedLastHeartbeat = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedLastSyncStatus = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedReadinessMonth = new() { AutoSize = true, Text = "-" };
 
     private ConnectorConfig _config = new();
     private string? _onboardingJwt;
@@ -178,6 +188,7 @@ internal sealed class ConnectorControlPanel : Form
     private readonly SemaphoreSlim _statusRefreshLock = new(1, 1);
     private bool _statusRefreshRunning;
     private readonly Dictionary<string, string> _statusDiagnosticsByMappingId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, MappingStatusSnapshot> _statusSnapshotByMappingId = new(StringComparer.OrdinalIgnoreCase);
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -197,11 +208,13 @@ internal sealed class ConnectorControlPanel : Form
         Height = 700;
         StartPosition = FormStartPosition.CenterScreen;
 
-        _mappingsList.Columns.Add("AICFO Company ID", 230);
-        _mappingsList.Columns.Add("Tally Company", 200);
-        _mappingsList.Columns.Add("Last Sync", 150);
-        _mappingsList.Columns.Add("Result", 100);
-        _mappingsList.Columns.Add("Last Error", 260);
+        _mappingsList.Columns.Add("Web Company Name", 180);
+        _mappingsList.Columns.Add("Web Company ID", 120);
+        _mappingsList.Columns.Add("Tally Company Name", 170);
+        _mappingsList.Columns.Add("Auth Method", 110);
+        _mappingsList.Columns.Add("Last Sync At", 130);
+        _mappingsList.Columns.Add("Last Result", 100);
+        _mappingsList.Columns.Add("Last Error", 210);
         _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "WebCompany", HeaderText = "Web Company", Width = 160 });
         _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TallyCompany", HeaderText = "Tally Company", Width = 130 });
         _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Auth", HeaderText = "Auth", Width = 90 });
@@ -323,7 +336,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 15,
+            RowCount = 20,
             Padding = new Padding(12),
             AutoScroll = true
         };
@@ -348,16 +361,17 @@ internal sealed class ConnectorControlPanel : Form
         var registerButton = new Button { Text = "Register & Save Mapping", Width = 190 };
         registerButton.Click += async (_, _) => await RegisterAndSaveMappingAsync();
         panel.Controls.Add(registerButton, 1, 7);
+        panel.Controls.Add(_mappingWarning, 1, 8);
 
-        panel.Controls.Add(new Label { Text = "Manual fallback (legacy token)", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 8);
+        panel.Controls.Add(new Label { Text = "Legacy mode (not recommended)", AutoSize = true, Font = new Font(Font, FontStyle.Bold), ForeColor = Color.Firebrick }, 0, 9);
 
-        panel.Controls.Add(new Label { Text = "Tally Companies Found", AutoSize = true }, 0, 9);
-        panel.Controls.Add(_tallyCompanyCombo, 1, 9);
+        panel.Controls.Add(new Label { Text = "Tally Companies Found", AutoSize = true }, 0, 10);
+        panel.Controls.Add(_tallyCompanyCombo, 1, 10);
 
-        panel.Controls.Add(new Label { Text = "AICFO company_id", AutoSize = true }, 0, 10);
-        panel.Controls.Add(_companyId, 1, 10);
-        panel.Controls.Add(new Label { Text = "connector_token", AutoSize = true }, 0, 11);
-        panel.Controls.Add(_connectorToken, 1, 11);
+        panel.Controls.Add(new Label { Text = "AICFO company_id", AutoSize = true }, 0, 11);
+        panel.Controls.Add(_companyId, 1, 11);
+        panel.Controls.Add(new Label { Text = "connector_token", AutoSize = true }, 0, 12);
+        panel.Controls.Add(_connectorToken, 1, 12);
 
         var mappingButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var detectButton = new Button { Text = "Detect Tally Companies", Width = 170 };
@@ -371,12 +385,31 @@ internal sealed class ConnectorControlPanel : Form
         var syncButton = new Button { Text = "Sync Selected", Width = 120 };
         syncButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
         mappingButtons.Controls.AddRange([detectButton, linkButton, removeButton, reRegisterButton, syncButton]);
-        panel.Controls.Add(mappingButtons, 0, 12);
+        panel.Controls.Add(mappingButtons, 0, 13);
         panel.SetColumnSpan(mappingButtons, 2);
 
-        panel.Controls.Add(new Label { Text = "Current Mappings", AutoSize = true }, 0, 13);
+        panel.Controls.Add(new Label { Text = "Current Mappings", AutoSize = true }, 0, 14);
         panel.SetColumnSpan(_mappingsList, 2);
-        panel.Controls.Add(_mappingsList, 0, 14);
+        panel.Controls.Add(_mappingsList, 0, 15);
+
+        var linkedStatusPanel = new TableLayoutPanel
+        {
+            ColumnCount = 2,
+            RowCount = 5,
+            AutoSize = true,
+            Dock = DockStyle.Top
+        };
+        linkedStatusPanel.Controls.Add(new Label { Text = "Linked Status", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Online/Offline:", AutoSize = true }, 0, 1);
+        linkedStatusPanel.Controls.Add(_linkedOnline, 1, 1);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Last Heartbeat:", AutoSize = true }, 0, 2);
+        linkedStatusPanel.Controls.Add(_linkedLastHeartbeat, 1, 2);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Last Sync Status:", AutoSize = true }, 0, 3);
+        linkedStatusPanel.Controls.Add(_linkedLastSyncStatus, 1, 3);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Readiness Month:", AutoSize = true }, 0, 4);
+        linkedStatusPanel.Controls.Add(_linkedReadinessMonth, 1, 4);
+        panel.Controls.Add(linkedStatusPanel, 0, 16);
+        panel.SetColumnSpan(linkedStatusPanel, 2);
 
         tab.Controls.Add(panel);
         return tab;
@@ -528,6 +561,27 @@ internal sealed class ConnectorControlPanel : Form
             return;
         }
 
+        var existing = _config.Mappings.FirstOrDefault(m =>
+            string.Equals(m.CompanyId, companyItem.Company.Id, StringComparison.OrdinalIgnoreCase) &&
+            NormalizeCompanyName(m.TallyCompanyName) == NormalizeCompanyName(tallyCompany));
+
+        var conflictMessage = GetMappingConflictMessage(companyItem.Company.Id, tallyCompany, existing?.Id);
+        if (!string.IsNullOrWhiteSpace(conflictMessage))
+        {
+            MessageBox.Show(conflictMessage, "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"You are linking Web Company: {companyItem.Company.Name} ({ShortCompanyId(companyItem.Company.Id)}) to Tally Company: {tallyCompany}. Continue?",
+            "Confirm Company Linking",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
         try
         {
             var registration = await _apiClient.RegisterDeviceAsync(
@@ -543,10 +597,6 @@ internal sealed class ConnectorControlPanel : Form
                 MessageBox.Show("Device registration failed: token missing.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-
-            var existing = _config.Mappings.FirstOrDefault(m =>
-                string.Equals(m.CompanyId, companyItem.Company.Id, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(m.TallyCompanyName, tallyCompany, StringComparison.OrdinalIgnoreCase));
 
             if (existing is null)
             {
@@ -643,7 +693,13 @@ internal sealed class ConnectorControlPanel : Form
 
         var existing = _config.Mappings.FirstOrDefault(m =>
             string.Equals(m.CompanyId, companyId, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(m.TallyCompanyName, tallyCompany, StringComparison.OrdinalIgnoreCase));
+            NormalizeCompanyName(m.TallyCompanyName) == NormalizeCompanyName(tallyCompany));
+        var conflictMessage = GetMappingConflictMessage(companyId, tallyCompany, existing?.Id);
+        if (!string.IsNullOrWhiteSpace(conflictMessage))
+        {
+            MessageBox.Show(conflictMessage, "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         if (existing is null)
         {
@@ -766,20 +822,19 @@ internal sealed class ConnectorControlPanel : Form
         _mappingsList.Items.Clear();
         foreach (var mapping in _config.Mappings)
         {
-            var authLabel = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
-                ? "(device token)"
-                : "(legacy)";
-            var tallyDisplay = $"{mapping.TallyCompanyName} {authLabel}";
-            if (!string.IsNullOrWhiteSpace(mapping.WebCompanyName))
-            {
-                tallyDisplay = $"{mapping.WebCompanyName} ↔ {tallyDisplay}";
-            }
+            var webName = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "(Unnamed)" : mapping.WebCompanyName;
+            var webIdShort = ShortCompanyId(mapping.CompanyId);
+            var authMethod = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
+                ? "Device Token"
+                : "Legacy";
 
-            var item = new ListViewItem(mapping.CompanyId)
+            var item = new ListViewItem(webName)
             {
                 Tag = mapping.Id
             };
-            item.SubItems.Add(tallyDisplay);
+            item.SubItems.Add(webIdShort);
+            item.SubItems.Add(mapping.TallyCompanyName);
+            item.SubItems.Add(authMethod);
             item.SubItems.Add(mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never");
             item.SubItems.Add(mapping.LastSyncResult);
             item.SubItems.Add(string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError);
@@ -799,6 +854,8 @@ internal sealed class ConnectorControlPanel : Form
             if (_statusMappingCombo.Items[i] is MappingComboItem item && item.Mapping.Id == mappingId)
             {
                 _statusMappingCombo.SelectedIndex = i;
+                PopulateMappingFields(item.Mapping);
+                RefreshLinkedStatusPanel(item.Mapping.Id);
                 break;
             }
         }
@@ -820,6 +877,7 @@ internal sealed class ConnectorControlPanel : Form
         _lastSync.Text = mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never";
         _lastResult.Text = mapping.LastSyncResult;
         _lastError.Text = string.IsNullOrWhiteSpace(mapping.LastError) ? "None" : mapping.LastError;
+        RefreshLinkedStatusPanel(mapping.Id);
     }
 
     private async Task RefreshStatusGridAsync()
@@ -830,7 +888,7 @@ internal sealed class ConnectorControlPanel : Form
         try
         {
             SaveGlobalSettings();
-            var rows = new List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics)>();
+            var rows = new List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics, MappingStatusSnapshot snapshot)>();
             var sessionExpired = false;
             var hasJwt = !string.IsNullOrWhiteSpace(_onboardingJwt);
 
@@ -847,7 +905,7 @@ internal sealed class ConnectorControlPanel : Form
                 var lastSyncStatus = mapping.LastSyncResult;
                 var lastSyncCompleted = mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never";
                 var readiness = hasJwt ? "Unknown" : "Login to view";
-                var readinessMonth = "-";
+                var readinessMonth = hasJwt ? "-" : "Login to view";
                 var lastError = string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError!;
                 var diagnostics = "{}";
 
@@ -892,7 +950,13 @@ internal sealed class ConnectorControlPanel : Form
                     lastError = Truncate(ex.Message, 120);
                 }
 
-                rows.Add((mappingId, webCompany, tallyCompany, auth, online, lastSeen, lastSyncStatus, lastSyncCompleted, readiness, readinessMonth, Truncate(lastError, 80), diagnostics));
+                rows.Add((mappingId, webCompany, tallyCompany, auth, online, lastSeen, lastSyncStatus, lastSyncCompleted, readiness, readinessMonth, Truncate(lastError, 80), diagnostics, new MappingStatusSnapshot
+                {
+                    Online = online,
+                    LastSeen = lastSeen,
+                    LastSyncStatus = lastSyncStatus,
+                    ReadinessMonth = readinessMonth
+                }));
             }
 
             if (sessionExpired)
@@ -926,10 +990,11 @@ internal sealed class ConnectorControlPanel : Form
         }
     }
 
-    private void ApplyStatusRows(List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics)> rows)
+    private void ApplyStatusRows(List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics, MappingStatusSnapshot snapshot)> rows)
     {
         _statusGrid.Rows.Clear();
         _statusDiagnosticsByMappingId.Clear();
+        _statusSnapshotByMappingId.Clear();
 
         foreach (var row in rows)
         {
@@ -947,6 +1012,12 @@ internal sealed class ConnectorControlPanel : Form
             );
             _statusGrid.Rows[index].Tag = row.mappingId;
             _statusDiagnosticsByMappingId[row.mappingId] = row.diagnostics;
+            _statusSnapshotByMappingId[row.mappingId] = row.snapshot;
+        }
+
+        if (_statusMappingCombo.SelectedItem is MappingComboItem selected)
+        {
+            RefreshLinkedStatusPanel(selected.Mapping.Id);
         }
     }
 
@@ -1048,6 +1119,87 @@ internal sealed class ConnectorControlPanel : Form
         return $"{value[..(maxLength - 3)]}...";
     }
 
+    private string? GetMappingConflictMessage(string companyId, string tallyCompanyName, string? currentMappingId)
+    {
+        var byCompany = _config.Mappings.FirstOrDefault(m =>
+            !string.Equals(m.Id, currentMappingId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(m.CompanyId, companyId, StringComparison.OrdinalIgnoreCase) &&
+            NormalizeCompanyName(m.TallyCompanyName) != NormalizeCompanyName(tallyCompanyName));
+        if (byCompany is not null)
+        {
+            return $"This Web Company is already linked to Tally Company '{byCompany.TallyCompanyName}'. Unlink the old mapping first.";
+        }
+
+        var byTally = _config.Mappings.FirstOrDefault(m =>
+            !string.Equals(m.Id, currentMappingId, StringComparison.OrdinalIgnoreCase) &&
+            NormalizeCompanyName(m.TallyCompanyName) == NormalizeCompanyName(tallyCompanyName) &&
+            !string.Equals(m.CompanyId, companyId, StringComparison.OrdinalIgnoreCase));
+        if (byTally is not null)
+        {
+            var webName = string.IsNullOrWhiteSpace(byTally.WebCompanyName) ? byTally.CompanyId : byTally.WebCompanyName;
+            return $"This Tally Company is already linked to Web Company '{webName}'. Unlink the old mapping first.";
+        }
+
+        return null;
+    }
+
+    private void PopulateMappingFields(ConnectorMapping mapping)
+    {
+        _companyId.Text = mapping.CompanyId;
+
+        if (!string.IsNullOrWhiteSpace(mapping.TallyCompanyName))
+        {
+            var existingIndex = _tallyCompanyCombo.Items.IndexOf(mapping.TallyCompanyName);
+            if (existingIndex < 0)
+            {
+                _tallyCompanyCombo.Items.Add(mapping.TallyCompanyName);
+                existingIndex = _tallyCompanyCombo.Items.Count - 1;
+            }
+            _tallyCompanyCombo.SelectedIndex = existingIndex;
+        }
+    }
+
+    private void RefreshLinkedStatusPanel(string mappingId)
+    {
+        if (string.IsNullOrWhiteSpace(mappingId))
+        {
+            _linkedOnline.Text = "-";
+            _linkedLastHeartbeat.Text = "-";
+            _linkedLastSyncStatus.Text = "-";
+            _linkedReadinessMonth.Text = "-";
+            return;
+        }
+
+        if (_statusSnapshotByMappingId.TryGetValue(mappingId, out var status))
+        {
+            _linkedOnline.Text = status.Online;
+            _linkedLastHeartbeat.Text = status.LastSeen;
+            _linkedLastSyncStatus.Text = status.LastSyncStatus;
+            _linkedReadinessMonth.Text = status.ReadinessMonth;
+            return;
+        }
+
+        var mapping = _config.Mappings.FirstOrDefault(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase));
+        _linkedOnline.Text = "Unknown";
+        _linkedLastHeartbeat.Text = "Unknown";
+        _linkedLastSyncStatus.Text = mapping?.LastSyncResult ?? "-";
+        _linkedReadinessMonth.Text = string.IsNullOrWhiteSpace(_onboardingJwt) ? "Login to view" : "Unknown";
+    }
+
+    private static string ShortCompanyId(string companyId)
+    {
+        if (string.IsNullOrWhiteSpace(companyId)) return "-";
+        if (companyId.Length <= 12) return companyId;
+        return $"{companyId[..8]}...{companyId[^4..]}";
+    }
+
+    private static string NormalizeCompanyName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var parts = value.Trim().Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(" ", parts).ToLowerInvariant();
+    }
+
     private static void OpenLogs()
     {
         Process.Start(new ProcessStartInfo
@@ -1077,4 +1229,12 @@ internal sealed class WebCompanyComboItem(WebCompany company)
     public override string ToString() => string.IsNullOrWhiteSpace(company.Currency)
         ? company.Name
         : $"{company.Name} ({company.Currency})";
+}
+
+internal sealed class MappingStatusSnapshot
+{
+    public string Online { get; init; } = "Unknown";
+    public string LastSeen { get; init; } = "-";
+    public string LastSyncStatus { get; init; } = "-";
+    public string ReadinessMonth { get; init; } = "-";
 }
