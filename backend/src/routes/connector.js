@@ -1,10 +1,19 @@
 const express = require('express');
 const crypto = require('crypto');
+const { QueryTypes } = require('sequelize');
 const router = express.Router();
 
 const { integrationService, authService } = require('../services');
 const syncStatusService = require('../services/syncStatusService');
-const { IntegrationSyncRun, Company, ConnectorDevice } = require('../models');
+const {
+  IntegrationSyncRun,
+  IntegrationSyncEvent,
+  Company,
+  ConnectorDevice,
+  ConnectorClient,
+  MonthlyTrialBalanceSummary,
+  sequelize
+} = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
@@ -542,20 +551,21 @@ router.get('/status/connector', authenticateConnectorOrLegacy, async (req, res) 
 ================================ */
 router.get('/status', authenticate, async (req, res) => {
   try {
-    const { companyId } = req.query;
+    const companyId = req.headers['x-company-id'] || req.query?.companyId;
+    const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
 
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'companyId query parameter is required'
+        error: 'companyId is required (x-company-id header or companyId query)'
       });
     }
 
-    // Verify user has access to this company
+    // Owner-only access (same company ownership guard as connector onboarding endpoints).
     const company = await Company.findOne({
-      where: { 
+      where: {
         id: companyId,
-        owner_id: req.userId 
+        ownerId: req.userId
       }
     });
 
@@ -566,12 +576,103 @@ router.get('/status', authenticate, async (req, res) => {
       });
     }
 
-    // Get sync status
-    const status = await syncStatusService.getSyncStatus(companyId);
+    const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
+      ConnectorDevice.findOne({
+        where: { companyId, status: 'active' },
+        order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+        raw: true
+      }),
+      ConnectorClient.findOne({
+        where: { companyId },
+        order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+        raw: true
+      }),
+      IntegrationSyncRun.findOne({
+        where: { companyId },
+        order: [['startedAt', 'DESC']],
+        raw: true
+      }),
+      MonthlyTrialBalanceSummary.findOne({
+        where: { companyId },
+        order: [['month', 'DESC']],
+        attributes: ['month'],
+        raw: true
+      })
+    ]);
+
+    const runId = latestRun?.id || null;
+    const [latestErrorEvent, lastEvent] = runId
+      ? await Promise.all([
+          IntegrationSyncEvent.findOne({
+            where: { runId, level: 'error' },
+            order: [['time', 'DESC']],
+            attributes: ['message', 'time'],
+            raw: true
+          }),
+          IntegrationSyncEvent.findOne({
+            where: { runId },
+            order: [['time', 'DESC']],
+            attributes: ['time'],
+            raw: true
+          })
+        ])
+      : [null, null];
+
+    let dataSyncStatus = null;
+    try {
+      const rows = await sequelize.query(
+        `SELECT status, last_snapshot_month, "updatedAt"
+         FROM data_sync_status
+         WHERE company_id = :companyId
+         LIMIT 1`,
+        {
+          replacements: { companyId },
+          type: QueryTypes.SELECT
+        }
+      );
+      dataSyncStatus = rows?.[0] || null;
+    } catch (error) {
+      // data_sync_status is additive; tolerate missing table and return "never".
+      if (error?.original?.code !== '42P01') {
+        throw error;
+      }
+    }
+
+    const connectorSource = latestActiveDevice || latestConnectorClient || null;
+    const connectorLastSeenAt = connectorSource?.lastSeenAt || null;
+    const isOnline = connectorLastSeenAt
+      ? (Date.now() - new Date(connectorLastSeenAt).getTime()) <= (onlineThresholdSeconds * 1000)
+      : false;
+
+    const latestMonthKey = dataSyncStatus?.last_snapshot_month || latestSnapshot?.month || null;
+    const readinessStatus = dataSyncStatus?.status || 'never';
 
     res.json({
       success: true,
-      data: status
+      data: {
+        companyId,
+        connector: {
+          deviceId: latestActiveDevice?.deviceId || latestConnectorClient?.deviceId || null,
+          deviceName: latestActiveDevice?.deviceName || latestConnectorClient?.deviceName || null,
+          authMode: latestActiveDevice ? 'device_token' : (latestConnectorClient ? 'legacy_connector_token' : null),
+          lastSeenAt: connectorLastSeenAt,
+          isOnline,
+          onlineThresholdSeconds
+        },
+        sync: {
+          lastRunId: latestRun?.id || null,
+          lastRunStatus: latestRun?.status || null,
+          lastRunStartedAt: latestRun?.startedAt || null,
+          lastRunCompletedAt: latestRun?.finishedAt || null,
+          lastEventAt: lastEvent?.time || null,
+          lastError: latestErrorEvent?.message || latestRun?.lastError || null
+        },
+        dataReadiness: {
+          status: readinessStatus,
+          lastValidatedAt: dataSyncStatus?.updatedAt || null,
+          latestMonthKey
+        }
+      }
     });
   } catch (error) {
     console.error('Get sync status error:', error);
