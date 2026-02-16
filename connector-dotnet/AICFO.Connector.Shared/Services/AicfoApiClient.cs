@@ -12,6 +12,7 @@ public interface IAicfoApiClient
     Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken);
     Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken);
     Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken);
+    Task<ConnectorStatusV1Response> GetConnectorStatusV1Async(string baseUrl, string userJwt, string companyId, CancellationToken cancellationToken);
     Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken);
     Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
     Task SendHeartbeatAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
@@ -131,6 +132,34 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
             Status = status,
             ExpiresInDays = data.TryGetProperty("expiresInDays", out var expiryElement) ? expiryElement.GetInt32() : 0
         };
+    }
+
+    public async Task<ConnectorStatusV1Response> GetConnectorStatusV1Async(string baseUrl, string userJwt, string companyId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/status/v1?companyId={Uri.EscapeDataString(companyId)}"));
+        request.Headers.Authorization = new("Bearer", userJwt);
+        request.Headers.TryAddWithoutValidation("x-company-id", companyId);
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<ConnectorStatusV1Response>(body);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            throw new UnauthorizedAccessException(envelope.error ?? "Session expired. Please login again.");
+        }
+
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Failed to fetch connector status.");
+        }
+
+        if (envelope.data is null)
+        {
+            throw new InvalidOperationException("Failed to fetch connector status: missing response data.");
+        }
+
+        return envelope.data;
     }
 
     public async Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken)

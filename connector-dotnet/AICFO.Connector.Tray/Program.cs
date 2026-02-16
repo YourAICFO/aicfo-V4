@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.ServiceProcess;
+using System.Text.Json;
 using AICFO.Connector.Shared.Models;
 using AICFO.Connector.Shared.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -149,6 +150,18 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Label _lastSync = new() { AutoSize = true, Text = "Never" };
     private readonly Label _lastResult = new() { AutoSize = true, Text = "Never" };
     private readonly Label _lastError = new() { AutoSize = true, Text = "None" };
+    private readonly Label _statusHint = new() { AutoSize = true, Text = string.Empty, ForeColor = Color.DimGray };
+    private readonly DataGridView _statusGrid = new()
+    {
+        Width = 920,
+        Height = 250,
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        AutoGenerateColumns = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        MultiSelect = false
+    };
     private readonly ComboBox _tallyCompanyCombo = new() { Width = 360, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _loginEmail = new() { Width = 360 };
     private readonly TextBox _loginPassword = new() { Width = 360, UseSystemPasswordChar = true };
@@ -161,6 +174,10 @@ internal sealed class ConnectorControlPanel : Form
 
     private ConnectorConfig _config = new();
     private string? _onboardingJwt;
+    private readonly System.Windows.Forms.Timer _statusPollTimer = new() { Interval = 15000 };
+    private readonly SemaphoreSlim _statusRefreshLock = new(1, 1);
+    private bool _statusRefreshRunning;
+    private readonly Dictionary<string, string> _statusDiagnosticsByMappingId = new(StringComparer.OrdinalIgnoreCase);
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -185,6 +202,16 @@ internal sealed class ConnectorControlPanel : Form
         _mappingsList.Columns.Add("Last Sync", 150);
         _mappingsList.Columns.Add("Result", 100);
         _mappingsList.Columns.Add("Last Error", 260);
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "WebCompany", HeaderText = "Web Company", Width = 160 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TallyCompany", HeaderText = "Tally Company", Width = 130 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Auth", HeaderText = "Auth", Width = 90 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Online", HeaderText = "Online", Width = 70 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastSeen", HeaderText = "Last Seen", Width = 130 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastSyncStatus", HeaderText = "Last Sync Status", Width = 120 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastSyncCompleted", HeaderText = "Last Sync Completed", Width = 145 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Readiness", HeaderText = "Readiness", Width = 110 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ReadinessMonth", HeaderText = "Readiness Month", Width = 120 });
+        _statusGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LastError", HeaderText = "Last Error", Width = 200 });
 
         _tabs.TabPages.Add(BuildStatusTab());
         _tabs.TabPages.Add(BuildMappingTab());
@@ -196,6 +223,18 @@ internal sealed class ConnectorControlPanel : Form
 
         _statusMappingCombo.SelectedIndexChanged += (_, _) => RefreshStatusView();
         _mappingsList.SelectedIndexChanged += (_, _) => SyncSelectionToStatusMapping();
+        _statusPollTimer.Tick += async (_, _) => await RefreshStatusGridAsync();
+        Shown += async (_, _) =>
+        {
+            if (!_statusPollTimer.Enabled) _statusPollTimer.Start();
+            await RefreshStatusGridAsync();
+        };
+        FormClosed += (_, _) => _statusPollTimer.Stop();
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible && !_statusPollTimer.Enabled) _statusPollTimer.Start();
+            if (!Visible && _statusPollTimer.Enabled) _statusPollTimer.Stop();
+        };
 
         LoadConfig();
     }
@@ -207,7 +246,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 4,
-            RowCount = 10,
+            RowCount = 13,
             Padding = new Padding(12),
             AutoScroll = true
         };
@@ -259,9 +298,19 @@ internal sealed class ConnectorControlPanel : Form
         syncAll.Click += async (_, _) => await TriggerSyncAllAsync();
         var openLogs = new Button { Text = "Open Logs", Width = 120 };
         openLogs.Click += (_, _) => OpenLogs();
-        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, openLogs]);
+        var refreshStatus = new Button { Text = "Refresh Status", Width = 120 };
+        refreshStatus.Click += async (_, _) => await RefreshStatusGridAsync();
+        var copyDiagnostics = new Button { Text = "Copy Diagnostics", Width = 130 };
+        copyDiagnostics.Click += (_, _) => CopySelectedDiagnostics();
+        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, refreshStatus, copyDiagnostics, openLogs]);
         panel.Controls.Add(buttonBar, 0, 8);
         panel.SetColumnSpan(buttonBar, 4);
+
+        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 9);
+        panel.SetColumnSpan(_statusGrid, 4);
+        panel.Controls.Add(_statusGrid, 0, 10);
+        panel.Controls.Add(_statusHint, 0, 11);
+        panel.SetColumnSpan(_statusHint, 4);
 
         tab.Controls.Add(panel);
         return tab;
@@ -431,6 +480,8 @@ internal sealed class ConnectorControlPanel : Form
             {
                 MessageBox.Show("No companies found in your account.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+
+            await RefreshStatusGridAsync();
         }
         catch (Exception ex)
         {
@@ -518,6 +569,7 @@ internal sealed class ConnectorControlPanel : Form
             _configStore.Save(_config);
             LoadConfig();
             MessageBox.Show("Device mapping saved successfully.", "AI CFO Connector");
+            await RefreshStatusGridAsync();
         }
         catch (Exception ex)
         {
@@ -613,6 +665,7 @@ internal sealed class ConnectorControlPanel : Form
         _configStore.Save(_config);
         LoadConfig();
         MessageBox.Show("Mapping saved.", "AI CFO Connector");
+        _ = RefreshStatusGridAsync();
     }
 
     private void RemoveSelectedMapping()
@@ -636,6 +689,7 @@ internal sealed class ConnectorControlPanel : Form
         _credentialStore.DeleteMappingToken(mapping.Id);
         _configStore.Save(_config);
         LoadConfig();
+        _ = RefreshStatusGridAsync();
     }
 
     private async Task ReRegisterSelectedMappingAsync()
@@ -683,6 +737,7 @@ internal sealed class ConnectorControlPanel : Form
             _configStore.Save(_config);
             LoadConfig();
             MessageBox.Show("Device token re-registered successfully.", "AI CFO Connector");
+            await RefreshStatusGridAsync();
         }
         catch (Exception ex)
         {
@@ -765,6 +820,232 @@ internal sealed class ConnectorControlPanel : Form
         _lastSync.Text = mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never";
         _lastResult.Text = mapping.LastSyncResult;
         _lastError.Text = string.IsNullOrWhiteSpace(mapping.LastError) ? "None" : mapping.LastError;
+    }
+
+    private async Task RefreshStatusGridAsync()
+    {
+        if (_statusRefreshRunning) return;
+        _statusRefreshRunning = true;
+        await _statusRefreshLock.WaitAsync();
+        try
+        {
+            SaveGlobalSettings();
+            var rows = new List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics)>();
+            var sessionExpired = false;
+            var hasJwt = !string.IsNullOrWhiteSpace(_onboardingJwt);
+
+            foreach (var mapping in _config.Mappings)
+            {
+                var mappingId = mapping.Id;
+                var webCompany = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? mapping.CompanyId : mapping.WebCompanyName!;
+                var tallyCompany = mapping.TallyCompanyName;
+                var auth = string.IsNullOrWhiteSpace(mapping.AuthMethod) ? "legacy" : mapping.AuthMethod!;
+                var token = _credentialStore.LoadMappingToken(mappingId);
+
+                var online = "Unknown";
+                var lastSeen = "-";
+                var lastSyncStatus = mapping.LastSyncResult;
+                var lastSyncCompleted = mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never";
+                var readiness = hasJwt ? "Unknown" : "Login to view";
+                var readinessMonth = "-";
+                var lastError = string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError!;
+                var diagnostics = "{}";
+
+                try
+                {
+                    if (hasJwt)
+                    {
+                        var statusV1 = await _apiClient.GetConnectorStatusV1Async(_config.ApiUrl, _onboardingJwt!, mapping.CompanyId, CancellationToken.None);
+                        online = statusV1.Connector?.IsOnline == true ? "Yes" : "No";
+                        lastSeen = FormatDate(statusV1.Connector?.LastSeenAt);
+                        lastSyncStatus = statusV1.Sync?.Status ?? lastSyncStatus;
+                        lastSyncCompleted = FormatDate(statusV1.Sync?.CompletedAt, lastSyncCompleted);
+                        readiness = statusV1.DataReadiness?.Status ?? "never";
+                        readinessMonth = statusV1.DataReadiness?.MonthKey ?? "-";
+                        lastError = string.IsNullOrWhiteSpace(statusV1.Sync?.LastError) ? "-" : statusV1.Sync!.LastError!;
+                        diagnostics = JsonSerializer.Serialize(statusV1, new JsonSerializerOptions { WriteIndented = true });
+                    }
+                    else if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        var legacy = await _apiClient.GetConnectorStatusAsync(_config, token, CancellationToken.None);
+                        online = ParseLegacyOnline(legacy) ? "Yes" : "No";
+                        lastSeen = ParseLegacyLastSeen(legacy);
+                        lastSyncStatus = ParseLegacySyncStatus(legacy, lastSyncStatus);
+                        lastError = ParseLegacyError(legacy, lastError);
+                        diagnostics = JsonSerializer.Serialize(legacy, new JsonSerializerOptions { WriteIndented = true });
+                    }
+                    else
+                    {
+                        online = "Token missing";
+                        lastError = "Token missing";
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    sessionExpired = true;
+                    online = "Auth required";
+                    readiness = "Login to view";
+                    lastError = "Session expired";
+                }
+                catch (Exception ex)
+                {
+                    lastError = Truncate(ex.Message, 120);
+                }
+
+                rows.Add((mappingId, webCompany, tallyCompany, auth, online, lastSeen, lastSyncStatus, lastSyncCompleted, readiness, readinessMonth, Truncate(lastError, 80), diagnostics));
+            }
+
+            if (sessionExpired)
+            {
+                _onboardingJwt = null;
+                _webCompanyCombo.Enabled = false;
+                _webCompanyCombo.Items.Clear();
+                _statusHint.Text = "Session expired - login again.";
+            }
+            else
+            {
+                _statusHint.Text = hasJwt
+                    ? $"Last refreshed: {DateTime.Now:g}"
+                    : "Login to view readiness details from /api/connector/status/v1.";
+            }
+
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => ApplyStatusRows(rows)));
+            }
+            else
+            {
+                ApplyStatusRows(rows);
+            }
+        }
+        finally
+        {
+            _statusRefreshRunning = false;
+            _statusRefreshLock.Release();
+        }
+    }
+
+    private void ApplyStatusRows(List<(string mappingId, string webCompany, string tallyCompany, string auth, string online, string lastSeen, string lastSyncStatus, string lastSyncCompleted, string readiness, string readinessMonth, string lastError, string diagnostics)> rows)
+    {
+        _statusGrid.Rows.Clear();
+        _statusDiagnosticsByMappingId.Clear();
+
+        foreach (var row in rows)
+        {
+            var index = _statusGrid.Rows.Add(
+                row.webCompany,
+                row.tallyCompany,
+                row.auth,
+                row.online,
+                row.lastSeen,
+                row.lastSyncStatus,
+                row.lastSyncCompleted,
+                row.readiness,
+                row.readinessMonth,
+                row.lastError
+            );
+            _statusGrid.Rows[index].Tag = row.mappingId;
+            _statusDiagnosticsByMappingId[row.mappingId] = row.diagnostics;
+        }
+    }
+
+    private void CopySelectedDiagnostics()
+    {
+        if (_statusGrid.SelectedRows.Count == 0)
+        {
+            MessageBox.Show("Select a mapping row first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var mappingId = _statusGrid.SelectedRows[0].Tag?.ToString();
+        if (string.IsNullOrWhiteSpace(mappingId) || !_statusDiagnosticsByMappingId.TryGetValue(mappingId, out var diagnostics))
+        {
+            MessageBox.Show("No diagnostics available for selected mapping.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        Clipboard.SetText(diagnostics);
+        MessageBox.Show("Diagnostics copied to clipboard.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private static string FormatDate(DateTimeOffset? value, string fallback = "-") => value?.ToLocalTime().ToString("g") ?? fallback;
+
+    private static bool ParseLegacyOnline(Dictionary<string, object>? payload)
+    {
+        if (payload is null) return false;
+        if (TryGetNested(payload, "data", "connectorLastSeenAt", out var seenRaw) && DateTimeOffset.TryParse(seenRaw, out var seenAt))
+        {
+            return DateTimeOffset.UtcNow - seenAt.ToUniversalTime() <= TimeSpan.FromMinutes(2);
+        }
+        return false;
+    }
+
+    private static string ParseLegacyLastSeen(Dictionary<string, object>? payload)
+    {
+        if (payload is null) return "-";
+        if (TryGetNested(payload, "data", "connectorLastSeenAt", out var seenRaw) && DateTimeOffset.TryParse(seenRaw, out var seenAt))
+        {
+            return seenAt.ToLocalTime().ToString("g");
+        }
+        return "-";
+    }
+
+    private static string ParseLegacySyncStatus(Dictionary<string, object>? payload, string fallback)
+    {
+        if (payload is null) return fallback;
+        if (TryGetNested(payload, "data", "lastStatus", out var status))
+        {
+            return status;
+        }
+        return fallback;
+    }
+
+    private static string ParseLegacyError(Dictionary<string, object>? payload, string fallback)
+    {
+        if (payload is null) return fallback;
+        if (TryGetNested(payload, "data", "lastError", out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            return error;
+        }
+        return fallback;
+    }
+
+    private static bool TryGetNested(Dictionary<string, object> payload, string parentKey, string childKey, out string value)
+    {
+        value = string.Empty;
+        if (!payload.TryGetValue(parentKey, out var parent) || parent is null) return false;
+
+        JsonElement parentElement;
+        if (parent is JsonElement jsonElement)
+        {
+            parentElement = jsonElement;
+        }
+        else
+        {
+            try
+            {
+                parentElement = JsonSerializer.SerializeToElement(parent);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        if (parentElement.ValueKind == JsonValueKind.Object && parentElement.TryGetProperty(childKey, out var child))
+        {
+            value = child.ValueKind == JsonValueKind.String ? (child.GetString() ?? string.Empty) : child.ToString();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength) return value;
+        return $"{value[..(maxLength - 3)]}...";
     }
 
     private static void OpenLogs()

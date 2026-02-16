@@ -19,6 +19,125 @@ const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/conn
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
 
 const connectorLoginAttempts = new Map();
+let hasWarnedDataSyncStatusSchemaMissing = false;
+
+const authorizeCompanyAccess = async (userId, companyId) => {
+  if (!companyId) return null;
+  return Company.findOne({
+    where: {
+      id: companyId,
+      ownerId: userId
+    }
+  });
+};
+
+const resolveCompanyId = (req) => req.headers['x-company-id'] || req.query?.companyId || null;
+
+const buildStableStatusResponse = async (companyId) => {
+  const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
+  const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
+    ConnectorDevice.findOne({
+      where: { companyId, status: 'active' },
+      order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+      raw: true
+    }),
+    ConnectorClient.findOne({
+      where: { companyId },
+      order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+      raw: true
+    }),
+    IntegrationSyncRun.findOne({
+      where: { companyId },
+      order: [['startedAt', 'DESC']],
+      raw: true
+    }),
+    MonthlyTrialBalanceSummary.findOne({
+      where: { companyId },
+      order: [['month', 'DESC']],
+      attributes: ['month'],
+      raw: true
+    })
+  ]);
+
+  const runId = latestRun?.id || null;
+  const [latestErrorEvent, lastEvent] = runId
+    ? await Promise.all([
+        IntegrationSyncEvent.findOne({
+          where: { runId, level: 'error' },
+          order: [['time', 'DESC']],
+          attributes: ['message', 'time'],
+          raw: true
+        }),
+        IntegrationSyncEvent.findOne({
+          where: { runId },
+          order: [['time', 'DESC']],
+          attributes: ['time'],
+          raw: true
+        })
+      ])
+    : [null, null];
+
+  let dataSyncStatus = null;
+  try {
+    const rows = await sequelize.query(
+      `SELECT status, last_snapshot_month, "updatedAt"
+       FROM data_sync_status
+       WHERE company_id = :companyId
+       LIMIT 1`,
+      {
+        replacements: { companyId },
+        type: QueryTypes.SELECT
+      }
+    );
+    dataSyncStatus = rows?.[0] || null;
+  } catch (error) {
+    const pgCode = error?.original?.code || error?.parent?.code || null;
+    // data_sync_status is additive; tolerate missing table/column and default readiness to "never".
+    if (pgCode === '42P01' || pgCode === '42703') {
+      if (!hasWarnedDataSyncStatusSchemaMissing) {
+        hasWarnedDataSyncStatusSchemaMissing = true;
+        console.warn('data_sync_status schema missing or incomplete; connector readiness defaults to status=never');
+      }
+    } else {
+      throw error;
+    }
+  }
+
+  const connectorSource = latestActiveDevice || latestConnectorClient || null;
+  const connectorLastSeenAt = connectorSource?.lastSeenAt || null;
+  const isOnline = connectorLastSeenAt
+    ? (Date.now() - new Date(connectorLastSeenAt).getTime()) <= (onlineThresholdSeconds * 1000)
+    : false;
+
+  const latestMonthKey = dataSyncStatus?.last_snapshot_month || latestSnapshot?.month || null;
+  const readinessStatus = dataSyncStatus?.status || 'never';
+
+  return {
+    companyId,
+    connector: {
+      deviceId: latestActiveDevice?.deviceId || latestConnectorClient?.deviceId || null,
+      deviceName: latestActiveDevice?.deviceName || latestConnectorClient?.deviceName || null,
+      authMode: latestActiveDevice ? 'device_token' : (latestConnectorClient ? 'legacy_connector_token' : null),
+      lastSeenAt: connectorLastSeenAt,
+      isOnline,
+      onlineThresholdSeconds
+    },
+    sync: {
+      lastRunId: latestRun?.id || null,
+      lastRunStatus: latestRun?.status || null,
+      lastRunStartedAt: latestRun?.startedAt || null,
+      lastRunCompletedAt: latestRun?.finishedAt || null,
+      lastEventAt: lastEvent?.time || null,
+      lastError: latestErrorEvent?.message || latestRun?.lastError || null
+    },
+    dataReadiness: {
+      status: readinessStatus,
+      lastValidatedAt: dataSyncStatus?.updatedAt || null,
+      latestMonthKey
+    }
+  };
+};
+
 const connectorLoginLimiter = (req, res, next) => {
   const windowMs = 60 * 1000;
   const max = 5;
@@ -551,23 +670,16 @@ router.get('/status/connector', authenticateConnectorOrLegacy, async (req, res) 
 ================================ */
 router.get('/status', authenticate, async (req, res) => {
   try {
-    const companyId = req.headers['x-company-id'] || req.query?.companyId;
-    const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
+    const companyId = resolveCompanyId(req);
 
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'companyId is required (x-company-id header or companyId query)'
+        error: 'companyId required'
       });
     }
 
-    // Owner-only access (same company ownership guard as connector onboarding endpoints).
-    const company = await Company.findOne({
-      where: {
-        id: companyId,
-        ownerId: req.userId
-      }
-    });
+    const company = await authorizeCompanyAccess(req.userId, companyId);
 
     if (!company) {
       return res.status(403).json({
@@ -576,107 +688,52 @@ router.get('/status', authenticate, async (req, res) => {
       });
     }
 
-    const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
-      ConnectorDevice.findOne({
-        where: { companyId, status: 'active' },
-        order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
-        raw: true
-      }),
-      ConnectorClient.findOne({
-        where: { companyId },
-        order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
-        raw: true
-      }),
-      IntegrationSyncRun.findOne({
-        where: { companyId },
-        order: [['startedAt', 'DESC']],
-        raw: true
-      }),
-      MonthlyTrialBalanceSummary.findOne({
-        where: { companyId },
-        order: [['month', 'DESC']],
-        attributes: ['month'],
-        raw: true
-      })
-    ]);
-
-    const runId = latestRun?.id || null;
-    const [latestErrorEvent, lastEvent] = runId
-      ? await Promise.all([
-          IntegrationSyncEvent.findOne({
-            where: { runId, level: 'error' },
-            order: [['time', 'DESC']],
-            attributes: ['message', 'time'],
-            raw: true
-          }),
-          IntegrationSyncEvent.findOne({
-            where: { runId },
-            order: [['time', 'DESC']],
-            attributes: ['time'],
-            raw: true
-          })
-        ])
-      : [null, null];
-
-    let dataSyncStatus = null;
-    try {
-      const rows = await sequelize.query(
-        `SELECT status, last_snapshot_month, "updatedAt"
-         FROM data_sync_status
-         WHERE company_id = :companyId
-         LIMIT 1`,
-        {
-          replacements: { companyId },
-          type: QueryTypes.SELECT
-        }
-      );
-      dataSyncStatus = rows?.[0] || null;
-    } catch (error) {
-      // data_sync_status is additive; tolerate missing table and return "never".
-      if (error?.original?.code !== '42P01') {
-        throw error;
-      }
-    }
-
-    const connectorSource = latestActiveDevice || latestConnectorClient || null;
-    const connectorLastSeenAt = connectorSource?.lastSeenAt || null;
-    const isOnline = connectorLastSeenAt
-      ? (Date.now() - new Date(connectorLastSeenAt).getTime()) <= (onlineThresholdSeconds * 1000)
-      : false;
-
-    const latestMonthKey = dataSyncStatus?.last_snapshot_month || latestSnapshot?.month || null;
-    const readinessStatus = dataSyncStatus?.status || 'never';
+    // Keep legacy response shape for existing web clients.
+    const legacyStatus = await syncStatusService.getSyncStatus(companyId);
 
     res.json({
       success: true,
-      data: {
-        companyId,
-        connector: {
-          deviceId: latestActiveDevice?.deviceId || latestConnectorClient?.deviceId || null,
-          deviceName: latestActiveDevice?.deviceName || latestConnectorClient?.deviceName || null,
-          authMode: latestActiveDevice ? 'device_token' : (latestConnectorClient ? 'legacy_connector_token' : null),
-          lastSeenAt: connectorLastSeenAt,
-          isOnline,
-          onlineThresholdSeconds
-        },
-        sync: {
-          lastRunId: latestRun?.id || null,
-          lastRunStatus: latestRun?.status || null,
-          lastRunStartedAt: latestRun?.startedAt || null,
-          lastRunCompletedAt: latestRun?.finishedAt || null,
-          lastEventAt: lastEvent?.time || null,
-          lastError: latestErrorEvent?.message || latestRun?.lastError || null
-        },
-        dataReadiness: {
-          status: readinessStatus,
-          lastValidatedAt: dataSyncStatus?.updatedAt || null,
-          latestMonthKey
-        }
-      }
+      data: legacyStatus
     });
   } catch (error) {
     console.error('Get sync status error:', error);
     res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   GET /api/connector/status/v1
+   Auth: normal user JWT (stable status shape for web + tray)
+================================ */
+router.get('/status/v1', authenticate, async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req);
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        error: 'companyId required'
+      });
+    }
+
+    const company = await authorizeCompanyAccess(req.userId, companyId);
+    if (!company) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this company'
+      });
+    }
+
+    const stableStatus = await buildStableStatusResponse(companyId);
+    return res.json({
+      success: true,
+      data: stableStatus
+    });
+  } catch (error) {
+    console.error('Get stable connector status error:', error);
+    return res.status(500).json({
       success: false,
       error: error.message
     });

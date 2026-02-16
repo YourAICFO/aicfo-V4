@@ -56,3 +56,74 @@ public sealed class RegisterDeviceResponse
     public int ExpiresInDays { get; init; }
 }
 
+public sealed class ConnectorStatusV1Response
+{
+    [JsonPropertyName("companyId")]
+    public string? CompanyId { get; init; }
+
+    [JsonPropertyName("connector")]
+    public ConnectorStatusV1Connector? Connector { get; init; }
+
+    [JsonPropertyName("sync")]
+    public ConnectorStatusV1Sync? Sync { get; init; }
+
+    [JsonPropertyName("dataReadiness")]
+    public ConnectorStatusV1DataReadiness? DataReadiness { get; init; }
+}
+
+public sealed class ConnectorStatusV1Connector
+{
+    [JsonPropertyName("isOnline")]
+    public bool? IsOnline { get; init; }
+
+    [JsonPropertyName("lastSeenAt")]
+    public DateTimeOffset? LastSeenAt { get; init; }
+
+    [JsonPropertyName("deviceId")]
+    public string? DeviceId { get; init; }
+
+    [JsonPropertyName("deviceName")]
+    public string? DeviceName { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("authMode")]
+    public string? AuthType { get; init; }
+}
+
+public sealed class ConnectorStatusV1Sync
+{
+    [JsonPropertyName("lastRunId")]
+    public string? LastRunId { get; init; }
+
+    [JsonPropertyName("lastRunStatus")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("lastRunStartedAt")]
+    public DateTimeOffset? StartedAt { get; init; }
+
+    [JsonPropertyName("lastRunCompletedAt")]
+    public DateTimeOffset? CompletedAt { get; init; }
+
+    [JsonPropertyName("lastEventAt")]
+    public DateTimeOffset? LastEventAt { get; init; }
+
+    [JsonPropertyName("lastError")]
+    public string? LastError { get; init; }
+}
+
+public sealed class ConnectorStatusV1DataReadiness
+{
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("latestMonthKey")]
+    public string? MonthKey { get; init; }
+
+    [JsonPropertyName("lastValidatedAt")]
+    public DateTimeOffset? UpdatedAt { get; init; }
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; init; }
+}

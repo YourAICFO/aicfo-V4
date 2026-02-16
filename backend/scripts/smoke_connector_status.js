@@ -18,7 +18,7 @@ if (!API_BASE_URL || !USER_JWT || !COMPANY_ID) {
 
 const run = async () => {
   const response = await fetch(
-    `${API_BASE_URL}/api/connector/status?companyId=${encodeURIComponent(COMPANY_ID)}`,
+    `${API_BASE_URL}/api/connector/status/v1?companyId=${encodeURIComponent(COMPANY_ID)}`,
     {
       method: 'GET',
       headers: {
@@ -38,6 +38,17 @@ const run = async () => {
 
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}): ${JSON.stringify(payload)}`);
+  }
+
+  const data = payload?.data || {};
+  const hasRequiredKeys = Boolean(
+    data.companyId
+    && data.connector
+    && data.sync
+    && data.dataReadiness
+  );
+  if (!hasRequiredKeys) {
+    throw new Error(`Missing required keys in response: ${JSON.stringify(payload)}`);
   }
 
   console.log(JSON.stringify(payload, null, 2));
