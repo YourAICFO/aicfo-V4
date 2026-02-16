@@ -10,6 +10,16 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+  IntegrationSyncRun,
+  IntegrationSyncEvent,
+  PartyBalanceLatest,
+  CurrentDebtor,
+  CurrentCreditor,
+  CurrentLoan,
+  CFOMetric,
+  sequelize
+} = require('../src/models');
 
 const API_BASE_URL = (process.env.API_BASE_URL || '').replace(/\/+$/, '');
 const USER_JWT = process.env.USER_JWT || '';
@@ -64,12 +74,66 @@ const run = async () => {
   console.log('[smoke] sync response:', JSON.stringify(syncResp?.data || syncResp));
 
   console.log('[smoke] marking run complete...');
-  await request('POST', '/api/connector/sync/complete', CONNECTOR_TOKEN, {
+  const completeResp = await request('POST', '/api/connector/sync/complete', CONNECTOR_TOKEN, {
     runId,
-    status: 'success',
+    status: 'partial_success',
     finishedAt: new Date().toISOString(),
-    lastError: null
+    lastError: null,
+    missingMonths: ['2024-11'],
+    historicalMonthsRequested: 24,
+    historicalMonthsSynced: 23
   });
+  if (completeResp?.data?.status !== 'success') {
+    throw new Error(`Expected completed run status=success, got=${completeResp?.data?.status || 'unknown'}`);
+  }
+
+  const persistedRun = await IntegrationSyncRun.findByPk(runId);
+  if (!persistedRun || persistedRun.status !== 'success') {
+    throw new Error(`Expected persisted run status=success, got=${persistedRun?.status || 'missing'}`);
+  }
+  console.log('[smoke] run persisted with status=success');
+
+  const partialEvent = await IntegrationSyncEvent.findOne({
+    where: { runId, event: 'SYNC_PARTIAL' },
+    order: [['time', 'DESC']]
+  });
+  if (!partialEvent) {
+    throw new Error('Expected SYNC_PARTIAL event but none found');
+  }
+  console.log('[smoke] SYNC_PARTIAL event found');
+
+  const missingMonthsEvent = await IntegrationSyncEvent.findOne({
+    where: { runId, event: 'SYNC_MISSING_MONTHS_REPORTED' },
+    order: [['time', 'DESC']]
+  });
+  if (!missingMonthsEvent) {
+    throw new Error('Expected SYNC_MISSING_MONTHS_REPORTED event but none found');
+  }
+  console.log('[smoke] SYNC_MISSING_MONTHS_REPORTED event found');
+
+  const [partyRows, debtors, creditors, loans, interestMetric] = await Promise.all([
+    PartyBalanceLatest.findAll({ where: { companyId: COMPANY_ID } }),
+    CurrentDebtor.findAll({ where: { companyId: COMPANY_ID } }),
+    CurrentCreditor.findAll({ where: { companyId: COMPANY_ID } }),
+    CurrentLoan.findAll({ where: { companyId: COMPANY_ID } }),
+    CFOMetric.findOne({
+      where: {
+        companyId: COMPANY_ID,
+        metricKey: 'interest_expense_latest',
+        timeScope: 'latest'
+      }
+    })
+  ]);
+  if (partyRows.length === 0 && debtors.length === 0 && creditors.length === 0) {
+    throw new Error('Expected party balances in party_balances_latest or current_debtors/current_creditors');
+  }
+  if (loans.length === 0) {
+    throw new Error('Expected current_loans to be populated from optional loans block');
+  }
+  if (!interestMetric) {
+    throw new Error('Expected cfo_metrics row for interest_expense_latest');
+  }
+  console.log('[smoke] optional blocks persisted: party balances, loans, interest metric');
 
   console.log('[smoke] checking sync status...');
   const status = await request(
@@ -94,8 +158,14 @@ const run = async () => {
   console.log('[smoke] done');
 };
 
-run().catch((err) => {
-  console.error('[smoke] failed:', err.message);
-  process.exit(1);
-});
-
+run()
+  .then(async () => {
+    await sequelize.close();
+  })
+  .catch(async (err) => {
+    console.error('[smoke] failed:', err.message);
+    try {
+      await sequelize.close();
+    } catch (_closeErr) {}
+    process.exit(1);
+  });

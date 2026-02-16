@@ -12,7 +12,9 @@ const {
   CurrentDebtor,
   CurrentCreditor,
   CurrentLoan,
-  AdminUsageEvent
+  AdminUsageEvent,
+  CFOMetric,
+  PartyBalanceLatest
 } = require('../models');
 
 const router = express.Router();
@@ -106,17 +108,42 @@ router.get('/health', authenticate, async (req, res) => {
         balance: toNumber(row.balance)
       }));
 
-    const [cashRows, debtorRows, creditorRows, loanRows] = await Promise.all([
+    const [cashRows, debtorRows, creditorRows, loanRows, interestMetric, partyRows, missingMonthsEvent] = await Promise.all([
       CurrentCashBalance.findAll({ where: { companyId }, raw: true }),
       CurrentDebtor.findAll({ where: { companyId }, raw: true }),
       CurrentCreditor.findAll({ where: { companyId }, raw: true }),
-      CurrentLoan.findAll({ where: { companyId }, raw: true })
+      CurrentLoan.findAll({ where: { companyId }, raw: true }),
+      CFOMetric.findOne({
+        where: { companyId, metricKey: 'interest_expense_latest', timeScope: 'latest' },
+        raw: true
+      }),
+      PartyBalanceLatest.findAll({
+        where: { companyId },
+        attributes: ['partyType'],
+        raw: true
+      }),
+      lastSyncRun
+        ? IntegrationSyncEvent.findOne({
+            where: {
+              runId: lastSyncRun.id,
+              event: {
+                [Op.in]: ['SYNC_PARTIAL', 'SYNC_MISSING_MONTHS_REPORTED']
+              }
+            },
+            order: [['time', 'DESC']]
+          })
+        : Promise.resolve(null)
     ]);
 
     const cashTotal = cashRows.reduce((sum, row) => sum + toNumber(row.balance), 0);
     const debtorsTotal = debtorRows.reduce((sum, row) => sum + toNumber(row.balance), 0);
     const creditorsTotal = creditorRows.reduce((sum, row) => sum + toNumber(row.balance), 0);
     const loansTotal = loanRows.reduce((sum, row) => sum + toNumber(row.balance), 0);
+    const debtorsPartyCount = partyRows.filter((row) => String(row.partyType).toLowerCase() === 'debtor').length;
+    const creditorsPartyCount = partyRows.filter((row) => String(row.partyType).toLowerCase() === 'creditor').length;
+    const missingMonths = Array.isArray(missingMonthsEvent?.data?.missingMonths)
+      ? missingMonthsEvent.data.missingMonths
+      : [];
 
     return res.json({
       success: true,
@@ -152,6 +179,20 @@ router.get('/health', authenticate, async (req, res) => {
           loansTotal,
           asOfMonthKey: latestCurrentBalanceEvent?.metadata?.monthKey || coverageMonthKey,
           derivedFrom: latestCurrentBalanceEvent?.metadata?.source || null
+        },
+        missingMonths,
+        interestLatest: interestMetric ? {
+          amount: toNumber(interestMetric.metricValue),
+          monthKey: interestMetric.month || null,
+          updatedAt: interestMetric.updatedAt || null
+        } : null,
+        loansSummary: {
+          loansTotal,
+          loansCount: loanRows.length
+        },
+        partyCounts: {
+          debtorsTotalCount: debtorsPartyCount,
+          creditorsTotalCount: creditorsPartyCount
         }
       }
     });

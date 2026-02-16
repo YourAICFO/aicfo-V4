@@ -1,4 +1,16 @@
-const { Integration, Subscription, FinancialTransaction, LedgerMonthlyBalance } = require('../models');
+const {
+  Integration,
+  Subscription,
+  FinancialTransaction,
+  LedgerMonthlyBalance,
+  PartyBalanceLatest,
+  CurrentDebtor,
+  CurrentCreditor,
+  CurrentLoan,
+  CFOMetric,
+  IntegrationSyncRun,
+  IntegrationSyncEvent
+} = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { normalizeMonth } = require('../utils/monthKeyUtils');
 const { normalizeCoaPayload } = require('./tallyCoaAdapter');
@@ -390,11 +402,152 @@ const generateMockTransactions = (type) => {
   return transactions;
 };
 
+const toNumber = (value) => {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const persistOptionalConnectorBlocks = async (companyId, payload, monthKey) => {
+  const { partyBalances, loans, interestSummary, metadata } = payload || {};
+
+  if (partyBalances && (Array.isArray(partyBalances.debtors) || Array.isArray(partyBalances.creditors))) {
+    try {
+      const asOfDate = partyBalances.asOfDate || new Date().toISOString().split('T')[0];
+      const rows = [];
+      for (const item of (partyBalances.debtors || [])) {
+        const name = String(item?.name || '').trim();
+        if (!name) continue;
+        rows.push({
+          companyId,
+          asOfDate,
+          partyType: 'debtor',
+          partyName: name,
+          balance: toNumber(item?.amount),
+          source: 'connector'
+        });
+      }
+      for (const item of (partyBalances.creditors || [])) {
+        const name = String(item?.name || '').trim();
+        if (!name) continue;
+        rows.push({
+          companyId,
+          asOfDate,
+          partyType: 'creditor',
+          partyName: name,
+          balance: toNumber(item?.amount),
+          source: 'connector'
+        });
+      }
+
+      if (rows.length > 0) {
+        await PartyBalanceLatest.destroy({ where: { companyId } });
+        await PartyBalanceLatest.bulkCreate(rows);
+      }
+
+      if (Array.isArray(partyBalances.debtors)) {
+        await CurrentDebtor.destroy({ where: { companyId } });
+        if (partyBalances.debtors.length > 0) {
+          await CurrentDebtor.bulkCreate(
+            partyBalances.debtors
+              .map((d) => ({ debtorName: String(d?.name || '').trim(), balance: toNumber(d?.amount) }))
+              .filter((d) => d.debtorName)
+              .map((d) => ({ companyId, ...d }))
+          );
+        }
+      }
+
+      if (Array.isArray(partyBalances.creditors)) {
+        await CurrentCreditor.destroy({ where: { companyId } });
+        if (partyBalances.creditors.length > 0) {
+          await CurrentCreditor.bulkCreate(
+            partyBalances.creditors
+              .map((c) => ({ creditorName: String(c?.name || '').trim(), balance: toNumber(c?.amount) }))
+              .filter((c) => c.creditorName)
+              .map((c) => ({ companyId, ...c }))
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn({ companyId, error: error.message }, 'Optional block persist failed: partyBalances');
+    }
+  }
+
+  if (loans && Array.isArray(loans.items)) {
+    try {
+      await CurrentLoan.destroy({ where: { companyId } });
+      if (loans.items.length > 0) {
+        await CurrentLoan.bulkCreate(
+          loans.items
+            .map((l) => ({
+              companyId,
+              loanName: String(l?.name || l?.ledgerGuid || '').trim(),
+              balance: toNumber(l?.balance)
+            }))
+            .filter((l) => l.loanName)
+        );
+      }
+
+      const loanTotal = loans.items.reduce((sum, item) => sum + toNumber(item?.balance), 0);
+      await CFOMetric.upsert({
+        companyId,
+        metricKey: 'loans_balance_live',
+        metricValue: loanTotal,
+        month: monthKey,
+        timeScope: 'live',
+        computedAt: new Date(),
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      logger.warn({ companyId, error: error.message }, 'Optional block persist failed: loans');
+    }
+  }
+
+  if (interestSummary && interestSummary.latestMonthAmount !== undefined && interestSummary.latestMonthAmount !== null) {
+    try {
+      await CFOMetric.upsert({
+        companyId,
+        metricKey: 'interest_expense_latest',
+        metricValue: toNumber(interestSummary.latestMonthAmount),
+        month: interestSummary.monthKey || monthKey,
+        timeScope: 'latest',
+        computedAt: new Date(),
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      logger.warn({ companyId, error: error.message }, 'Optional block persist failed: interestSummary');
+    }
+  }
+
+  if (Array.isArray(metadata?.missingMonths) && metadata.missingMonths.length > 0) {
+    try {
+      const run = await IntegrationSyncRun.findOne({
+        where: { companyId },
+        order: [['startedAt', 'DESC']]
+      });
+      if (run) {
+        await IntegrationSyncEvent.create({
+          runId: run.id,
+          level: 'warn',
+          event: 'SYNC_MISSING_MONTHS_REPORTED',
+          message: 'Connector reported missing historical months in payload metadata',
+          data: {
+            missingMonths: metadata.missingMonths,
+            historicalMonthsRequested: toNumber(metadata.historicalMonthsRequested),
+            historicalMonthsSynced: toNumber(metadata.historicalMonthsSynced)
+          }
+        });
+      }
+    } catch (error) {
+      logger.warn({ companyId, error: error.message }, 'Optional block persist failed: metadata');
+    }
+  }
+};
+
 const processConnectorPayload = async (companyId, payload) => {
   try {
     logger.info({ companyId, payloadSize: JSON.stringify(payload).length }, 'Processing connector payload');
 
-    const { chartOfAccounts, asOfDate } = payload;
+    const { chartOfAccounts, asOfDate, partyBalances, loans, interestSummary, metadata } = payload;
     
     if (!chartOfAccounts || !chartOfAccounts.ledgers) {
       throw new Error('Invalid payload: missing chartOfAccounts or ledgers');
@@ -490,6 +643,13 @@ const processConnectorPayload = async (companyId, payload) => {
       currentBalances: null, // Will be calculated from ledger balances
       chartOfAccounts: chartOfAccounts
     });
+
+    await persistOptionalConnectorBlocks(companyId, {
+      partyBalances,
+      loans,
+      interestSummary,
+      metadata
+    }, monthKey);
 
     logger.info({ companyId, monthKey }, 'Successfully processed connector payload');
 

@@ -534,7 +534,16 @@ router.post('/sync/progress', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { runId, status, finishedAt, lastError } = req.body;
+    const {
+      runId,
+      status,
+      finishedAt,
+      lastError,
+      missingMonths,
+      historicalMonthsRequested,
+      historicalMonthsSynced,
+      metadata
+    } = req.body;
 
     if (!runId || !status) {
       return res.status(400).json({
@@ -544,13 +553,14 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
     }
 
     // Validate status
-    const validStatuses = ['success', 'failed', 'partial'];
+    const validStatuses = ['success', 'failed', 'partial', 'partial_success'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
         error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
       });
     }
+    const runStatus = status === 'partial_success' ? 'success' : status;
 
     // Verify the run belongs to this company
     const syncRun = await IntegrationSyncRun.findOne({
@@ -568,11 +578,32 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
     }
 
     // Complete the sync run
-    const completedRun = await syncStatusService.completeRun(runId, status, lastError);
+    const completedRun = await syncStatusService.completeRun(runId, runStatus, lastError);
+
+    if (status === 'partial_success') {
+      await syncStatusService.addEvent(
+        runId,
+        'warn',
+        'SYNC_PARTIAL',
+        'Sync completed with partial historical month coverage',
+        {
+          reason: 'historical_months_missing',
+          missingMonths: Array.isArray(missingMonths)
+            ? missingMonths
+            : (Array.isArray(metadata?.missingMonths) ? metadata.missingMonths : []),
+          historicalMonthsRequested: Number.isFinite(historicalMonthsRequested)
+            ? Number(historicalMonthsRequested)
+            : (Number.isFinite(metadata?.historicalMonthsRequested) ? Number(metadata.historicalMonthsRequested) : null),
+          historicalMonthsSynced: Number.isFinite(historicalMonthsSynced)
+            ? Number(historicalMonthsSynced)
+            : (Number.isFinite(metadata?.historicalMonthsSynced) ? Number(metadata.historicalMonthsSynced) : null)
+        }
+      );
+    }
 
     // Add completion event
-    const eventLevel = status === 'success' ? 'info' : 'error';
-    const eventMessage = status === 'success' ? 'Sync completed successfully' : `Sync failed: ${lastError}`;
+    const eventLevel = runStatus === 'success' ? 'info' : 'error';
+    const eventMessage = runStatus === 'success' ? 'Sync completed successfully' : `Sync failed: ${lastError}`;
     await syncStatusService.addEvent(
       runId,
       eventLevel,
