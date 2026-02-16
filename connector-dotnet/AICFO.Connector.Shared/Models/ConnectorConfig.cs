@@ -84,6 +84,12 @@ public sealed class ConnectorMapping
     [JsonPropertyName("tally_company_name")]
     public string TallyCompanyName { get; set; } = string.Empty;
 
+    [JsonPropertyName("web_company_name")]
+    public string? WebCompanyName { get; set; }
+
+    [JsonPropertyName("auth_method")]
+    public string? AuthMethod { get; set; }
+
     [JsonPropertyName("last_sync_at")]
     public DateTimeOffset? LastSyncAt { get; set; }
 

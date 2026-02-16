@@ -150,11 +150,17 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Label _lastResult = new() { AutoSize = true, Text = "Never" };
     private readonly Label _lastError = new() { AutoSize = true, Text = "None" };
     private readonly ComboBox _tallyCompanyCombo = new() { Width = 360, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly TextBox _loginEmail = new() { Width = 360 };
+    private readonly TextBox _loginPassword = new() { Width = 360, UseSystemPasswordChar = true };
+    private readonly ComboBox _webCompanyCombo = new() { Width = 360, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
+    private readonly TextBox _deviceId = new() { Width = 360, Text = Environment.MachineName };
+    private readonly TextBox _deviceName = new() { Width = 360, Text = Environment.MachineName };
     private readonly TextBox _companyId = new() { Width = 360 };
     private readonly TextBox _connectorToken = new() { Width = 360, UseSystemPasswordChar = true };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true };
 
     private ConnectorConfig _config = new();
+    private string? _onboardingJwt;
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -264,18 +270,41 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 8,
+            RowCount = 15,
             Padding = new Padding(12),
             AutoScroll = true
         };
 
-        panel.Controls.Add(new Label { Text = "Tally Companies Found", AutoSize = true }, 0, 0);
-        panel.Controls.Add(_tallyCompanyCombo, 1, 0);
+        panel.Controls.Add(new Label { Text = "Login (recommended)", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
+        panel.Controls.Add(new Label { Text = "Email", AutoSize = true }, 0, 1);
+        panel.Controls.Add(_loginEmail, 1, 1);
+        panel.Controls.Add(new Label { Text = "Password", AutoSize = true }, 0, 2);
+        panel.Controls.Add(_loginPassword, 1, 2);
 
-        panel.Controls.Add(new Label { Text = "AICFO company_id", AutoSize = true }, 0, 1);
-        panel.Controls.Add(_companyId, 1, 1);
-        panel.Controls.Add(new Label { Text = "connector_token", AutoSize = true }, 0, 2);
-        panel.Controls.Add(_connectorToken, 1, 2);
+        var loginButton = new Button { Text = "Login", Width = 120 };
+        loginButton.Click += async (_, _) => await LoginRecommendedAsync();
+        panel.Controls.Add(loginButton, 1, 3);
+
+        panel.Controls.Add(new Label { Text = "Web Company", AutoSize = true }, 0, 4);
+        panel.Controls.Add(_webCompanyCombo, 1, 4);
+        panel.Controls.Add(new Label { Text = "Device ID", AutoSize = true }, 0, 5);
+        panel.Controls.Add(_deviceId, 1, 5);
+        panel.Controls.Add(new Label { Text = "Device Name", AutoSize = true }, 0, 6);
+        panel.Controls.Add(_deviceName, 1, 6);
+
+        var registerButton = new Button { Text = "Register & Save Mapping", Width = 190 };
+        registerButton.Click += async (_, _) => await RegisterAndSaveMappingAsync();
+        panel.Controls.Add(registerButton, 1, 7);
+
+        panel.Controls.Add(new Label { Text = "Manual fallback (legacy token)", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 8);
+
+        panel.Controls.Add(new Label { Text = "Tally Companies Found", AutoSize = true }, 0, 9);
+        panel.Controls.Add(_tallyCompanyCombo, 1, 9);
+
+        panel.Controls.Add(new Label { Text = "AICFO company_id", AutoSize = true }, 0, 10);
+        panel.Controls.Add(_companyId, 1, 10);
+        panel.Controls.Add(new Label { Text = "connector_token", AutoSize = true }, 0, 11);
+        panel.Controls.Add(_connectorToken, 1, 11);
 
         var mappingButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var detectButton = new Button { Text = "Detect Tally Companies", Width = 170 };
@@ -287,12 +316,12 @@ internal sealed class ConnectorControlPanel : Form
         var syncButton = new Button { Text = "Sync Selected", Width = 120 };
         syncButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
         mappingButtons.Controls.AddRange([detectButton, linkButton, removeButton, syncButton]);
-        panel.Controls.Add(mappingButtons, 0, 3);
+        panel.Controls.Add(mappingButtons, 0, 12);
         panel.SetColumnSpan(mappingButtons, 2);
 
-        panel.Controls.Add(new Label { Text = "Current Mappings", AutoSize = true }, 0, 4);
+        panel.Controls.Add(new Label { Text = "Current Mappings", AutoSize = true }, 0, 13);
         panel.SetColumnSpan(_mappingsList, 2);
-        panel.Controls.Add(_mappingsList, 0, 5);
+        panel.Controls.Add(_mappingsList, 0, 14);
 
         tab.Controls.Add(panel);
         return tab;
@@ -348,6 +377,132 @@ internal sealed class ConnectorControlPanel : Form
             {
                 _backendStatus.Text = $"Reachable (auth failed: {ex.Message})";
             }
+        }
+    }
+
+    private async Task LoginRecommendedAsync()
+    {
+        SaveGlobalSettings();
+        var email = _loginEmail.Text.Trim();
+        var password = _loginPassword.Text;
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            MessageBox.Show("Please enter email and password.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            var login = await _apiClient.LoginAsync(email, password, CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(login.Token))
+            {
+                MessageBox.Show("Login failed: token missing.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            _onboardingJwt = login.Token;
+            var companies = await _apiClient.GetCompaniesAsync(_onboardingJwt, CancellationToken.None);
+            _webCompanyCombo.Items.Clear();
+            foreach (var company in companies)
+            {
+                _webCompanyCombo.Items.Add(new WebCompanyComboItem(company));
+            }
+
+            _webCompanyCombo.Enabled = true;
+            if (_webCompanyCombo.Items.Count > 0)
+            {
+                _webCompanyCombo.SelectedIndex = 0;
+                MessageBox.Show("Login successful. Select web company and register this device.", "AI CFO Connector");
+            }
+            else
+            {
+                MessageBox.Show("No companies found in your account.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            _onboardingJwt = null;
+            _webCompanyCombo.Enabled = false;
+            _webCompanyCombo.Items.Clear();
+            MessageBox.Show($"Login failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async Task RegisterAndSaveMappingAsync()
+    {
+        SaveGlobalSettings();
+        if (string.IsNullOrWhiteSpace(_onboardingJwt))
+        {
+            MessageBox.Show("Please login first.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (_webCompanyCombo.SelectedItem is not WebCompanyComboItem companyItem)
+        {
+            MessageBox.Show("Please select a web company.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var tallyCompany = _tallyCompanyCombo.SelectedItem?.ToString() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(tallyCompany))
+        {
+            MessageBox.Show("Please select a Tally company.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var deviceId = _deviceId.Text.Trim();
+        var deviceName = _deviceName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(deviceName))
+        {
+            MessageBox.Show("Please provide Device ID and Device Name.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            var registration = await _apiClient.RegisterDeviceAsync(
+                _onboardingJwt,
+                companyItem.Company.Id,
+                deviceId,
+                deviceName,
+                CancellationToken.None);
+
+            if (string.IsNullOrWhiteSpace(registration.DeviceToken))
+            {
+                MessageBox.Show("Device registration failed: token missing.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var existing = _config.Mappings.FirstOrDefault(m =>
+                string.Equals(m.CompanyId, companyItem.Company.Id, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(m.TallyCompanyName, tallyCompany, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
+            {
+                existing = new ConnectorMapping
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    CompanyId = companyItem.Company.Id,
+                    TallyCompanyName = tallyCompany,
+                    LastSyncResult = "Never"
+                };
+                _config.Mappings.Add(existing);
+            }
+
+            existing.CompanyId = companyItem.Company.Id;
+            existing.WebCompanyName = companyItem.Company.Name;
+            existing.TallyCompanyName = tallyCompany;
+            existing.AuthMethod = "device_token";
+
+            _credentialStore.SaveMappingToken(existing.Id, registration.DeviceToken);
+            _configStore.Save(_config);
+            LoadConfig();
+            MessageBox.Show("Device mapping saved successfully.", "AI CFO Connector");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Register device failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -431,6 +586,10 @@ internal sealed class ConnectorControlPanel : Form
             _config.Mappings.Add(existing);
         }
 
+        existing.CompanyId = companyId;
+        existing.TallyCompanyName = tallyCompany;
+        existing.AuthMethod = "legacy_token";
+
         _credentialStore.SaveMappingToken(existing.Id, token);
         _configStore.Save(_config);
         LoadConfig();
@@ -481,11 +640,20 @@ internal sealed class ConnectorControlPanel : Form
         _mappingsList.Items.Clear();
         foreach (var mapping in _config.Mappings)
         {
+            var authLabel = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
+                ? "(device token)"
+                : "(legacy)";
+            var tallyDisplay = $"{mapping.TallyCompanyName} {authLabel}";
+            if (!string.IsNullOrWhiteSpace(mapping.WebCompanyName))
+            {
+                tallyDisplay = $"{mapping.WebCompanyName} ↔ {tallyDisplay}";
+            }
+
             var item = new ListViewItem(mapping.CompanyId)
             {
                 Tag = mapping.Id
             };
-            item.SubItems.Add(mapping.TallyCompanyName);
+            item.SubItems.Add(tallyDisplay);
             item.SubItems.Add(mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never");
             item.SubItems.Add(mapping.LastSyncResult);
             item.SubItems.Add(string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError);
@@ -541,6 +709,20 @@ internal sealed class ConnectorControlPanel : Form
 internal sealed class MappingComboItem(ConnectorMapping mapping)
 {
     public ConnectorMapping Mapping { get; } = mapping;
-    public override string ToString() => $"{mapping.CompanyId} ↔ {mapping.TallyCompanyName}";
+    public override string ToString()
+    {
+        var auth = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
+            ? "device token"
+            : "legacy";
+        var web = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? mapping.CompanyId : mapping.WebCompanyName;
+        return $"{web} ↔ {mapping.TallyCompanyName} ({auth})";
+    }
 }
 
+internal sealed class WebCompanyComboItem(WebCompany company)
+{
+    public WebCompany Company { get; } = company;
+    public override string ToString() => string.IsNullOrWhiteSpace(company.Currency)
+        ? company.Name
+        : $"{company.Name} ({company.Currency})";
+}
