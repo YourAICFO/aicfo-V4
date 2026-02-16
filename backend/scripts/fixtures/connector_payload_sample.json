@@ -45,5 +45,40 @@
         }
       ]
     }
+  },
+  "partyBalances": {
+    "asOfDate": "2026-01-31",
+    "debtors": [
+      { "name": "Customer ABC Pvt Ltd", "amount": 280000.0 },
+      { "name": "Customer DEF LLP", "amount": 120000.0 }
+    ],
+    "creditors": [
+      { "name": "Vendor XYZ Traders", "amount": 190000.0 },
+      { "name": "Vendor LMN Agencies", "amount": 80000.0 }
+    ],
+    "debtorsTotalCount": 2,
+    "creditorsTotalCount": 2
+  },
+  "loans": {
+    "asOfDate": "2026-01-31",
+    "items": [
+      {
+        "ledgerGuid": "led-loan-1",
+        "name": "Term Loan - SBI",
+        "parent": "Secured Loans",
+        "balance": -500000.0
+      }
+    ]
+  },
+  "interestSummary": {
+    "monthKey": "2026-01",
+    "latestMonthAmount": 45000.0
+  },
+  "metadata": {
+    "historicalMonthsRequested": 24,
+    "historicalMonthsSynced": 2,
+    "missingMonths": [
+      "2024-11"
+    ]
   }
 }
