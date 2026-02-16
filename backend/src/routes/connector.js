@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
 const { integrationService, authService } = require('../services');
@@ -8,6 +9,13 @@ const { IntegrationSyncRun, Company, ConnectorDevice } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
+
+const connectorLoginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 /* ===============================
    TEST ROUTE
@@ -98,7 +106,7 @@ router.post('/auth', async (req, res) => {
    POST /api/connector/login
    Purpose: connector installer gets normal short-lived user JWT
 ================================ */
-router.post('/login', async (req, res) => {
+router.post('/login', connectorLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
@@ -155,10 +163,22 @@ router.get('/companies', authenticate, async (req, res) => {
 router.post('/register-device', authenticate, async (req, res) => {
   try {
     const { companyId, deviceId, deviceName } = req.body || {};
-    if (!companyId || !deviceId) {
+    if (!companyId || !deviceId || !deviceName) {
       return res.status(400).json({
         success: false,
-        error: 'companyId and deviceId are required'
+        error: 'companyId, deviceId and deviceName are required'
+      });
+    }
+    if (String(deviceId).length > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId must be 100 characters or fewer'
+      });
+    }
+    if (String(deviceName).length > 150) {
+      return res.status(400).json({
+        success: false,
+        error: 'deviceName must be 150 characters or fewer'
       });
     }
 
@@ -199,9 +219,10 @@ router.post('/register-device', authenticate, async (req, res) => {
     if (!created) {
       await device.update({
         userId: req.userId,
-        deviceName: deviceName || device.deviceName,
+        deviceName,
         deviceTokenHash,
-        status: 'active'
+        status: 'active',
+        lastSeenAt: null
       });
     }
 
@@ -437,10 +458,23 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { companyId, connectorClientId } = req;
+    const { companyId, connectorClientId, deviceId } = req;
 
     // Update connector last seen
-    await syncStatusService.updateConnectorLastSeen(connectorClientId);
+    if (connectorClientId) {
+      await syncStatusService.updateConnectorLastSeen(connectorClientId);
+    }
+    if (deviceId) {
+      // Device-token path: keep connector_devices last_seen_at fresh without affecting legacy flow.
+      try {
+        await ConnectorDevice.update(
+          { lastSeenAt: new Date() },
+          { where: { companyId, deviceId } }
+        );
+      } catch (error) {
+        console.warn('Device heartbeat update failed:', error.message);
+      }
+    }
 
     // Get latest run summary for company
     const latestRun = await IntegrationSyncRun.findOne({
