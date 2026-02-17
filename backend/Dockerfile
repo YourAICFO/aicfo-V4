@@ -14,10 +14,8 @@ RUN npm ci --omit=dev
 COPY src ./src
 COPY docs ./docs
 COPY migrations ./migrations
-COPY downloads ./downloads
-
-# Keep startup behavior consistent for frontend static serving fallback
-RUN mkdir -p public
+# Keep startup behavior consistent for optional local connector artifact + static fallback
+RUN mkdir -p downloads public
 
 USER node
 
