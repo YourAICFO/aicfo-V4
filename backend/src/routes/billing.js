@@ -111,6 +111,12 @@ router.get('/status', authenticate, requireCompany, async (req, res) => {
     const trialActive = Boolean(
       trialProfile?.trialEndsAt && new Date(trialProfile.trialEndsAt) > now
     );
+    const trialDaysLeft = trialActive
+      ? Math.max(
+          0,
+          Math.ceil((new Date(trialProfile.trialEndsAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        )
+      : 0;
 
     res.json({
       success: true,
@@ -129,7 +135,8 @@ router.get('/status', authenticate, requireCompany, async (req, res) => {
           has_used_trial: Boolean(trialProfile?.hasUsedTrial),
           trial_started_at: trialProfile?.trialStartedAt || null,
           trial_ends_at: trialProfile?.trialEndsAt || null,
-          is_active: trialActive
+          is_active: trialActive,
+          trial_days_left: trialDaysLeft
         },
         invoices: {
           count: invoices.length,

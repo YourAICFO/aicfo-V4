@@ -98,16 +98,33 @@ const resolveUserIdForAccess = async (companyId, userId) => {
   return company?.ownerId || null;
 };
 
-const isUserTrialActive = async (userId) => {
-  if (!userId) return false;
+const getUserTrialState = async (userId) => {
+  if (!userId) {
+    return { active: false, hasProfile: false, profile: null };
+  }
   const profile = await UserBillingProfile.findOne({ where: { userId } });
-  if (!profile?.trialEndsAt) return false;
-  return new Date(profile.trialEndsAt) > new Date();
+  const active = Boolean(profile?.trialEndsAt && new Date(profile.trialEndsAt) > new Date());
+  return { active, hasProfile: Boolean(profile), profile };
+};
+
+const backfillUserTrialProfileFromLegacy = async (userId, legacySubscription) => {
+  if (!userId || !legacySubscription) return null;
+  if (legacySubscription.subscriptionStatus !== 'trial' || !legacySubscription.trialEndDate || legacySubscription.accountLocked) {
+    return null;
+  }
+  const now = new Date();
+  if (now > new Date(legacySubscription.trialEndDate)) return null;
+  return UserBillingProfile.create({
+    userId,
+    trialStartedAt: legacySubscription.trialStartDate || now,
+    trialEndsAt: legacySubscription.trialEndDate,
+    hasUsedTrial: true
+  });
 };
 
 const checkAccess = async (companyId, userId = null) => {
   const resolvedUserId = await resolveUserIdForAccess(companyId, userId);
-  const trialActive = await isUserTrialActive(resolvedUserId);
+  let trialState = await getUserTrialState(resolvedUserId);
 
   const latestBillingSub = await CompanySubscription.findOne({
     where: { companyId },
@@ -118,10 +135,10 @@ const checkAccess = async (companyId, userId = null) => {
     if (latestBillingSub.status === 'active') {
       return { allowed: true };
     }
-    if (latestBillingSub.status === 'trialing' && trialActive) {
+    if (latestBillingSub.status === 'trialing' && trialState.active) {
       return { allowed: true };
     }
-    if (trialActive) {
+    if (trialState.active) {
       return { allowed: true };
     }
     return {
@@ -135,7 +152,12 @@ const checkAccess = async (companyId, userId = null) => {
   const subscription = await ensureSubscription(companyId);
   const updated = await lockExpiredTrialIfNeeded(subscription);
 
-  if (trialActive) {
+  if (!trialState.hasProfile) {
+    await backfillUserTrialProfileFromLegacy(resolvedUserId, updated);
+    trialState = await getUserTrialState(resolvedUserId);
+  }
+
+  if (trialState.active) {
     return { allowed: true };
   }
 

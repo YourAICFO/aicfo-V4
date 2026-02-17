@@ -27,6 +27,7 @@ interface BillingStatus {
     trial_started_at: string | null;
     trial_ends_at: string | null;
     is_active: boolean;
+    trial_days_left?: number;
   };
 }
 
@@ -397,9 +398,9 @@ export default function Settings() {
                     <p className="text-sm text-gray-600">
                       Trial:{' '}
                       {billingStatus?.user_trial?.is_active
-                        ? `Active until ${new Date(billingStatus.user_trial.trial_ends_at || '').toLocaleDateString()}`
+                        ? `Ends on ${new Date(billingStatus.user_trial.trial_ends_at || '').toLocaleDateString()} (${billingStatus.user_trial.trial_days_left ?? 0} days left)`
                         : billingStatus?.user_trial?.has_used_trial
-                          ? 'Already used'
+                          ? 'Trial used'
                           : 'Not started'}
                     </p>
                     <button onClick={handleSubscribe} className="btn-primary mt-4">
