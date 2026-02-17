@@ -1162,7 +1162,13 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
     const latestProcessedMonthKey = monthKeys[monthKeys.length - 1] || normalizeMonth(new Date());
     await updateCurrentBalances(companyId, currentBalances, transaction, latestProcessedMonthKey);
     await computeLiquidityMetrics(companyId, transaction);
-    await computeCfoMetrics(companyId, transaction);
+    const { runCatalogMetrics } = require('../metrics/runCatalogMetrics');
+    await runCatalogMetrics(companyId, {
+      transaction,
+      months: monthKeys,
+      monthsBack: 24,
+      includeLatest: true
+    });
     await upsertAlerts(companyId, transaction);
     await trimOldSnapshots(companyId, latestClosedKey, transaction);
   });
