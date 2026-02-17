@@ -41,7 +41,8 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         {
             throw new InvalidOperationException(envelope.error ?? "Login failed.");
         }
-        if (!envelope.data.HasValue || !envelope.data.Value.TryGetProperty("token", out var tokenElement))
+        var loginData = envelope.data;
+        if (loginData.ValueKind != JsonValueKind.Object || !loginData.TryGetProperty("token", out var tokenElement))
         {
             throw new InvalidOperationException("Login failed: missing token in response.");
         }
@@ -65,13 +66,14 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         {
             throw new InvalidOperationException(envelope.error ?? "Failed to fetch companies.");
         }
-        if (!envelope.data.HasValue || envelope.data.Value.ValueKind != JsonValueKind.Array)
+        var companiesData = envelope.data;
+        if (companiesData.ValueKind != JsonValueKind.Array)
         {
             return [];
         }
 
         var companies = new List<WebCompany>();
-        foreach (var item in envelope.data.Value.EnumerateArray())
+        foreach (var item in companiesData.EnumerateArray())
         {
             if (!item.TryGetProperty("id", out var idElement) || !item.TryGetProperty("name", out var nameElement))
             {
@@ -108,12 +110,11 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         {
             throw new InvalidOperationException(envelope.error ?? "Register device failed.");
         }
-        if (!envelope.data.HasValue)
+        var data = envelope.data;
+        if (data.ValueKind != JsonValueKind.Object)
         {
             throw new InvalidOperationException("Register device failed: missing response data.");
         }
-
-        var data = envelope.data.Value;
         var deviceToken = data.TryGetProperty("deviceToken", out var tokenElement) ? tokenElement.GetString() : null;
         var returnedCompanyId = data.TryGetProperty("companyId", out var companyElement) ? companyElement.GetString() : null;
         var returnedDeviceId = data.TryGetProperty("deviceId", out var deviceElement) ? deviceElement.GetString() : null;

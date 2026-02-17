@@ -43,6 +43,7 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
             .Where(e => string.Equals(e.Name.LocalName, "COMPANYNAME", StringComparison.OrdinalIgnoreCase))
             .Select(e => e.Value?.Trim())
             .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         return names;
