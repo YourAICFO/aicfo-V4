@@ -1,5 +1,6 @@
-const { Company, Subscription, Integration } = require('../models');
+const { Company, Subscription, Integration, sequelize } = require('../models');
 const { createTrialSubscription } = require('./subscriptionService');
+let loggedCompanyModelMapping = false;
 
 const isAdminEmail = (email) => {
   const allowlist = (process.env.ADMIN_EMAILS || '')
@@ -29,6 +30,15 @@ const createCompany = async (userId, companyData) => {
 };
 
 const getUserCompanies = async (userId, opts = {}, userEmail = null) => {
+  if (process.env.NODE_ENV !== 'production' && !loggedCompanyModelMapping) {
+    loggedCompanyModelMapping = true;
+    console.log('[companyService] Company model mapping', {
+      tableName: Company.getTableName(),
+      createdAtField: Company.rawAttributes?.createdAt?.field,
+      updatedAtField: Company.rawAttributes?.updatedAt?.field
+    });
+  }
+
   const includeDeleted = opts.includeDeleted === true && isAdminEmail(userEmail);
   const companies = await Company.findAll({
     where: {
@@ -40,7 +50,7 @@ const getUserCompanies = async (userId, opts = {}, userEmail = null) => {
       as: 'subscription',
       attributes: ['planType', 'status', 'features']
     }],
-    order: [['created_at', 'DESC']]
+    order: [[sequelize.col('Company.created_at'), 'DESC']]
   });
 
   return companies;
