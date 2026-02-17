@@ -47,4 +47,8 @@
     <PackageReference Include="WixToolset.UI.wixext" Version="4.0.4" />
     <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" />
   </ItemGroup>
+  <ItemGroup>
+    <WixExtension Include="WixToolset.UI.wixext" />
+    <WixExtension Include="WixToolset.Util.wixext" />
+  </ItemGroup>
 </Project>
