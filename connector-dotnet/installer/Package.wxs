@@ -74,8 +74,10 @@
     </Component>
 
     <!-- Per-user auto-start registry component is isolated from file/shortcut components to avoid ICE43/ICE57. -->
-    <Component Id="ConnectorTrayAutoStartRunKey" Directory="INSTALLFOLDER" Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}">
-      <Condition><![CDATA[WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1]]></Condition>
+    <Component Id="ConnectorTrayAutoStartRunKey"
+               Directory="INSTALLFOLDER"
+               Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1">
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayAutoStart" Type="integer" Value="1" KeyPath="yes" />
       <RegistryValue Root="HKCU"
                      Key="Software\Microsoft\Windows\CurrentVersion\Run"
