@@ -38,12 +38,13 @@ const buildStableStatusResponse = async (companyId) => {
   const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
     ConnectorDevice.findOne({
       where: { companyId, status: 'active' },
-      order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+      // Use physical column names to avoid timestamp attribute alias differences across Sequelize configs.
+      order: [['last_seen_at', 'DESC'], ['updated_at', 'DESC']],
       raw: true
     }),
     ConnectorClient.findOne({
       where: { companyId },
-      order: [['lastSeenAt', 'DESC'], ['updatedAt', 'DESC']],
+      order: [['last_seen_at', 'DESC'], ['updated_at', 'DESC']],
       raw: true
     }),
     IntegrationSyncRun.findOne({
