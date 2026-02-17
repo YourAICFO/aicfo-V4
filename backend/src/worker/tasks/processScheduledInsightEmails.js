@@ -238,18 +238,18 @@ const processScheduledInsightEmails = async () => {
         model: Company,
         as: 'company',
         required: true,
-        where: { isDeleted: false },
+        where: { isDeleted: false, deletedAt: null },
         include: [
-          {
-            model: User,
-            as: 'owner',
-            required: false,
-            attributes: ['id', 'email']
-          }
-        ]
-      }
-    ]
-  });
+            {
+              model: User,
+              as: 'owner',
+              required: false,
+              attributes: ['id', 'email']
+            }
+          ]
+        }
+      ]
+    });
 
   const results = [];
   const now = new Date();
