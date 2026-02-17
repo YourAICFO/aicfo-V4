@@ -595,7 +595,7 @@ const processConnectorPayload = async (companyId, payload) => {
     // Store ledger monthly balances
     if (ledgerBalances.length > 0) {
       await LedgerMonthlyBalance.bulkCreate(ledgerBalances, {
-        updateOnDuplicate: ['balance', 'asOfDate', 'updated_at']
+        updateOnDuplicate: ['balance', 'asOfDate', 'ledgerName', 'parentGroup', 'cfoCategory', 'updatedAt']
       });
       
       logger.info({ companyId, monthKey, count: ledgerBalances.length }, 'Stored ledger monthly balances');
@@ -626,7 +626,7 @@ const processConnectorPayload = async (companyId, payload) => {
 
         if (closedMonthBalances.length > 0) {
           await LedgerMonthlyBalance.bulkCreate(closedMonthBalances, {
-            updateOnDuplicate: ['balance', 'asOfDate', 'updated_at']
+            updateOnDuplicate: ['balance', 'asOfDate', 'ledgerName', 'parentGroup', 'cfoCategory', 'updatedAt']
           });
           
           logger.info({ companyId, monthKey: closedMonth.monthKey, count: closedMonthBalances.length }, 'Stored closed month balances');

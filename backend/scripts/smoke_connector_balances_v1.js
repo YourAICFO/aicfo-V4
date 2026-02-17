@@ -10,9 +10,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const { Op } = require('sequelize');
 const {
   IntegrationSyncRun,
   IntegrationSyncEvent,
+  LedgerMonthlyBalance,
   PartyBalanceLatest,
   CurrentDebtor,
   CurrentCreditor,
@@ -60,8 +62,8 @@ const request = async (method, urlPath, token, body, extraHeaders = {}) => {
   return json;
 };
 
-const run = async () => {
-  console.log('[smoke] starting connector sync run...');
+const runSingleSync = async (iteration) => {
+  console.log(`[smoke] starting connector sync run #${iteration}...`);
   const start = await request('POST', '/api/connector/sync/start', CONNECTOR_TOKEN, {});
   const runId = start?.data?.runId;
   if (!runId) {
@@ -69,11 +71,11 @@ const run = async () => {
   }
   console.log(`[smoke] runId=${runId}`);
 
-  console.log('[smoke] uploading balances payload...');
+  console.log(`[smoke] uploading balances payload #${iteration}...`);
   const syncResp = await request('POST', '/api/connector/sync', CONNECTOR_TOKEN, payload);
   console.log('[smoke] sync response:', JSON.stringify(syncResp?.data || syncResp));
 
-  console.log('[smoke] marking run complete...');
+  console.log(`[smoke] marking run complete #${iteration}...`);
   const completeResp = await request('POST', '/api/connector/sync/complete', CONNECTOR_TOKEN, {
     runId,
     status: 'partial_success',
@@ -100,7 +102,7 @@ const run = async () => {
   if (!partialEvent) {
     throw new Error('Expected SYNC_PARTIAL event but none found');
   }
-  console.log('[smoke] SYNC_PARTIAL event found');
+  console.log(`[smoke] SYNC_PARTIAL event found #${iteration}`);
 
   const missingMonthsEvent = await IntegrationSyncEvent.findOne({
     where: { runId, event: 'SYNC_MISSING_MONTHS_REPORTED' },
@@ -109,7 +111,48 @@ const run = async () => {
   if (!missingMonthsEvent) {
     throw new Error('Expected SYNC_MISSING_MONTHS_REPORTED event but none found');
   }
-  console.log('[smoke] SYNC_MISSING_MONTHS_REPORTED event found');
+  console.log(`[smoke] SYNC_MISSING_MONTHS_REPORTED event found #${iteration}`);
+};
+
+const snapshotCounts = async () => {
+  const [ledgerCount, partyCount, loanCount, metricCount] = await Promise.all([
+    LedgerMonthlyBalance.count({ where: { companyId: COMPANY_ID } }),
+    PartyBalanceLatest.count({ where: { companyId: COMPANY_ID } }),
+    CurrentLoan.count({ where: { companyId: COMPANY_ID } }),
+    CFOMetric.count({
+      where: {
+        companyId: COMPANY_ID,
+        metricKey: { [Op.in]: ['interest_expense_latest', 'loans_balance_live'] }
+      }
+    })
+  ]);
+  return { ledgerCount, partyCount, loanCount, metricCount };
+};
+
+const run = async () => {
+  await runSingleSync(1);
+
+  const countsAfterFirst = await snapshotCounts();
+  console.log('[smoke] counts after first run:', countsAfterFirst);
+
+  await runSingleSync(2);
+
+  const countsAfterSecond = await snapshotCounts();
+  console.log('[smoke] counts after second run:', countsAfterSecond);
+
+  if (countsAfterFirst.ledgerCount !== countsAfterSecond.ledgerCount) {
+    throw new Error(`ledger_monthly_balances count changed across idempotent runs (${countsAfterFirst.ledgerCount} -> ${countsAfterSecond.ledgerCount})`);
+  }
+  if (countsAfterFirst.partyCount !== countsAfterSecond.partyCount) {
+    throw new Error(`party_balances_latest count changed across idempotent runs (${countsAfterFirst.partyCount} -> ${countsAfterSecond.partyCount})`);
+  }
+  if (countsAfterFirst.loanCount !== countsAfterSecond.loanCount) {
+    throw new Error(`current_loans count changed across idempotent runs (${countsAfterFirst.loanCount} -> ${countsAfterSecond.loanCount})`);
+  }
+  if (countsAfterFirst.metricCount !== countsAfterSecond.metricCount) {
+    throw new Error(`cfo_metrics count for interest/loan keys changed across idempotent runs (${countsAfterFirst.metricCount} -> ${countsAfterSecond.metricCount})`);
+  }
+  console.log('[smoke] idempotency counts stable across repeated sync');
 
   const [partyRows, debtors, creditors, loans, interestMetric] = await Promise.all([
     PartyBalanceLatest.findAll({ where: { companyId: COMPANY_ID } }),
