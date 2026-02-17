@@ -1,9 +1,9 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "backend/Dockerfile"
 
 [deploy]
-# Use one image for both services. Set RAILWAY_PROCESS=worker on the worker service.
-startCommand = "sh -lc 'if [ \"$RAILWAY_PROCESS\" = \"worker\" ]; then npm --prefix backend run worker; else npm --prefix backend start; fi'"
+# Single image for both services. Set RAILWAY_PROCESS=worker on the worker service.
+startCommand = "sh -lc 'if [ \"$RAILWAY_PROCESS\" = \"worker\" ]; then npm run worker; else npm start; fi'"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
