@@ -345,18 +345,42 @@ const trimOldSnapshots = async (companyId, latestClosedKey, transaction) => {
 };
 
 const upsertMetric = async (companyId, metricKey, metricValue, timeScope, transaction, opts = {}) => {
-  await CFOMetric.upsert({
+  const normalizedScope = (timeScope || 'live').toLowerCase();
+  const isMonthlyScope = normalizedScope === 'month';
+  // Sanity contract: monthly scope keeps month-level history; non-month scope behaves as latest/current.
+  const metricMonth = isMonthlyScope ? (opts.month || null) : null;
+
+  if (isMonthlyScope && !metricMonth) {
+    throw new Error(`month is required for monthly metric '${metricKey}'`);
+  }
+
+  const where = {
+    companyId,
+    metricKey,
+    timeScope: normalizedScope,
+    ...(isMonthlyScope ? { month: metricMonth } : {})
+  };
+
+  const payload = {
     companyId,
     metricKey,
     metricValue: metricValue === null || metricValue === undefined ? null : metricValue,
     metricText: metricValue === null || metricValue === undefined ? null : String(metricValue),
-    timeScope: timeScope || 'live',
-    month: opts.month || null,
+    timeScope: normalizedScope,
+    month: metricMonth,
     changePct: opts.changePct ?? null,
     severity: opts.severity || null,
     computedAt: new Date(),
     updatedAt: new Date()
-  }, { transaction });
+  };
+
+  const existing = await CFOMetric.findOne({ where, transaction });
+  if (existing) {
+    await existing.update(payload, { transaction });
+    return;
+  }
+
+  await CFOMetric.create(payload, { transaction });
 };
 
 const computeCfoMetrics = async (companyId, transaction) => {

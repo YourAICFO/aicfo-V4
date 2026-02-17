@@ -407,6 +407,40 @@ const toNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const upsertCFOMetricRecord = async ({ companyId, metricKey, metricValue, timeScope, month = null }) => {
+  const normalizedScope = String(timeScope || 'live').toLowerCase();
+  const isMonthlyScope = normalizedScope === 'month';
+  const metricMonth = isMonthlyScope ? month : null;
+  if (isMonthlyScope && !metricMonth) {
+    throw new Error(`month is required for monthly metric '${metricKey}'`);
+  }
+  const where = {
+    companyId,
+    metricKey,
+    timeScope: normalizedScope,
+    ...(isMonthlyScope ? { month: metricMonth } : {})
+  };
+
+  const payload = {
+    companyId,
+    metricKey,
+    metricValue: metricValue === null || metricValue === undefined ? null : metricValue,
+    metricText: metricValue === null || metricValue === undefined ? null : String(metricValue),
+    timeScope: normalizedScope,
+    month: metricMonth,
+    computedAt: new Date(),
+    updatedAt: new Date()
+  };
+
+  const existing = await CFOMetric.findOne({ where });
+  if (existing) {
+    await existing.update(payload);
+    return;
+  }
+
+  await CFOMetric.create(payload);
+};
+
 const persistOptionalConnectorBlocks = async (companyId, payload, monthKey) => {
   const { partyBalances, loans, interestSummary, metadata } = payload || {};
 
@@ -488,14 +522,12 @@ const persistOptionalConnectorBlocks = async (companyId, payload, monthKey) => {
       }
 
       const loanTotal = loans.items.reduce((sum, item) => sum + toNumber(item?.balance), 0);
-      await CFOMetric.upsert({
+      await upsertCFOMetricRecord({
         companyId,
         metricKey: 'loans_balance_live',
         metricValue: loanTotal,
-        month: monthKey,
         timeScope: 'live',
-        computedAt: new Date(),
-        updatedAt: new Date()
+        month: monthKey
       });
     } catch (error) {
       logger.warn({ companyId, error: error.message }, 'Optional block persist failed: loans');
@@ -504,14 +536,12 @@ const persistOptionalConnectorBlocks = async (companyId, payload, monthKey) => {
 
   if (interestSummary && interestSummary.latestMonthAmount !== undefined && interestSummary.latestMonthAmount !== null) {
     try {
-      await CFOMetric.upsert({
+      await upsertCFOMetricRecord({
         companyId,
         metricKey: 'interest_expense_latest',
         metricValue: toNumber(interestSummary.latestMonthAmount),
-        month: interestSummary.monthKey || monthKey,
         timeScope: 'latest',
-        computedAt: new Date(),
-        updatedAt: new Date()
+        month: interestSummary.monthKey || monthKey
       });
     } catch (error) {
       logger.warn({ companyId, error: error.message }, 'Optional block persist failed: interestSummary');

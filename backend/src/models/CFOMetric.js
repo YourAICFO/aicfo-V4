@@ -65,7 +65,7 @@ const CFOMetric = sequelize.define('CFOMetric', {
   indexes: [
     { fields: ['company_id'] },
     { fields: ['metric_key'] },
-    { unique: true, fields: ['company_id', 'metric_key', 'time_scope'] }
+    { fields: ['company_id', 'metric_key', 'time_scope', 'month'] }
   ]
 });
 
