@@ -1,19 +1,19 @@
 # Backend-only Dockerfile for Railway deployment
 FROM node:22-alpine
 
-WORKDIR /app/backend
+WORKDIR /app
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
 
-# Copy backend package metadata and install production dependencies
-COPY backend/package*.json ./
+# Copy package metadata and install production dependencies
+COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy backend source tree from repo root build context
-COPY backend/src ./src
-COPY backend/docs ./docs
-COPY backend/migrations ./migrations
+# Copy backend source tree
+COPY src ./src
+COPY docs ./docs
+COPY migrations ./migrations
 # Keep startup behavior consistent for optional local connector artifact + static fallback
 RUN mkdir -p downloads public
 
