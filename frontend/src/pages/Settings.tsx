@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Building2, Lock, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { authApi, companyApi } from '../services/api';
+import { authApi, billingApi, companyApi } from '../services/api';
 
 interface Company {
   id: string;
@@ -17,6 +17,27 @@ interface Company {
   panNumber: string;
 }
 
+interface BillingStatus {
+  plan: { code: string; name: string; price_amount: number; currency: string; interval: string } | null;
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  user_trial?: {
+    has_used_trial: boolean;
+    trial_started_at: string | null;
+    trial_ends_at: string | null;
+    is_active: boolean;
+  };
+}
+
+interface InvoiceRow {
+  id: string;
+  invoiceNo: string;
+  total: number;
+  status: string;
+  issuedAt: string;
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { user, selectedCompanyId, setSelectedCompany } = useAuthStore();
@@ -25,6 +46,9 @@ export default function Settings() {
   const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
+  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+  const [billingInvoices, setBillingInvoices] = useState<InvoiceRow[]>([]);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [profileData, setProfileData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -39,6 +63,7 @@ export default function Settings() {
 
   useEffect(() => {
     loadCompanies();
+    loadBilling();
   }, []);
 
   const loadCompanies = async () => {
@@ -59,6 +84,35 @@ export default function Settings() {
       setMessage({ type: 'success', text: 'Profile updated successfully' });
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update profile' });
+    }
+  };
+
+  const loadBilling = async () => {
+    try {
+      setBillingLoading(true);
+      const [statusRes, invoicesRes] = await Promise.all([
+        billingApi.getStatus(),
+        billingApi.getInvoices(),
+      ]);
+      setBillingStatus(statusRes?.data?.data || null);
+      setBillingInvoices(invoicesRes?.data?.data || []);
+    } catch (error) {
+      console.error('Failed to load billing:', error);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    try {
+      setBillingLoading(true);
+      await billingApi.subscribe('starter_5000');
+      await loadBilling();
+      setMessage({ type: 'success', text: 'Subscription initiated successfully.' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.response?.data?.error || 'Failed to subscribe' });
+    } finally {
+      setBillingLoading(false);
     }
   };
 
@@ -133,6 +187,7 @@ export default function Settings() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'company', label: 'Company', icon: Building2 },
+    { id: 'billing', label: 'Billing', icon: Building2 },
     { id: 'security', label: 'Security', icon: Lock },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
@@ -319,6 +374,78 @@ export default function Settings() {
                 </label>
                 <button className="btn-primary">Save Preferences</button>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'billing' && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-6">Billing</h2>
+              {billingLoading ? (
+                <p className="text-sm text-gray-500">Loading billing details...</p>
+              ) : (
+                <div className="space-y-6">
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Current Plan</p>
+                    <p className="text-lg font-semibold">{billingStatus?.plan?.name || 'Starter ₹5,000/month'}</p>
+                    <p className="text-sm text-gray-600 mt-1">Status: {billingStatus?.status || 'trialing'}</p>
+                    <p className="text-sm text-gray-600">
+                      Period Ends:{' '}
+                      {billingStatus?.current_period_end
+                        ? new Date(billingStatus.current_period_end).toLocaleDateString()
+                        : 'Not available yet'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Trial:{' '}
+                      {billingStatus?.user_trial?.is_active
+                        ? `Active until ${new Date(billingStatus.user_trial.trial_ends_at || '').toLocaleDateString()}`
+                        : billingStatus?.user_trial?.has_used_trial
+                          ? 'Already used'
+                          : 'Not started'}
+                    </p>
+                    <button onClick={handleSubscribe} className="btn-primary mt-4">
+                      Subscribe ₹5,000/month
+                    </button>
+                  </div>
+
+                  <div>
+                    <h3 className="font-medium mb-3">Invoices</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2">Invoice</th>
+                            <th className="text-left py-2">Issued</th>
+                            <th className="text-left py-2">Status</th>
+                            <th className="text-right py-2">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billingInvoices.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-4 text-gray-500">No invoices yet.</td>
+                            </tr>
+                          ) : (
+                            billingInvoices.map((invoice) => (
+                              <tr key={invoice.id} className="border-b border-gray-100">
+                                <td className="py-2">{invoice.invoiceNo}</td>
+                                <td className="py-2">{new Date(invoice.issuedAt).toLocaleDateString()}</td>
+                                <td className="py-2 capitalize">{invoice.status}</td>
+                                <td className="py-2 text-right">
+                                  {(Number(invoice.total || 0) / 100).toLocaleString('en-IN', {
+                                    style: 'currency',
+                                    currency: 'INR',
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

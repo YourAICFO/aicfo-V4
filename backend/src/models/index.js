@@ -45,6 +45,11 @@ const { IntegrationSyncEvent } = require('./IntegrationSyncEvent');
 const { IngestionLog } = require('./IngestionLog');
 const { AIChatThread } = require('./AIChatThread');
 const { AIChatMessage } = require('./AIChatMessage');
+const { BillingPlan } = require('./BillingPlan');
+const { CompanySubscription } = require('./CompanySubscription');
+const { Invoice } = require('./Invoice');
+const { UsageDaily } = require('./UsageDaily');
+const { UserBillingProfile } = require('./UserBillingProfile');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -167,6 +172,20 @@ AIChatThread.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 AIChatThread.hasMany(AIChatMessage, { foreignKey: 'thread_id', as: 'messages' });
 AIChatMessage.belongsTo(AIChatThread, { foreignKey: 'thread_id', as: 'thread' });
 
+Company.hasMany(CompanySubscription, { foreignKey: 'company_id', as: 'companySubscriptions' });
+CompanySubscription.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+BillingPlan.hasMany(CompanySubscription, { foreignKey: 'plan_code', sourceKey: 'code', as: 'subscriptions' });
+CompanySubscription.belongsTo(BillingPlan, { foreignKey: 'plan_code', targetKey: 'code', as: 'plan' });
+
+Company.hasMany(Invoice, { foreignKey: 'company_id', as: 'invoices' });
+Invoice.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Company.hasMany(UsageDaily, { foreignKey: 'company_id', as: 'usageDaily' });
+UsageDaily.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+User.hasOne(UserBillingProfile, { foreignKey: 'user_id', as: 'billingProfile' });
+UserBillingProfile.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
   sequelize,
   User,
@@ -214,5 +233,10 @@ module.exports = {
   IntegrationSyncEvent,
   IngestionLog,
   AIChatThread,
-  AIChatMessage
+  AIChatMessage,
+  BillingPlan,
+  CompanySubscription,
+  Invoice,
+  UsageDaily,
+  UserBillingProfile
 };

@@ -33,6 +33,7 @@ const creditorsRoutes = require('./routes/creditors');
 const devToolsRoutes = require('./routes/devTools');
 const downloadRoutes = require('./routes/download');
 const connectorRoutes = require('./routes/connector');
+const { billingRouter, handleBillingWebhook } = require('./routes/billing');
 
 
 const app = express();
@@ -118,6 +119,8 @@ app.use(sentryRequestHandler);
 /* ===============================
    Body parsing
 ================================ */
+// Keep webhook raw-body route explicit and ahead of express.json for signature verification.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleBillingWebhook);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -158,6 +161,7 @@ app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/connector', connectorRoutes);
+app.use('/api/billing', billingRouter);
 
 
 /* ===============================

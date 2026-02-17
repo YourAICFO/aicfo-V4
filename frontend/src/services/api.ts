@@ -121,6 +121,13 @@ export const subscriptionApi = {
   getStatus: () => api.get('/subscription/status'),
 };
 
+export const billingApi = {
+  getStatus: () => api.get('/billing/status'),
+  subscribe: (planCode: string) => api.post('/billing/subscribe', { planCode }),
+  getInvoices: () => api.get('/billing/invoices'),
+  getInvoice: (id: string) => api.get(`/billing/invoices/${id}`),
+};
+
 // Finance API
 export const financeApi = {
   getDebtorsSummary: () => api.get('/finance/debtors/summary'),

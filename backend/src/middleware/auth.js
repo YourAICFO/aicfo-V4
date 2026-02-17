@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User, Company, Subscription } = require('../models');
 const { jwtSecret } = require('../config/auth');
+const { markCompanyActiveToday } = require('../services/usageMeteringService');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -78,6 +79,7 @@ const requireCompany = async (req, res, next) => {
     req.company = company;
     req.subscription = subscription;
     req.companyId = company.id;
+    markCompanyActiveToday(company.id).catch(() => {});
     next();
   } catch (error) {
     console.error('Company middleware error:', error);

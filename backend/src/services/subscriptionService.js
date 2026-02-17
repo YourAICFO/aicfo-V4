@@ -1,4 +1,4 @@
-const { Subscription, sequelize } = require('../models');
+const { Subscription, CompanySubscription, Company, UserBillingProfile, sequelize } = require('../models');
 
 const TRIAL_DAYS = 30;
 
@@ -92,9 +92,57 @@ const lockExpiredTrialIfNeeded = async (subscription) => {
   return subscription;
 };
 
-const checkAccess = async (companyId) => {
+const resolveUserIdForAccess = async (companyId, userId) => {
+  if (userId) return userId;
+  const company = await Company.findByPk(companyId, { attributes: ['ownerId'] });
+  return company?.ownerId || null;
+};
+
+const isUserTrialActive = async (userId) => {
+  if (!userId) return false;
+  const profile = await UserBillingProfile.findOne({ where: { userId } });
+  if (!profile?.trialEndsAt) return false;
+  return new Date(profile.trialEndsAt) > new Date();
+};
+
+const checkAccess = async (companyId, userId = null) => {
+  const resolvedUserId = await resolveUserIdForAccess(companyId, userId);
+  const trialActive = await isUserTrialActive(resolvedUserId);
+
+  const latestBillingSub = await CompanySubscription.findOne({
+    where: { companyId },
+    order: [['updatedAt', 'DESC']]
+  });
+
+  if (latestBillingSub) {
+    if (latestBillingSub.status === 'active') {
+      return { allowed: true };
+    }
+    if (latestBillingSub.status === 'trialing' && trialActive) {
+      return { allowed: true };
+    }
+    if (trialActive) {
+      return { allowed: true };
+    }
+    return {
+      allowed: false,
+      reason: latestBillingSub.status === 'past_due'
+        ? 'Billing is past due. Please update payment method.'
+        : 'Subscription is canceled. Please subscribe to continue.'
+    };
+  }
+
   const subscription = await ensureSubscription(companyId);
   const updated = await lockExpiredTrialIfNeeded(subscription);
+
+  if (trialActive) {
+    return { allowed: true };
+  }
+
+  // Legacy fallback: only active paid status should pass if no user-level trial is active.
+  if (updated.subscriptionStatus === 'active' && !updated.accountLocked) {
+    return { allowed: true };
+  }
 
   if (updated.accountLocked || updated.subscriptionStatus === 'expired') {
     return {
@@ -103,7 +151,10 @@ const checkAccess = async (companyId) => {
     };
   }
 
-  return { allowed: true };
+  return {
+    allowed: false,
+    reason: 'Your free trial has expired. Please upgrade.'
+  };
 };
 
 const assertTrialOrActive = async (companyId) => {
