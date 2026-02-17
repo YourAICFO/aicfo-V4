@@ -25,3 +25,12 @@ Healthy response signals:
 - `coverage.classifiedPct` is high and `topUnclassifiedLedgers` is small.
 - `currentBalances.cashTotal/debtorsTotal/creditorsTotal/loansTotal` are non-zero when expected.
 
+## Connector Login Contract Check
+
+Connector login endpoint expects camelCase keys:
+
+```bash
+curl -X POST "$API_BASE_URL/api/connector/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"x@y.com","password":"secret"}'
+```

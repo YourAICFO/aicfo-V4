@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AICFO.Connector.Shared.Models;
 using Microsoft.Extensions.Logging;
 
@@ -27,19 +28,29 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     {
         PropertyNameCaseInsensitive = true
     };
+    private static readonly JsonSerializerOptions RequestJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public async Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/login"))
+        const string endpointPath = "/api/connector/login";
+        var body = new ConnectorLoginRequest
         {
-            Content = JsonContent.Create(new { email, password })
+            Email = email,
+            Password = password
         };
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var envelope = ParseEnvelope<JsonElement>(body);
-        if (!response.IsSuccessStatusCode || !envelope.success)
+        var responseEnvelope = await PostJsonAsync(baseUrl, endpointPath, body, cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(responseEnvelope.responseBody);
+        if (!responseEnvelope.isSuccessStatusCode || !envelope.success)
         {
-            throw new InvalidOperationException(envelope.error ?? "Login failed.");
+            throw new ApiRequestException(
+                envelope.error ?? "Login failed.",
+                baseUrl,
+                endpointPath,
+                responseEnvelope.statusCode,
+                responseEnvelope.responseBody);
         }
         var loginData = envelope.data;
         if (loginData.ValueKind != JsonValueKind.Object || !loginData.TryGetProperty("token", out var tokenElement))
@@ -57,7 +68,7 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
 
     public async Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/companies"));
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, "/api/connector/companies"));
         request.Headers.Authorization = new("Bearer", userJwt);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -98,7 +109,7 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
 
     public async Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/register-device"))
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(baseUrl, "/api/connector/register-device"))
         {
             Content = JsonContent.Create(new { companyId, deviceId, deviceName })
         };
@@ -137,7 +148,7 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
 
     public async Task<ConnectorStatusV1Response> GetConnectorStatusV1Async(string baseUrl, string userJwt, string companyId, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{baseUrl.TrimEnd('/')}/api/connector/status/v1?companyId={Uri.EscapeDataString(companyId)}"));
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, $"/api/connector/status/v1?companyId={Uri.EscapeDataString(companyId)}"));
         request.Headers.Authorization = new("Bearer", userJwt);
         request.Headers.TryAddWithoutValidation("x-company-id", companyId);
 
@@ -166,7 +177,7 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     public async Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(apiUrl)) return false;
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{apiUrl.TrimEnd('/')}/health"));
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(apiUrl, "/health"));
         using var response = await httpClient.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
@@ -238,8 +249,7 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, ConnectorConfig config, string path, string token, object? body = null, string? payloadHash = null)
     {
-        var baseUri = config.ApiUrl.TrimEnd('/');
-        var request = new HttpRequestMessage(method, new Uri($"{baseUri}{path}"));
+        var request = new HttpRequestMessage(method, BuildApiUri(config.ApiUrl, path));
         request.Headers.Authorization = new("Bearer", token);
 
         if (!string.IsNullOrWhiteSpace(payloadHash))
@@ -253,6 +263,25 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         }
 
         return request;
+    }
+
+    private static Uri BuildApiUri(string baseUrl, string path)
+    {
+        var normalizedBase = string.IsNullOrWhiteSpace(baseUrl) ? string.Empty : $"{baseUrl.TrimEnd('/')}/";
+        return new Uri(new Uri(normalizedBase, UriKind.Absolute), path.TrimStart('/'));
+    }
+
+    private async Task<(bool isSuccessStatusCode, int statusCode, string responseBody)> PostJsonAsync<TBody>(string baseUrl, string endpointPath, TBody body, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(baseUrl, endpointPath))
+        {
+            Content = JsonContent.Create(body, options: RequestJsonOptions)
+        };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        return (response.IsSuccessStatusCode, (int)response.StatusCode, responseBody);
     }
 
     private static (bool success, T? data, string? error) ParseEnvelope<T>(string json)
@@ -281,4 +310,26 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
             return (false, default, "Invalid JSON response from backend.");
         }
     }
+}
+
+public sealed class ApiRequestException(
+    string message,
+    string baseUrl,
+    string endpointPath,
+    int statusCode,
+    string? responseBody) : InvalidOperationException(message)
+{
+    public string BaseUrl { get; } = baseUrl;
+    public string EndpointPath { get; } = endpointPath;
+    public int StatusCode { get; } = statusCode;
+    public string? ResponseBody { get; } = responseBody;
+}
+
+internal sealed class ConnectorLoginRequest
+{
+    [JsonPropertyName("email")]
+    public string Email { get; set; } = string.Empty;
+
+    [JsonPropertyName("password")]
+    public string Password { get; set; } = string.Empty;
 }

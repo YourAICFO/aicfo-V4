@@ -189,6 +189,7 @@ internal sealed class ConnectorControlPanel : Form
     private bool _statusRefreshRunning;
     private readonly Dictionary<string, string> _statusDiagnosticsByMappingId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, MappingStatusSnapshot> _statusSnapshotByMappingId = new(StringComparer.OrdinalIgnoreCase);
+    private LoginDiagnostics? _lastLoginDiagnostics;
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -349,7 +350,12 @@ internal sealed class ConnectorControlPanel : Form
 
         var loginButton = new Button { Text = "Login", Width = 120 };
         loginButton.Click += async (_, _) => await LoginRecommendedAsync();
-        panel.Controls.Add(loginButton, 1, 3);
+        var copyLoginDiagnosticsButton = new Button { Text = "Copy Login Diagnostics", Width = 170 };
+        copyLoginDiagnosticsButton.Click += (_, _) => CopyLoginDiagnostics();
+        var loginButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
+        loginButtons.Controls.Add(loginButton);
+        loginButtons.Controls.Add(copyLoginDiagnosticsButton);
+        panel.Controls.Add(loginButtons, 1, 3);
 
         panel.Controls.Add(new Label { Text = "Web Company", AutoSize = true }, 0, 4);
         panel.Controls.Add(_webCompanyCombo, 1, 4);
@@ -489,6 +495,11 @@ internal sealed class ConnectorControlPanel : Form
         try
         {
             var login = await _apiClient.LoginAsync(apiBaseUrl, email, password, CancellationToken.None);
+            _lastLoginDiagnostics = new LoginDiagnostics(
+                apiBaseUrl,
+                "/api/connector/login",
+                200,
+                "Login successful");
             if (string.IsNullOrWhiteSpace(login.Token))
             {
                 MessageBox.Show("Login failed: token missing.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -516,11 +527,35 @@ internal sealed class ConnectorControlPanel : Form
 
             await RefreshStatusGridAsync();
         }
+        catch (ApiRequestException ex)
+        {
+            _onboardingJwt = null;
+            _webCompanyCombo.Enabled = false;
+            _webCompanyCombo.Items.Clear();
+
+            var responsePreview = TruncateForUi(ex.ResponseBody, 500);
+            _lastLoginDiagnostics = new LoginDiagnostics(
+                ex.BaseUrl,
+                ex.EndpointPath,
+                ex.StatusCode,
+                responsePreview);
+
+            MessageBox.Show(
+                $"Login failed.\nHTTP {(ex.StatusCode > 0 ? ex.StatusCode : 0)}\nResponse: {responsePreview}\n\nCheck API URL and credentials.",
+                "AI CFO Connector",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
         catch (Exception ex)
         {
             _onboardingJwt = null;
             _webCompanyCombo.Enabled = false;
             _webCompanyCombo.Items.Clear();
+            _lastLoginDiagnostics = new LoginDiagnostics(
+                apiBaseUrl,
+                "/api/connector/login",
+                null,
+                TruncateForUi(ex.Message, 500));
             MessageBox.Show($"Login failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -625,6 +660,26 @@ internal sealed class ConnectorControlPanel : Form
         {
             MessageBox.Show($"Register device failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void CopyLoginDiagnostics()
+    {
+        if (_lastLoginDiagnostics is null)
+        {
+            MessageBox.Show("No login diagnostics available yet. Attempt login first.", "AI CFO Connector");
+            return;
+        }
+
+        var diagnostics = new
+        {
+            baseUrl = _lastLoginDiagnostics.BaseUrl,
+            endpointPath = _lastLoginDiagnostics.EndpointPath,
+            statusCode = _lastLoginDiagnostics.StatusCode,
+            responseBody = _lastLoginDiagnostics.ResponseBody
+        };
+
+        Clipboard.SetText(JsonSerializer.Serialize(diagnostics, new JsonSerializerOptions { WriteIndented = true }));
+        MessageBox.Show("Login diagnostics copied.", "AI CFO Connector");
     }
 
     private async Task TestTallyAsync()
@@ -1119,6 +1174,13 @@ internal sealed class ConnectorControlPanel : Form
         return $"{value[..(maxLength - 3)]}...";
     }
 
+    private static string TruncateForUi(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "(empty response body)";
+        if (value.Length <= maxLength) return value;
+        return $"{value[..maxLength]}...";
+    }
+
     private string? GetMappingConflictMessage(string companyId, string tallyCompanyName, string? currentMappingId)
     {
         var byCompany = _config.Mappings.FirstOrDefault(m =>
@@ -1238,3 +1300,5 @@ internal sealed class MappingStatusSnapshot
     public string LastSyncStatus { get; init; } = "-";
     public string ReadinessMonth { get; init; } = "-";
 }
+
+internal sealed record LoginDiagnostics(string BaseUrl, string EndpointPath, int? StatusCode, string ResponseBody);

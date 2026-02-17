@@ -255,6 +255,14 @@ router.post('/auth', async (req, res) => {
 router.post('/login', connectorLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
+    if (process.env.CONNECTOR_LOGIN_DEBUG === '1') {
+      console.log('connector_login_debug', {
+        hasEmail: Boolean(email),
+        emailLength: typeof email === 'string' ? email.length : 0,
+        hasPassword: Boolean(password),
+        passwordLength: typeof password === 'string' ? password.length : 0
+      });
+    }
     if (!email || !password) {
       return res.status(400).json({
         success: false,
