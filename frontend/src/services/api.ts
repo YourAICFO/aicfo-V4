@@ -97,7 +97,10 @@ export const aiApi = {
   getInsights: () => api.get('/ai/insights'),
   markRead: (id: string) => api.post(`/ai/insights/${id}/read`),
   dismiss: (id: string) => api.post(`/ai/insights/${id}/dismiss`),
-  chat: (message: string) => api.post('/ai/chat', { message }),
+  listThreads: () => api.get('/ai/threads'),
+  createThread: (title?: string) => api.post('/ai/threads', title ? { title } : {}),
+  getThread: (threadId: string) => api.get(`/ai/threads/${threadId}`),
+  chat: (message: string, threadId?: string) => api.post('/ai/chat', threadId ? { message, threadId } : { message }),
 };
 
 // Integration API

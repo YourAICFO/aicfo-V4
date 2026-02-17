@@ -43,6 +43,8 @@ const { ConnectorDevice } = require('./ConnectorDevice');
 const { IntegrationSyncRun } = require('./IntegrationSyncRun');
 const { IntegrationSyncEvent } = require('./IntegrationSyncEvent');
 const { IngestionLog } = require('./IngestionLog');
+const { AIChatThread } = require('./AIChatThread');
+const { AIChatMessage } = require('./AIChatMessage');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -158,6 +160,13 @@ IntegrationSyncEvent.belongsTo(IntegrationSyncRun, { foreignKey: 'run_id', as: '
 Company.hasMany(IngestionLog, { foreignKey: 'company_id', as: 'ingestionLogs' });
 IngestionLog.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+User.hasMany(AIChatThread, { foreignKey: 'user_id', as: 'aiChatThreads' });
+AIChatThread.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Company.hasMany(AIChatThread, { foreignKey: 'company_id', as: 'aiChatThreads' });
+AIChatThread.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+AIChatThread.hasMany(AIChatMessage, { foreignKey: 'thread_id', as: 'messages' });
+AIChatMessage.belongsTo(AIChatThread, { foreignKey: 'thread_id', as: 'thread' });
+
 module.exports = {
   sequelize,
   User,
@@ -203,5 +212,7 @@ module.exports = {
   ConnectorDevice,
   IntegrationSyncRun,
   IntegrationSyncEvent,
-  IngestionLog
+  IngestionLog,
+  AIChatThread,
+  AIChatMessage
 };
