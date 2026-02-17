@@ -2,7 +2,7 @@ const { subscriptionService } = require('../services');
 
 const getStatus = async (req, res) => {
   try {
-    const status = await subscriptionService.getStatus(req.companyId);
+    const status = await subscriptionService.getStatus(req.companyId, req.userId);
     res.json({
       success: true,
       data: status

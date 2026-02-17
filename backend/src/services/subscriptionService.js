@@ -188,24 +188,29 @@ const assertTrialOrActive = async (companyId) => {
   return updated;
 };
 
-const getStatus = async (companyId) => {
+const getStatus = async (companyId, userId = null) => {
   const subscription = await ensureSubscription(companyId);
   const updated = await lockExpiredTrialIfNeeded(subscription);
+  const resolvedUserId = await resolveUserIdForAccess(companyId, userId);
+  const trialState = await getUserTrialState(resolvedUserId);
 
   const now = new Date();
-  let trialEndsInDays = null;
-  if (updated.trialEndDate) {
-    trialEndsInDays = Math.max(
-      0,
-      Math.ceil((updated.trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    );
-  }
+  const effectiveTrialEndDate = trialState.active
+    ? trialState.profile?.trialEndsAt
+    : updated.trialEndDate;
+  const trialEndsInDays = effectiveTrialEndDate
+    ? Math.max(
+        0,
+        Math.ceil((new Date(effectiveTrialEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      )
+    : null;
+  const effectiveStatus = trialState.active ? 'trial' : updated.subscriptionStatus;
 
   return {
-    status: updated.subscriptionStatus,
-    trialEndDate: updated.trialEndDate,
+    status: effectiveStatus,
+    trialEndDate: effectiveTrialEndDate,
     trialEndsInDays,
-    accountLocked: updated.accountLocked
+    accountLocked: trialState.active ? false : updated.accountLocked
   };
 };
 
