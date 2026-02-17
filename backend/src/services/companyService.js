@@ -40,7 +40,7 @@ const getUserCompanies = async (userId, opts = {}, userEmail = null) => {
       as: 'subscription',
       attributes: ['planType', 'status', 'features']
     }],
-    order: [['createdAt', 'DESC']]
+    order: [['created_at', 'DESC']]
   });
 
   return companies;
