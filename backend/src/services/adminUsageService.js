@@ -35,7 +35,10 @@ const logAIQuestion = async (companyId, userId, question, success = true, detail
       success,
       detectedQuestionKey: details.detectedQuestionKey || null,
       failureReason: details.failureReason || null,
-      metricsUsedJson: details.metricsUsedJson || {}
+      reason: details.reason || null,
+      missingMetricKeys: details.missingMetricKeys || [],
+      metricsUsedJson: details.metricsUsedJson || {},
+      requestedAt: details.requestedAt || new Date()
     });
   } catch (error) {
     console.warn('AI question log failed:', error.message);

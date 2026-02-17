@@ -133,11 +133,14 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
         usedRewrite: process.env.AI_REWRITE_ENABLED === 'true'
       }
     });
-    const missingMetrics = typeof response?.message === 'string' && response.message.includes('Not enough data');
+    const missingMetricKeys = response?.missing?.metrics || [];
+    const missingMetrics = missingMetricKeys.length > 0;
     const aiSuccess = Boolean(response?.matched) && !missingMetrics;
     adminUsageService.logAIQuestion(req.companyId, req.userId, message, aiSuccess, {
       detectedQuestionKey: response?.questionCode || null,
-      failureReason: response?.matched ? (missingMetrics ? 'missing_metrics' : null) : 'unmatched_intent',
+      failureReason: response?.matched ? (missingMetrics ? 'MISSING_METRICS' : null) : 'unmatched_intent',
+      reason: response?.matched ? (missingMetrics ? 'MISSING_METRICS' : null) : 'UNMATCHED_INTENT',
+      missingMetricKeys,
       metricsUsedJson: response?.metrics || {}
     });
     if (response?.questionCode) {

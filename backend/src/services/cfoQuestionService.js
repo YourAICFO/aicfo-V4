@@ -4,18 +4,8 @@ const {
   CFOQuestionMetric,
   CFOQuestionRule,
   CFOQuestionResult,
-  CFOMetric,
-  MonthlyTrialBalanceSummary,
-  CurrentCashBalance,
-  CurrentDebtor,
-  CurrentCreditor,
-  CurrentLoan,
-  CurrentLiquidityMetric
+  CFOMetric
 } = require('../models');
-const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
-const { listMonthKeysBetween } = require('../utils/monthKeyUtils');
-const debtorsService = require('./debtorsService');
-const creditorsService = require('./creditorsService');
 
 const AUTO_INSIGHT_CODES = [
   'CASH_RUNWAY_STATUS',
@@ -25,13 +15,6 @@ const AUTO_INSIGHT_CODES = [
   'DEBTORS_CONCENTRATION',
   'CREDITORS_PRESSURE'
 ];
-
-const addMonths = (monthKey, delta) => {
-  if (!monthKey) return null;
-  const [year, month] = monthKey.split('-').map(Number);
-  const d = new Date(year, month - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 
 const formatNumber = (value, digits = 2) => {
   if (value === null || value === undefined || Number.isNaN(value)) return 'N/A';
@@ -81,150 +64,27 @@ const evaluateCondition = (condition, metrics) => {
   });
 };
 
-const getLatestClosedMonths = (count) => {
-  const latest = getLatestClosedMonthKey();
-  if (!latest) return [];
-  const start = addMonths(latest, -(count - 1));
-  return listMonthKeysBetween(start, latest);
-};
+const getStoredMetricValue = async (companyId, metricKey, timeScope = null) => {
+  const where = {
+    companyId,
+    metricKey,
+    ...(timeScope ? { timeScope } : { timeScope: { [Sequelize.Op.ne]: 'month' } })
+  };
 
-const getSummariesForMonths = async (companyId, months) => {
-  if (!months.length) return [];
-  const rows = await MonthlyTrialBalanceSummary.findAll({
-    where: {
-      companyId,
-      month: { [Sequelize.Op.in]: months }
-    },
-    raw: true
-  });
-  const map = new Map(rows.map(r => [r.month, r]));
-  return months.map(m => map.get(m)).filter(Boolean);
-};
+  const order = timeScope === 'month'
+    ? [['month', 'DESC'], ['updatedAt', 'DESC']]
+    : [['updatedAt', 'DESC']];
 
-const getMetricValue = async (companyId, metricKey, timeScope = null) => {
-  const cached = await CFOMetric.findOne({
-    where: {
-      companyId,
-      metricKey,
-      ...(timeScope ? { timeScope } : {})
-    },
-    raw: true
-  });
-  if (cached) {
-    if (cached.metric_value !== null && cached.metric_value !== undefined) {
-      return Number(cached.metric_value);
-    }
-    if (cached.metric_text !== null && cached.metric_text !== undefined) {
-      return cached.metric_text;
-    }
+  const cached = await CFOMetric.findOne({ where, order, raw: true });
+  if (!cached) return null;
+  if (cached.metric_value !== null && cached.metric_value !== undefined) {
+    const num = Number(cached.metric_value);
+    return Number.isNaN(num) ? null : num;
   }
-  switch (metricKey) {
-    case 'cash_balance_live': {
-      const rows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
-      return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-    }
-    case 'debtors_balance_live': {
-      const rows = await CurrentDebtor.findAll({ where: { companyId }, raw: true });
-      return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-    }
-    case 'creditors_balance_live': {
-      const rows = await CurrentCreditor.findAll({ where: { companyId }, raw: true });
-      return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-    }
-    case 'loans_balance_live': {
-      const rows = await CurrentLoan.findAll({ where: { companyId }, raw: true });
-      return rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-    }
-    case 'cash_runway_months': {
-      const metric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
-      return metric ? Number(metric.cash_runway_months || 0) : 0;
-    }
-    case 'avg_net_cash_outflow_3m': {
-      const metric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
-      return metric ? Number(metric.avg_net_cash_outflow_3m || 0) : 0;
-    }
-    case 'revenue_last_closed': {
-      const latest = getLatestClosedMonthKey();
-      if (!latest) return 0;
-      const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
-      return row ? Number(row.total_revenue || 0) : 0;
-    }
-    case 'expenses_last_closed': {
-      const latest = getLatestClosedMonthKey();
-      if (!latest) return 0;
-      const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
-      return row ? Number(row.total_expenses || 0) : 0;
-    }
-    case 'net_profit_last_closed': {
-      const latest = getLatestClosedMonthKey();
-      if (!latest) return 0;
-      const row = await MonthlyTrialBalanceSummary.findOne({ where: { companyId, month: latest }, raw: true });
-      return row ? Number(row.net_profit || 0) : 0;
-    }
-    case 'revenue_growth_3m': {
-      const latest = getLatestClosedMonthKey();
-      if (!latest) return 0;
-      const recentMonths = getLatestClosedMonths(3);
-      const prevMonths = listMonthKeysBetween(addMonths(latest, -5), addMonths(latest, -3));
-      const recent = await getSummariesForMonths(companyId, recentMonths);
-      const prev = await getSummariesForMonths(companyId, prevMonths);
-      const recentAvg = recent.length
-        ? recent.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0) / recent.length
-        : 0;
-      const prevAvg = prev.length
-        ? prev.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0) / prev.length
-        : 0;
-      if (prevAvg === 0) return 0;
-      return (recentAvg - prevAvg) / prevAvg;
-    }
-    case 'expense_growth_3m': {
-      const latest = getLatestClosedMonthKey();
-      if (!latest) return 0;
-      const recentMonths = getLatestClosedMonths(3);
-      const prevMonths = listMonthKeysBetween(addMonths(latest, -5), addMonths(latest, -3));
-      const recent = await getSummariesForMonths(companyId, recentMonths);
-      const prev = await getSummariesForMonths(companyId, prevMonths);
-      const recentAvg = recent.length
-        ? recent.reduce((sum, r) => sum + Number(r.total_expenses || 0), 0) / recent.length
-        : 0;
-      const prevAvg = prev.length
-        ? prev.reduce((sum, r) => sum + Number(r.total_expenses || 0), 0) / prev.length
-        : 0;
-      if (prevAvg === 0) return 0;
-      return (recentAvg - prevAvg) / prevAvg;
-    }
-    case 'debtors_concentration_ratio': {
-      const rows = await CurrentDebtor.findAll({ where: { companyId }, order: [['balance', 'DESC']], raw: true });
-      const total = rows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-      const top5 = rows.slice(0, 5).reduce((sum, r) => sum + Number(r.balance || 0), 0);
-      return total > 0 ? top5 / total : 0;
-    }
-    case 'creditors_cash_pressure': {
-      const creditors = await CurrentCreditor.findAll({ where: { companyId }, raw: true });
-      const cashRows = await CurrentCashBalance.findAll({ where: { companyId }, raw: true });
-      const totalCreditors = creditors.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-      const totalCash = cashRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
-      return totalCreditors > totalCash;
-    }
-    case 'debtors_revenue_divergence': {
-      const summary = await debtorsService.getSummary(companyId);
-      return Boolean(summary?.divergenceFlag);
-    }
-    case 'revenue_yoy_growth_pct':
-    case 'expense_yoy_growth_pct':
-    case 'net_profit_yoy_growth_pct':
-    case 'gross_margin_yoy_growth_pct': {
-      const cached = await CFOMetric.findOne({ where: { companyId, metricKey: metricKey, timeScope: 'yoy' }, raw: true });
-      return cached && cached.metric_value !== null ? Number(cached.metric_value) : null;
-    }
-    case 'cash_balance_yoy_change':
-    case 'debtor_balance_yoy_change':
-    case 'creditor_balance_yoy_change': {
-      return cached && cached.metric_value !== null ? Number(cached.metric_value) : null;
-    }
-    default:
-      return null;
+  if (cached.metric_text !== null && cached.metric_text !== undefined) {
+    return cached.metric_text;
   }
+  return null;
 };
 
 const getMetricsForQuestion = async (companyId, questionId) => {
@@ -233,14 +93,15 @@ const getMetricsForQuestion = async (companyId, questionId) => {
     raw: true
   });
   const result = {};
-  const latestClosedKey = getLatestClosedMonthKey();
-  const lastYearKey = latestClosedKey ? addMonths(latestClosedKey, -12) : null;
-  result.month = latestClosedKey || null;
-  result.month_last_year = lastYearKey || null;
+  const missingMetricKeys = [];
   for (const metric of metrics) {
-    result[metric.metric_key] = await getMetricValue(companyId, metric.metric_key, metric.time_scope);
+    const value = await getStoredMetricValue(companyId, metric.metric_key, metric.time_scope);
+    result[metric.metric_key] = value;
+    if (value === null || value === undefined || value === '') {
+      missingMetricKeys.push(metric.metric_key);
+    }
   }
-  return result;
+  return { metrics: result, missingMetricKeys };
 };
 
 const resolveRule = async (questionId, metrics) => {
@@ -262,14 +123,36 @@ const computeQuestionResult = async (companyId, code) => {
   if (!question) {
     return null;
   }
-  const metrics = await getMetricsForQuestion(companyId, question.id);
+  const { metrics, missingMetricKeys } = await getMetricsForQuestion(companyId, question.id);
+  if (missingMetricKeys.length > 0) {
+    return {
+      question,
+      severity: 'info',
+      metrics,
+      matched: false,
+      missing: { metrics: missingMetricKeys, tables: [] },
+      message: 'Not available yet for this company. Please sync/update data.'
+    };
+  }
   const rule = await resolveRule(question.id, metrics);
+  if (!rule) {
+    return {
+      question,
+      severity: 'info',
+      metrics,
+      matched: false,
+      missing: { metrics: [], tables: [] },
+      message: 'Not available yet for this company. Please sync/update data.'
+    };
+  }
   const severity = rule?.severity || 'info';
-  const message = rule ? formatTemplate(rule.insight_template, metrics) : 'Not enough data to answer this question.';
+  const message = formatTemplate(rule.insight_template, metrics);
   return {
     question,
     severity,
     metrics,
+    matched: true,
+    missing: { metrics: [], tables: [] },
     message
   };
 };
@@ -289,13 +172,15 @@ const storeQuestionResult = async (companyId, questionId, payload) => {
 const answerQuestion = async (companyId, code) => {
   const computed = await computeQuestionResult(companyId, code);
   if (!computed) {
-    return { message: 'Question not supported.', code, severity: 'info' };
+    return { message: 'Question not supported.', code, severity: 'info', matched: false, missing: { metrics: [], tables: [] } };
   }
   await storeQuestionResult(companyId, computed.question.id, {
     code: computed.question.code,
     title: computed.question.title,
     category: computed.question.category,
     severity: computed.severity,
+    matched: computed.matched,
+    missing: computed.missing,
     metrics: computed.metrics,
     message: computed.message
   });
@@ -304,6 +189,8 @@ const answerQuestion = async (companyId, code) => {
     title: computed.question.title,
     category: computed.question.category,
     severity: computed.severity,
+    matched: computed.matched,
+    missing: computed.missing,
     metrics: computed.metrics,
     message: computed.message
   };
@@ -317,7 +204,7 @@ const getAutoInsights = async (companyId) => {
   const results = [];
   for (const code of AUTO_INSIGHT_CODES) {
     const result = await answerQuestion(companyId, code);
-    if (result && result.code) {
+    if (result && result.code && result.matched) {
       results.push(result);
     }
   }

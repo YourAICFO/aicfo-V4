@@ -31,6 +31,16 @@ const AdminAIQuestion = sequelize.define('AdminAIQuestion', {
     allowNull: true,
     field: 'failure_reason'
   },
+  reason: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  missingMetricKeys: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'missing_metric_keys',
+    defaultValue: []
+  },
   metricsUsedJson: {
     type: DataTypes.JSONB,
     allowNull: true,
@@ -41,6 +51,12 @@ const AdminAIQuestion = sequelize.define('AdminAIQuestion', {
     type: DataTypes.DATE,
     allowNull: false,
     field: 'createdAt',
+    defaultValue: DataTypes.NOW
+  },
+  requestedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'requested_at',
     defaultValue: DataTypes.NOW
   },
   success: {

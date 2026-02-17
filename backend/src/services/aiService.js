@@ -398,6 +398,21 @@ const chatWithCFO = async (companyId, message) => {
     };
   }
   const result = await cfoQuestionService.answerQuestion(companyId, code);
+  if (!result?.matched) {
+    return {
+      message: result?.message || 'Not available yet for this company. Please sync/update data.',
+      matched: false,
+      questionCode: result?.code || code,
+      severity: result?.severity || 'info',
+      metrics: result?.metrics || {},
+      missing: result?.missing || { metrics: [], tables: [] },
+      context: {
+        dataSource: 'company_database',
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
   const rewritten = await rewriteMessageIfEnabled(result.message, {
     code: result.code,
     severity: result.severity,
@@ -407,7 +422,7 @@ const chatWithCFO = async (companyId, message) => {
 
   return {
     message: rewritten,
-    matched: true,
+    matched: Boolean(result?.matched),
     questionCode: result.code,
     severity: result.severity,
     metrics: result.metrics,

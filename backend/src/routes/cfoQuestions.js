@@ -26,10 +26,13 @@ router.get('/questions/:code', authenticate, requireCompany, checkSubscriptionAc
       eventName: 'cfo_question',
       metadata: { questionKey: req.params.code }
     });
-    const missingMetrics = typeof result?.message === 'string' && result.message.includes('Not enough data');
+    const missingMetricKeys = result?.missing?.metrics || [];
+    const missingMetrics = missingMetricKeys.length > 0;
     adminUsageService.logAIQuestion(req.companyId, req.userId, req.params.code, !missingMetrics, {
       detectedQuestionKey: result?.code || req.params.code,
-      failureReason: missingMetrics ? 'missing_metrics' : null,
+      failureReason: missingMetrics ? 'MISSING_METRICS' : null,
+      reason: missingMetrics ? 'MISSING_METRICS' : null,
+      missingMetricKeys,
       metricsUsedJson: result?.metrics || {}
     });
     res.json({ success: true, data: result });
