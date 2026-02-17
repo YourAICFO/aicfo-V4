@@ -1,1 +1,2 @@
-web: cd backend && npm start
+web: npm --prefix backend start
+worker: npm --prefix backend run worker

@@ -2,7 +2,7 @@
 # Fixes "cd: frontend: No such file or directory" by using correct paths from repo root
 
 # Stage 1: Frontend Builder - Install ALL dependencies including dev/build deps
-FROM node:18-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -18,8 +18,8 @@ COPY frontend/ ./
 # Build frontend (now with all PostCSS/Tailwind deps available)
 RUN npm run build
 
-# Stage 2: Backend Builder - Production dependencies only  
-FROM node:18-alpine AS backend-builder
+# Stage 2: Backend Builder - Production dependencies only
+FROM node:22-alpine AS backend-builder
 
 WORKDIR /app/backend
 
@@ -30,7 +30,7 @@ COPY backend/package*.json ./
 RUN npm ci --omit=dev
 
 # Stage 3: Production Runtime
-FROM node:18-alpine AS production
+FROM node:22-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
