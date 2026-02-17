@@ -8,9 +8,7 @@ const {
   CurrentCreditor,
   CurrentLiquidityMetric,
   CFOMetric,
-  CFOAlert,
-  MonthlyDebtor,
-  MonthlyCreditor
+  CFOAlert
 } = require('../models');
 const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
 const { listMonthKeysBetween } = require('../utils/monthKeyUtils');
@@ -132,32 +130,11 @@ const buildContext = async (companyId) => {
 
   const cashLatest = await getCashLatest(companyId);
   const runwayMonths = await getMetricValue(companyId, 'cash_runway_months', 'live', latestClosed);
-  let receivableDays = await getMetricValue(companyId, 'debtor_days', '3m', latestClosed);
-  let payableDays = await getMetricValue(companyId, 'creditor_days', '3m', latestClosed);
-
-  if (receivableDays === null) {
-    const debtorsTotal = await MonthlyDebtor.findOne({
-      where: { companyId, month: latestClosed },
-      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
-      raw: true
-    });
-    const revenueAvg = await getMetricValue(companyId, 'revenue_avg_3m', '3m', latestClosed);
-    receivableDays = revenueAvg && revenueAvg > 0
-      ? (Number(debtorsTotal?.total || 0) / Number(revenueAvg)) * 30
-      : null;
-  }
-
-  if (payableDays === null) {
-    const creditorsTotal = await MonthlyCreditor.findOne({
-      where: { companyId, month: latestClosed },
-      attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
-      raw: true
-    });
-    const expenseAvg = await getMetricValue(companyId, 'expense_avg_3m', '3m', latestClosed);
-    payableDays = expenseAvg && expenseAvg > 0
-      ? (Number(creditorsTotal?.total || 0) / Number(expenseAvg)) * 30
-      : null;
-  }
+  const receivableDays = await getMetricValue(companyId, 'debtor_days', '3m', latestClosed);
+  const payableDays = await getMetricValue(companyId, 'creditor_days', '3m', latestClosed);
+  const missingMetrics = [];
+  if (receivableDays === null || receivableDays === undefined) missingMetrics.push('debtor_days');
+  if (payableDays === null || payableDays === undefined) missingMetrics.push('creditor_days');
 
   const alerts = await CFOAlert.findAll({ where: { companyId }, order: [['generated_at', 'DESC']], limit: 10, raw: true });
 
@@ -176,6 +153,7 @@ const buildContext = async (companyId) => {
     runway_months: runwayMonths,
     receivable_days: receivableDays,
     payable_days: payableDays,
+    missingMetrics,
     alerts,
     debtors_summary: debtorsSummary,
     creditors_summary: creditorsSummary

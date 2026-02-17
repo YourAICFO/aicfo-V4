@@ -45,6 +45,25 @@ const logAIQuestion = async (companyId, userId, question, success = true, detail
   }
 };
 
+const logMissingMetrics = async ({
+  companyId,
+  userId,
+  question,
+  detectedQuestionKey = null,
+  missingMetricKeys = [],
+  failureReason = 'MISSING_METRICS'
+}) => {
+  const sanitizedMissingKeys = Array.isArray(missingMetricKeys) ? missingMetricKeys.filter(Boolean) : [];
+  if (!companyId || !userId || !sanitizedMissingKeys.length) return;
+  await logAIQuestion(companyId, userId, question || detectedQuestionKey || 'unknown', false, {
+    detectedQuestionKey,
+    failureReason,
+    reason: 'MISSING_METRICS',
+    missingMetricKeys: sanitizedMissingKeys,
+    metricsUsedJson: {}
+  });
+};
+
 const getUsageSummary = async () => {
   const companiesCount = await Company.count();
   const activeUsers = await sequelize.query(
@@ -281,5 +300,6 @@ module.exports = {
   getMetricsSummary,
   getUsageByMonth,
   getAIAnalytics,
-  getCustomerMetrics
+  getCustomerMetrics,
+  logMissingMetrics
 };

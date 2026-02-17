@@ -13,7 +13,7 @@ const buildThreadTitle = (text) => {
 // GET /api/ai/insights
 router.get('/insights', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
-    const insights = await aiService.getInsights(req.companyId);
+    const insights = await aiService.getInsights(req.companyId, req.userId);
     adminUsageService.logUsageEvent({
       companyId: req.companyId,
       userId: req.userId,
