@@ -77,6 +77,26 @@ const Company = sequelize.define('Company', {
     type: DataTypes.ENUM('trial', 'active', 'expired'),
     allowNull: true,
     field: 'subscription_status'
+  },
+  deletedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'deleted_at'
+  },
+  deletedByUserId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'deleted_by_user_id',
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  isDeleted: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_deleted'
   }
 }, {
   tableName: 'companies',

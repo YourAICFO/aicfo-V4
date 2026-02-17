@@ -7,7 +7,12 @@ const { companyService } = require('../services');
 // GET /api/companies
 router.get('/', authenticate, async (req, res) => {
   try {
-    const companies = await companyService.getUserCompanies(req.userId);
+    const includeDeleted = req.query.includeDeleted === 'true';
+    const companies = await companyService.getUserCompanies(
+      req.userId,
+      { includeDeleted },
+      req.user?.email
+    );
     res.json({
       success: true,
       data: companies
@@ -77,7 +82,7 @@ router.put('/:id', authenticate, async (req, res) => {
 // DELETE /api/companies/:id
 router.delete('/:id', authenticate, async (req, res) => {
   try {
-    const result = await companyService.deleteCompany(req.params.id, req.userId);
+    const result = await companyService.deleteCompany(req.params.id, req.user.id, req.user?.email);
     res.json({
       success: true,
       message: result.message

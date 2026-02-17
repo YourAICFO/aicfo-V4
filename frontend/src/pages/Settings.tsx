@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Building2, Lock, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { authApi, companyApi } from '../services/api';
@@ -17,9 +18,13 @@ interface Company {
 }
 
 export default function Settings() {
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const { user, selectedCompanyId, setSelectedCompany } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [profileData, setProfileData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -72,6 +77,56 @@ export default function Settings() {
       setMessage({ type: 'success', text: 'Password changed successfully' });
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to change password' });
+    }
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeleteConfirmText('');
+  };
+
+  const handleDeleteCompany = async () => {
+    if (!deleteTarget) return;
+
+    const normalized = deleteConfirmText.trim().toLowerCase();
+    const companyNameMatch = deleteConfirmText.trim() === deleteTarget.name;
+    const deleteKeywordMatch = normalized === 'delete';
+    if (!companyNameMatch && !deleteKeywordMatch) {
+      setMessage({
+        type: 'error',
+        text: `Type "${deleteTarget.name}" or "DELETE" to confirm.`,
+      });
+      return;
+    }
+
+    setDeletingCompanyId(deleteTarget.id);
+    try {
+      await companyApi.delete(deleteTarget.id);
+      const response = await companyApi.getAll();
+      const remainingCompanies: Company[] = response.data?.data || [];
+      setCompanies(remainingCompanies);
+      closeDeleteModal();
+      setMessage({
+        type: 'success',
+        text: 'Company archived. Data and invoices are preserved.',
+      });
+
+      if (selectedCompanyId === deleteTarget.id) {
+        if (remainingCompanies.length > 0) {
+          setSelectedCompany(remainingCompanies[0].id);
+        } else {
+          navigate('/create-company', {
+            state: { message: 'Your company was archived. Create a new company to continue.' },
+          });
+        }
+      }
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.response?.data?.error || 'Failed to archive company',
+      });
+    } finally {
+      setDeletingCompanyId(null);
     }
   };
 
@@ -172,7 +227,16 @@ export default function Settings() {
                 <div className="space-y-6">
                   {companies.map((company) => (
                     <div key={company.id} className="border-b border-gray-200 pb-6 last:border-0">
-                      <h3 className="font-medium mb-4">{company.name}</h3>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h3 className="font-medium">{company.name}</h3>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(company)}
+                          className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                        >
+                          Delete Company
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-gray-500">Industry:</span>{' '}
@@ -259,6 +323,46 @@ export default function Settings() {
           )}
         </div>
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Archive Company</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              This will archive <span className="font-medium">{deleteTarget.name}</span>. Data and invoices are preserved.
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Type the company name or <span className="font-semibold">DELETE</span> to confirm.
+            </p>
+
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="input mt-4"
+              placeholder={`Type "${deleteTarget.name}" or DELETE`}
+            />
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCompany}
+                disabled={deletingCompanyId === deleteTarget.id}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingCompanyId === deleteTarget.id ? 'Archiving...' : 'Archive Company'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

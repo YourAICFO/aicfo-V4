@@ -56,7 +56,7 @@ export const authApi = {
 
 // Company API
 export const companyApi = {
-  getAll: () => api.get('/companies'),
+  getAll: (includeDeleted?: boolean) => api.get('/companies', { params: { includeDeleted } }),
   getById: (id: string) => api.get(`/companies/${id}`),
   create: (data: { name: string; industry?: string; currency?: string }) =>
     api.post('/companies', data),

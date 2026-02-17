@@ -1,5 +1,13 @@
-const { Company, Subscription, FinancialTransaction, CashBalance, Integration, AIInsight } = require('../models');
+const { Company, Subscription, Integration } = require('../models');
 const { createTrialSubscription } = require('./subscriptionService');
+
+const isAdminEmail = (email) => {
+  const allowlist = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return allowlist.includes((email || '').toLowerCase());
+};
 
 const createCompany = async (userId, companyData) => {
   const now = new Date();
@@ -20,15 +28,19 @@ const createCompany = async (userId, companyData) => {
   return company;
 };
 
-const getUserCompanies = async (userId) => {
+const getUserCompanies = async (userId, opts = {}, userEmail = null) => {
+  const includeDeleted = opts.includeDeleted === true && isAdminEmail(userEmail);
   const companies = await Company.findAll({
-    where: { ownerId: userId },
+    where: {
+      ownerId: userId,
+      ...(includeDeleted ? {} : { isDeleted: false })
+    },
     include: [{
       model: Subscription,
       as: 'subscription',
       attributes: ['planType', 'status', 'features']
     }],
-    order: [['created_at', 'DESC']]
+    order: [['createdAt', 'DESC']]
   });
 
   return companies;
@@ -36,7 +48,7 @@ const getUserCompanies = async (userId) => {
 
 const getCompanyById = async (companyId, userId) => {
   const company = await Company.findOne({
-    where: { id: companyId, ownerId: userId },
+    where: { id: companyId, ownerId: userId, isDeleted: false },
     include: [
       {
         model: Subscription,
@@ -58,7 +70,7 @@ const getCompanyById = async (companyId, userId) => {
 
 const updateCompany = async (companyId, userId, updateData) => {
   const company = await Company.findOne({
-    where: { id: companyId, ownerId: userId }
+    where: { id: companyId, ownerId: userId, isDeleted: false }
   });
 
   if (!company) {
@@ -81,24 +93,29 @@ const updateCompany = async (companyId, userId, updateData) => {
   return company;
 };
 
-const deleteCompany = async (companyId, userId) => {
+const deleteCompany = async (companyId, userId, userEmail = null) => {
+  const canAdminDelete = isAdminEmail(userEmail);
   const company = await Company.findOne({
-    where: { id: companyId, ownerId: userId }
+    where: canAdminDelete
+      ? { id: companyId }
+      : { id: companyId, ownerId: userId }
   });
 
   if (!company) {
     throw new Error('Company not found');
   }
 
-  // Delete related data
-  await FinancialTransaction.destroy({ where: { companyId } });
-  await CashBalance.destroy({ where: { companyId } });
-  await Integration.destroy({ where: { companyId } });
-  await AIInsight.destroy({ where: { companyId } });
-  await Subscription.destroy({ where: { companyId } });
-  await company.destroy();
+  if (company.isDeleted) {
+    return { message: 'Company already archived' };
+  }
 
-  return { message: 'Company deleted successfully' };
+  await company.update({
+    isDeleted: true,
+    deletedAt: new Date(),
+    deletedByUserId: userId
+  });
+
+  return { message: 'Company archived successfully' };
 };
 
 module.exports = {

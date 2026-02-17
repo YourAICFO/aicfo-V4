@@ -51,7 +51,7 @@ const requireCompany = async (req, res, next) => {
 
     if (!companyId) {
       const fallbackCompany = await Company.findOne({
-        where: { ownerId: req.userId },
+        where: { ownerId: req.userId, isDeleted: false },
         order: [['created_at', 'DESC']]
       });
       if (fallbackCompany) {
@@ -64,7 +64,7 @@ const requireCompany = async (req, res, next) => {
     }
 
     const company = await Company.findOne({
-      where: { id: companyId, ownerId: req.userId }
+      where: { id: companyId, ownerId: req.userId, isDeleted: false }
     });
 
     if (!company) {
