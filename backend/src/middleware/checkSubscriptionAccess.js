@@ -2,7 +2,8 @@ const { checkAccess } = require('../services/subscriptionService');
 
 const checkSubscriptionAccess = async (req, res, next) => {
   try {
-    const result = await checkAccess(req.companyId, req.userId);
+    const userId = req.userId || req.user?.id || null;
+    const result = await checkAccess(req.companyId, userId);
     if (!result.allowed) {
       return res.status(403).json({
         success: false,
