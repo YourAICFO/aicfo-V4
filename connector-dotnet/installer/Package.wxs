@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
            Version="1.0.0"
@@ -8,7 +9,7 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
-    <UIRef Id="WixUI_Minimal" />
+    <ui:WixUI Id="WixUI_Minimal" />
 
     <!-- Installer UX: default ON. WixUI checkbox can toggle this at install time. -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
