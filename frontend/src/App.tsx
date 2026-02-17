@@ -16,6 +16,7 @@ import CreateCompany from './pages/CreateCompany';
 import Home from './pages/Home';
 import Debtors from './pages/Debtors';
 import Creditors from './pages/Creditors';
+import WorkingCapital from './pages/WorkingCapital';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminControlTower from './pages/AdminControlTower';
 import Download from './pages/Download';
@@ -52,6 +53,7 @@ function App() {
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/debtors" element={<Debtors />} />
             <Route path="/creditors" element={<Creditors />} />
+            <Route path="/working-capital" element={<WorkingCapital />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/create-company" element={<CreateCompany />} />
             <Route element={<AdminRoute />}>

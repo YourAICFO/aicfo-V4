@@ -129,6 +129,7 @@ export const financeApi = {
   getCreditorsSummary: () => api.get('/finance/creditors/summary'),
   getCreditorsTop: () => api.get('/finance/creditors/top'),
   getCreditorsTrends: () => api.get('/finance/creditors/trends'),
+  getWorkingCapital: () => api.get('/finance/working-capital'),
 };
 
 // Debtors/Creditors (ledger-based)
