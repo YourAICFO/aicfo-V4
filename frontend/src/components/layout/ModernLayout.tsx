@@ -34,11 +34,19 @@ const ModernLayout: React.FC = () => {
         const items = response?.data?.data || [];
         if (!mounted) return;
         setCompanies(items);
-        if (items.length > 0) {
-          const hasSelectedCompany = selectedCompanyId && items.some((item: Company) => item.id === selectedCompanyId);
-          if (!hasSelectedCompany) {
-            setSelectedCompany(items[0].id);
+        if (items.length === 0) {
+          if (selectedCompanyId) {
+            setSelectedCompany(null);
           }
+          if (location.pathname !== '/create-company') {
+            navigate('/create-company', { replace: true });
+          }
+          return;
+        }
+
+        const hasSelectedCompany = selectedCompanyId && items.some((item: Company) => item.id === selectedCompanyId);
+        if (!hasSelectedCompany) {
+          setSelectedCompany(items[0].id);
         }
       } catch (error) {
         console.error('Failed to load companies for layout', error);
@@ -52,7 +60,7 @@ const ModernLayout: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [location.pathname, selectedCompanyId, setSelectedCompany]);
+  }, [location.pathname, navigate, selectedCompanyId, setSelectedCompany]);
 
   const handleLogout = () => {
     logout();

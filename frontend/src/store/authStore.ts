@@ -16,7 +16,7 @@ interface AuthState {
   selectedCompanyId: string | null;
   setAuth: (user: User, token: string) => void;
   logout: () => void;
-  setSelectedCompany: (companyId: string) => void;
+  setSelectedCompany: (companyId: string | null) => void;
   updateUser: (user: Partial<User>) => void;
 }
 
@@ -33,7 +33,11 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, token: null, isAuthenticated: false, selectedCompanyId: null });
       },
       setSelectedCompany: (companyId) => {
-        localStorage.setItem('selectedCompanyId', companyId);
+        if (companyId) {
+          localStorage.setItem('selectedCompanyId', companyId);
+        } else {
+          localStorage.removeItem('selectedCompanyId');
+        }
         set({ selectedCompanyId: companyId });
       },
       updateUser: (userData) => set((state) => ({ 
