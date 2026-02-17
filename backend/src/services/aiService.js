@@ -1,9 +1,8 @@
-const { Sequelize } = require('sequelize');
 const { AIInsight } = require('../models');
 const dashboardService = require('./dashboardService');
 const cfoQuestionService = require('./cfoQuestionService');
 const cfoContextService = require('./cfoContextService');
-const adminUsageService = require('./adminUsageService');
+const { buildInsights } = require('../insights/buildInsights');
 let OpenAI;
 if (process.env.OPENAI_API_KEY) {
   try {
@@ -20,125 +19,8 @@ Explain your logic step-by-step.
 Provide structured, actionable recommendations.
 Never hallucinate numbers or make up data.`;
 
-const AUTO_INSIGHT_CODES = [
-  'CASH_RUNWAY_STATUS',
-  'PROFITABILITY_STATUS',
-  'REVENUE_GROWTH_3M',
-  'EXPENSE_GROWTH_3M',
-  'DEBTORS_CONCENTRATION',
-  'CREDITORS_PRESSURE'
-];
-
-const severityToRisk = (severity) => {
-  if (severity === 'critical') return 'RED';
-  if (severity === 'warning') return 'AMBER';
-  if (severity === 'good') return 'GREEN';
-  return 'BLUE';
-};
-
-const buildDeterministicAlerts = (context) => {
-  if (!context?.alerts || !Array.isArray(context.alerts)) return [];
-  return context.alerts.map((alert) => {
-    const alertType = alert.alertType || alert.alert_type || 'CFO_ALERT';
-    const severity = String(alert.severity || '').toUpperCase();
-    return {
-      type: alertType,
-      riskLevel: ['RED', 'AMBER', 'GREEN', 'BLUE'].includes(severity) ? severity : severityToRisk(alert.severity),
-      title: String(alertType).replace(/_/g, ' '),
-      content: `Stored CFO alert: ${String(alertType).replace(/_/g, ' ')}`,
-      explanation: 'Generated from stored snapshot alert rules.',
-      recommendations: [],
-      metricsUsedJson: alert.metadata || {}
-    };
-  });
-};
-
 const generateInsights = async (companyId, userId = null) => {
-  if (!dashboardService || typeof dashboardService.getCFOOverview !== 'function') {
-    throw new Error('dashboardService not initialized correctly');
-  }
-  const insights = [];
-  for (const code of AUTO_INSIGHT_CODES) {
-    const result = await cfoQuestionService.answerQuestion(companyId, code);
-    if (result?.matched) {
-      insights.push(result);
-      continue;
-    }
-    const missingMetricKeys = result?.missing?.metrics || [];
-    if (userId && missingMetricKeys.length > 0) {
-      await adminUsageService.logMissingMetrics({
-        companyId,
-        userId,
-        question: code,
-        detectedQuestionKey: code,
-        missingMetricKeys
-      });
-    }
-  }
-  const context = process.env.CFO_CONTEXT_ENABLED === 'true'
-    ? await cfoContextService.buildContext(companyId)
-    : null;
-  if (userId && Array.isArray(context?.missingMetrics) && context.missingMetrics.length > 0) {
-    await adminUsageService.logMissingMetrics({
-      companyId,
-      userId,
-      question: 'AI_CONTEXT',
-      detectedQuestionKey: 'AI_CONTEXT',
-      missingMetricKeys: context.missingMetrics
-    });
-  }
-  const deterministicAlerts = buildDeterministicAlerts(context);
-
-  // Save insights to database
-  for (const insight of insights) {
-    await AIInsight.findOrCreate({
-      where: {
-        companyId,
-        type: (insight.category || 'GENERAL').toUpperCase(),
-        riskLevel: severityToRisk(insight.severity),
-        title: insight.title,
-        created_at: {
-          [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-        }
-      },
-      defaults: {
-        companyId,
-        type: (insight.category || 'GENERAL').toUpperCase(),
-        riskLevel: severityToRisk(insight.severity),
-        title: insight.title,
-        content: insight.message,
-        explanation: insight.message,
-        recommendations: [],
-        dataPoints: insight.metrics || {}
-      }
-    });
-  }
-
-  for (const alert of deterministicAlerts) {
-    await AIInsight.findOrCreate({
-      where: {
-        companyId,
-        type: alert.type,
-        riskLevel: alert.riskLevel,
-        title: alert.title,
-        created_at: {
-          [Sequelize.Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000)
-        }
-      },
-      defaults: {
-        companyId,
-        type: alert.type,
-        riskLevel: alert.riskLevel,
-        title: alert.title,
-        content: alert.content,
-        explanation: alert.explanation,
-        recommendations: alert.recommendations,
-        dataPoints: alert.metricsUsedJson || {}
-      }
-    });
-  }
-
-  return insights;
+  return buildInsights(companyId, userId, { limit: 10 });
 };
 
 const rewriteMessageIfEnabled = async (message, context) => {
@@ -164,22 +46,33 @@ const rewriteMessageIfEnabled = async (message, context) => {
 };
 
 const getInsights = async (companyId, userId = null) => {
-  // Generate new insights
   await generateInsights(companyId, userId);
 
-  // Return all active insights
   const insights = await AIInsight.findAll({
     where: {
       companyId,
       isDismissed: false
     },
-    order: [
-      ['risk_level', 'ASC'],
-      ['created_at', 'DESC']
-    ]
+    order: [['generated_at', 'DESC']]
   });
 
-  return insights;
+  const severityOrder = { critical: 3, high: 2, medium: 1, low: 0 };
+  const filtered = insights
+    .map((insight) => {
+      const severity = String(insight?.dataPoints?.severity || '').toLowerCase();
+      const priorityRank = Number(insight?.dataPoints?.priority_rank || 999);
+      return { insight, severity, priorityRank };
+    })
+    .filter((item) => ['critical', 'high'].includes(item.severity))
+    .sort((a, b) => {
+      const sevDelta = (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
+      if (sevDelta !== 0) return sevDelta;
+      return a.priorityRank - b.priorityRank;
+    })
+    .slice(0, 10)
+    .map((item) => item.insight);
+
+  return filtered;
 };
 
 const markInsightRead = async (insightId, companyId) => {

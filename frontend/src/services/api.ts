@@ -128,6 +128,19 @@ export const billingApi = {
   getInvoice: (id: string) => api.get(`/billing/invoices/${id}`),
 };
 
+export const settingsApi = {
+  getNotificationSettings: () => api.get('/settings/notifications'),
+  updateNotificationSettings: (payload: {
+    enabled_weekly: boolean;
+    weekly_day_of_week: number | null;
+    weekly_time_hhmm: string;
+    enabled_monthly: boolean;
+    monthly_day_of_month: number | null;
+    monthly_time_hhmm: string;
+    timezone: string;
+  }) => api.post('/settings/notifications', payload),
+};
+
 // Finance API
 export const financeApi = {
   getDebtorsSummary: () => api.get('/finance/debtors/summary'),

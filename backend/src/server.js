@@ -34,6 +34,7 @@ const devToolsRoutes = require('./routes/devTools');
 const downloadRoutes = require('./routes/download');
 const connectorRoutes = require('./routes/connector');
 const { billingRouter, handleBillingWebhook } = require('./routes/billing');
+const settingsNotificationsRoutes = require('./routes/settingsNotifications');
 
 
 const app = express();
@@ -162,6 +163,7 @@ app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/connector', connectorRoutes);
 app.use('/api/billing', billingRouter);
+app.use('/api/settings/notifications', settingsNotificationsRoutes);
 
 
 /* ===============================

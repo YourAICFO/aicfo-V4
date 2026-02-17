@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Building2, Lock, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { authApi, billingApi, companyApi } from '../services/api';
+import { authApi, billingApi, companyApi, settingsApi } from '../services/api';
 
 interface Company {
   id: string;
@@ -39,6 +39,16 @@ interface InvoiceRow {
   issuedAt: string;
 }
 
+interface NotificationSettings {
+  enabled_weekly: boolean;
+  weekly_day_of_week: number | null;
+  weekly_time_hhmm: string;
+  enabled_monthly: boolean;
+  monthly_day_of_month: number | null;
+  monthly_time_hhmm: string;
+  timezone: string;
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { user, selectedCompanyId, setSelectedCompany } = useAuthStore();
@@ -50,6 +60,15 @@ export default function Settings() {
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingInvoices, setBillingInvoices] = useState<InvoiceRow[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+    enabled_weekly: false,
+    weekly_day_of_week: 1,
+    weekly_time_hhmm: '09:00',
+    enabled_monthly: false,
+    monthly_day_of_month: 1,
+    monthly_time_hhmm: '09:00',
+    timezone: 'Asia/Kolkata',
+  });
   const [profileData, setProfileData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -65,6 +84,7 @@ export default function Settings() {
   useEffect(() => {
     loadCompanies();
     loadBilling();
+    loadNotificationSettings();
   }, []);
 
   const loadCompanies = async () => {
@@ -101,6 +121,26 @@ export default function Settings() {
       console.error('Failed to load billing:', error);
     } finally {
       setBillingLoading(false);
+    }
+  };
+
+  const loadNotificationSettings = async () => {
+    try {
+      const response = await settingsApi.getNotificationSettings();
+      if (response?.data?.data) {
+        setNotificationSettings(response.data.data);
+      }
+    } catch (error) {
+      console.error('Failed to load notification settings:', error);
+    }
+  };
+
+  const saveNotificationSettings = async () => {
+    try {
+      await settingsApi.updateNotificationSettings(notificationSettings);
+      setMessage({ type: 'success', text: 'Notification schedule updated.' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.response?.data?.error || 'Failed to update notification settings' });
     }
   };
 
@@ -357,23 +397,87 @@ export default function Settings() {
             <div className="card">
               <h2 className="text-lg font-semibold mb-6">Notification Preferences</h2>
               <div className="space-y-4">
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" defaultChecked className="w-4 h-4" />
-                  <span>Email notifications for new AI insights</span>
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" defaultChecked className="w-4 h-4" />
-                  <span>Cash runway alerts</span>
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" className="w-4 h-4" />
-                  <span>Weekly financial summary</span>
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" defaultChecked className="w-4 h-4" />
-                  <span>Integration sync notifications</span>
-                </label>
-                <button className="btn-primary">Save Preferences</button>
+                <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.enabled_weekly}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, enabled_weekly: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <span className="font-medium">Weekly Email Digest</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select
+                      value={notificationSettings.weekly_day_of_week || 1}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, weekly_day_of_week: Number(e.target.value) }))}
+                      className="input"
+                      disabled={!notificationSettings.enabled_weekly}
+                    >
+                      <option value={1}>Monday</option>
+                      <option value={2}>Tuesday</option>
+                      <option value={3}>Wednesday</option>
+                      <option value={4}>Thursday</option>
+                      <option value={5}>Friday</option>
+                      <option value={6}>Saturday</option>
+                      <option value={7}>Sunday</option>
+                    </select>
+                    <input
+                      type="time"
+                      value={notificationSettings.weekly_time_hhmm}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, weekly_time_hhmm: e.target.value }))}
+                      className="input"
+                      disabled={!notificationSettings.enabled_weekly}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.enabled_monthly}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, enabled_monthly: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <span className="font-medium">Monthly Email Digest</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select
+                      value={notificationSettings.monthly_day_of_month || 1}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, monthly_day_of_month: Number(e.target.value) }))}
+                      className="input"
+                      disabled={!notificationSettings.enabled_monthly}
+                    >
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                        <option key={day} value={day}>
+                          Day {day}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={notificationSettings.monthly_time_hhmm}
+                      onChange={(e) => setNotificationSettings((prev) => ({ ...prev, monthly_time_hhmm: e.target.value }))}
+                      className="input"
+                      disabled={!notificationSettings.enabled_monthly}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Timezone</label>
+                  <input
+                    type="text"
+                    value={notificationSettings.timezone}
+                    onChange={(e) => setNotificationSettings((prev) => ({ ...prev, timezone: e.target.value }))}
+                    className="input"
+                  />
+                </div>
+
+                <button onClick={saveNotificationSettings} className="btn-primary">
+                  Save Preferences
+                </button>
               </div>
             </div>
           )}

@@ -12,6 +12,11 @@ interface Insight {
   content: string;
   explanation: string;
   recommendations: string[];
+  dataPoints?: {
+    severity?: string;
+    priority_rank?: number;
+    evidence?: Array<{ metric_key: string; value: any }>;
+  };
   isRead: boolean;
   createdAt: string;
 }
@@ -176,6 +181,16 @@ export default function AIInsights() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-lg">{insight.title}</h3>
+                      {insight.dataPoints?.severity && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 uppercase">
+                          {insight.dataPoints.severity}
+                        </span>
+                      )}
+                      {typeof insight.dataPoints?.priority_rank === 'number' && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                          Priority #{insight.dataPoints.priority_rank}
+                        </span>
+                      )}
                       {!insight.isRead && (
                         <span className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded text-xs font-medium">
                           New
@@ -187,6 +202,19 @@ export default function AIInsights() {
                     {insight.explanation && (
                       <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                         <p className="text-sm text-gray-600">{insight.explanation}</p>
+                      </div>
+                    )}
+
+                    {insight.dataPoints?.evidence && insight.dataPoints.evidence.length > 0 && (
+                      <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-100">
+                        <p className="text-sm font-medium text-red-800 mb-2">Evidence</p>
+                        <ul className="space-y-1">
+                          {insight.dataPoints.evidence.slice(0, 5).map((item, idx) => (
+                            <li key={`${item.metric_key}-${idx}`} className="text-sm text-red-700">
+                              {item.metric_key}: {typeof item.value === 'number' ? item.value.toLocaleString() : String(item.value)}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                     

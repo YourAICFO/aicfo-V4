@@ -15,6 +15,7 @@ const { updateReports } = require('./tasks/updateReports');
 const { batchRecalc } = require('./tasks/batchRecalc');
 const { sendNotifications } = require('./tasks/sendNotifications');
 const { generateMonthlySnapshots } = require('./tasks/generateMonthlySnapshots');
+const { processScheduledInsightEmails } = require('./tasks/processScheduledInsightEmails');
 
 // Resilient worker mode - can work without Redis
 const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
@@ -45,6 +46,21 @@ const withTimeout = (promise, ms) =>
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`PING_TIMEOUT_${ms}ms`)), ms))
   ]);
+
+const startScheduledEmailTicker = () => {
+  const tickMs = Number(process.env.INSIGHT_EMAIL_TICK_MS || 60 * 60 * 1000);
+  const runTick = async () => {
+    try {
+      const result = await processScheduledInsightEmails();
+      logger.info({ event: 'scheduled_insight_email_tick', ...result }, 'Scheduled insight email tick completed');
+    } catch (error) {
+      logger.warn({ event: 'scheduled_insight_email_tick_failed', error: error.message }, 'Scheduled insight email tick failed');
+    }
+  };
+
+  runTick().catch(() => {});
+  setInterval(runTick, tickMs);
+};
 
 const startWorker = async () => {
   if (process.env.DISABLE_WORKER === 'true') {
@@ -107,6 +123,7 @@ const startWorker = async () => {
     
     logger.info({ event: 'worker_resilient_ready' }, 'Worker ready in resilient mode');
     console.log("Worker ready in resilient mode - jobs will be processed synchronously");
+    startScheduledEmailTicker();
     
     // Keep the process alive
     process.on('SIGINT', () => {
@@ -241,6 +258,8 @@ const startWorker = async () => {
   worker.on('completed', (job) => {
     logger.info({ jobId: job.id, name: job.name }, 'Job completed');
   });
+
+  startScheduledEmailTicker();
 
   process.on('SIGINT', async () => {
     await worker.close();
