@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
            Version="1.0.0"
@@ -9,11 +8,6 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
-    <ui:WixUI Id="WixUI_Minimal" />
-
-    <!-- Installer UX: default ON. WixUI checkbox can toggle this at install time. -->
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start AICFO Connector at login" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="AICFOConnector">
@@ -77,8 +71,7 @@
     <!-- Per-user auto-start registry component is isolated from file/shortcut components to avoid ICE43/ICE57. -->
     <Component Id="ConnectorTrayAutoStartRunKey"
                Directory="INSTALLFOLDER"
-               Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}"
-               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1">
+               Guid="{C9DF700D-0E55-4D45-BA0E-B8FE1C9D47D2}">
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayAutoStart" Type="integer" Value="1" KeyPath="yes" />
       <RegistryValue Root="HKCU"
                      Key="Software\Microsoft\Windows\CurrentVersion\Run"

@@ -30,6 +30,10 @@ jobs:
         shell: pwsh
         run: dotnet tool install --global wix --version 4.*
 
+      - name: Restore installer project
+        shell: pwsh
+        run: dotnet restore ./connector-dotnet/installer/AICFO.Connector.Installer.wixproj
+
       - name: Build connector MSI
         shell: pwsh
         run: ./connector-dotnet/build.ps1 -Configuration Release
@@ -61,5 +65,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AICFO-Connector-MSI
-          path: "**/AICFOConnectorSetup.msi"
+          path: "connector-dotnet/installer/bin/**/AICFOConnectorSetup.msi"
           if-no-files-found: error

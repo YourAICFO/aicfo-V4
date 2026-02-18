@@ -44,11 +44,5 @@
   </Target>
   <ItemGroup>
     <PackageReference Include="WixToolset.Heat" Version="4.0.4" />
-    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.4" GeneratePathProperty="true" />
-    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.4" GeneratePathProperty="true" />
-  </ItemGroup>
-  <ItemGroup>
-    <WixExtension Include="$(PkgWixToolset_UI_wixext)\wixext4\WixToolset.UI.wixext.dll" />
-    <WixExtension Include="$(PkgWixToolset_Util_wixext)\wixext4\WixToolset.Util.wixext.dll" />
   </ItemGroup>
 </Project>
