@@ -10,6 +10,7 @@ const {
   IntegrationSyncEvent,
   Company,
   ConnectorDevice,
+  ConnectorCompanyLink,
   ConnectorClient,
   MonthlyTrialBalanceSummary,
   sequelize
@@ -32,6 +33,44 @@ const authorizeCompanyAccess = async (userId, companyId) => {
 };
 
 const resolveCompanyId = (req) => req.headers['x-company-id'] || req.query?.companyId || null;
+const normalizeTallyCompanyId = (value) => String(value || '').trim().toLowerCase();
+const normalizeTallyCompanyName = (value) =>
+  String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+const resolveLinkContext = async (req) => {
+  const linkId = req.body?.linkId || req.query?.linkId || null;
+  if (!linkId) {
+    if (req.connectorAuthMode === 'device_login') {
+      return { link: null, error: 'linkId is required for device login sync operations' };
+    }
+    return { link: null, error: null };
+  }
+  if (!req.userId) {
+    return { link: null, error: 'linkId requires device login authentication' };
+  }
+
+  const link = await ConnectorCompanyLink.findOne({
+    where: {
+      id: linkId,
+      userId: req.userId,
+      isActive: true
+    },
+    raw: false
+  });
+
+  if (!link) {
+    return { link: null, error: 'Active link not found' };
+  }
+
+  req.companyId = link.companyId;
+  req.linkId = link.id;
+  return { link, error: null };
+};
 
 const buildStableStatusResponse = async (companyId) => {
   const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
@@ -287,6 +326,274 @@ router.post('/login', connectorLoginLimiter, async (req, res) => {
 });
 
 /* ===============================
+   POST /api/connector/device/login
+   Purpose: device-first connector login (long-lived token)
+================================ */
+router.post('/device/login', connectorLoginLimiter, async (req, res) => {
+  try {
+    const { email, password, deviceId, deviceName } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'email and password are required'
+      });
+    }
+
+    const result = await authService.login(email, password);
+    const tokenPayload = {
+      type: 'connector_device_login',
+      userId: result.user.id,
+      deviceId: typeof deviceId === 'string' && deviceId.trim() ? deviceId.trim() : null,
+      deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName.trim() : null
+    };
+    const deviceToken = require('jsonwebtoken').sign(
+      tokenPayload,
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '365d' }
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        deviceToken
+      }
+    });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   GET /api/connector/device/companies
+   Auth: device token
+================================ */
+router.get('/device/companies', authenticateConnectorOrLegacy, async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Device login required'
+      });
+    }
+
+    const companies = await Company.findAll({
+      where: {
+        ownerId: req.userId,
+        isDeleted: false
+      },
+      attributes: ['id', 'name'],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({
+      success: true,
+      data: companies
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   GET /api/connector/device/links
+   Auth: device token
+================================ */
+router.get('/device/links', authenticateConnectorOrLegacy, async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Device login required'
+      });
+    }
+
+    const links = await ConnectorCompanyLink.findAll({
+      where: {
+        userId: req.userId,
+        isActive: true
+      },
+      include: [
+        {
+          model: Company,
+          as: 'company',
+          required: true,
+          where: { isDeleted: false },
+          attributes: ['id', 'name']
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({
+      success: true,
+      data: links.map((link) => ({
+        id: link.id,
+        companyId: link.companyId,
+        webCompanyName: link.company?.name || '',
+        tallyCompanyId: link.tallyCompanyId,
+        tallyCompanyName: link.tallyCompanyName,
+        status: link.lastSyncStatus || 'Never',
+        lastSyncAt: link.lastSyncAt,
+        lastSyncError: link.lastSyncError
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   POST /api/connector/device/links
+   Auth: device token
+================================ */
+router.post('/device/links', authenticateConnectorOrLegacy, async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Device login required'
+      });
+    }
+
+    const { companyId, tallyCompanyId, tallyCompanyName } = req.body || {};
+    if (!companyId || !tallyCompanyId || !tallyCompanyName) {
+      return res.status(400).json({
+        success: false,
+        error: 'companyId, tallyCompanyId and tallyCompanyName are required'
+      });
+    }
+
+    const company = await Company.findOne({
+      where: {
+        id: companyId,
+        ownerId: req.userId,
+        isDeleted: false
+      }
+    });
+    if (!company) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this company'
+      });
+    }
+
+    const normalizedTallyCompanyId = normalizeTallyCompanyId(tallyCompanyId);
+    const normalizedTallyCompanyName = normalizeTallyCompanyName(tallyCompanyName);
+
+    const companyConflict = await ConnectorCompanyLink.findOne({
+      where: {
+        companyId,
+        isActive: true
+      },
+      raw: true
+    });
+    if (companyConflict) {
+      return res.status(409).json({
+        success: false,
+        error: 'This web company is already linked. Unlink it first.'
+      });
+    }
+
+    const activeUserLinks = await ConnectorCompanyLink.findAll({
+      where: {
+        userId: req.userId,
+        isActive: true
+      },
+      raw: true
+    });
+    const tallyConflict = activeUserLinks.find((item) =>
+      normalizeTallyCompanyId(item.tally_company_id) === normalizedTallyCompanyId ||
+      normalizeTallyCompanyName(item.tally_company_name) === normalizedTallyCompanyName);
+    if (tallyConflict) {
+      return res.status(409).json({
+        success: false,
+        error: 'This Tally company is already linked. Unlink it first.'
+      });
+    }
+
+    const link = await ConnectorCompanyLink.create({
+      companyId,
+      userId: req.userId,
+      tallyCompanyId: String(tallyCompanyId).trim(),
+      tallyCompanyName: String(tallyCompanyName).trim(),
+      isActive: true
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        id: link.id,
+        companyId: link.companyId,
+        webCompanyName: company.name,
+        tallyCompanyId: link.tallyCompanyId,
+        tallyCompanyName: link.tallyCompanyName,
+        status: link.lastSyncStatus || 'Never',
+        lastSyncAt: link.lastSyncAt,
+        lastSyncError: link.lastSyncError
+      }
+    });
+  } catch (error) {
+    if (error?.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        error: 'Link already exists. Unlink the old mapping first.'
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   POST /api/connector/device/links/:id/unlink
+   Auth: device token
+================================ */
+router.post('/device/links/:id/unlink', authenticateConnectorOrLegacy, async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Device login required'
+      });
+    }
+
+    const link = await ConnectorCompanyLink.findOne({
+      where: {
+        id: req.params.id,
+        userId: req.userId,
+        isActive: true
+      }
+    });
+
+    if (!link) {
+      return res.status(404).json({
+        success: false,
+        error: 'Active link not found'
+      });
+    }
+
+    await link.update({ isActive: false });
+    return res.json({ success: true, data: { id: link.id, isActive: false } });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
    GET /api/connector/companies
    Purpose: list companies owned by current user
 ================================ */
@@ -404,6 +711,10 @@ router.post('/register-device', authenticate, async (req, res) => {
 ================================ */
 router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const { link, error } = await resolveLinkContext(req);
+    if (error) {
+      return res.status(400).json({ success: false, error });
+    }
     const { companyId } = req;
     
     // Create new sync run
@@ -418,7 +729,8 @@ router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
       syncRun.id,
       'info',
       'SYNC_START',
-      'Sync run started'
+      'Sync run started',
+      link ? { linkId: link.id } : null
     );
 
     res.json({
@@ -447,6 +759,10 @@ router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
 ================================ */
 router.post('/sync', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const { error } = await resolveLinkContext(req);
+    if (error) {
+      return res.status(400).json({ success: false, error });
+    }
     const validation = validateChartOfAccountsPayload(req.body || {});
     if (!validation.ok) {
       return res.status(400).json({
@@ -543,6 +859,10 @@ router.post('/sync/progress', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const { link, error: linkError } = await resolveLinkContext(req);
+    if (linkError) {
+      return res.status(400).json({ success: false, error: linkError });
+    }
     const {
       runId,
       status,
@@ -620,6 +940,17 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
       eventMessage
     );
 
+    if (link) {
+      await ConnectorCompanyLink.update(
+        {
+          lastSyncAt: completedRun.finishedAt || new Date(),
+          lastSyncStatus: status,
+          lastSyncError: lastError || null
+        },
+        { where: { id: link.id } }
+      );
+    }
+
     res.json({
       success: true,
       data: {
@@ -643,6 +974,10 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const { link, error } = await resolveLinkContext(req);
+    if (error) {
+      return res.status(400).json({ success: false, error });
+    }
     const { companyId, connectorClientId, deviceId } = req;
 
     // Update connector last seen
@@ -671,6 +1006,7 @@ router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
     res.json({
       success: true,
       data: {
+        linkId: link?.id || null,
         latestRun: latestRun || null,
         serverTime: new Date().toISOString()
       }
@@ -690,6 +1026,10 @@ router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
 ================================ */
 router.get('/status/connector', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const { error } = await resolveLinkContext(req);
+    if (error) {
+      return res.status(400).json({ success: false, error });
+    }
     const status = await syncStatusService.getSyncStatus(req.companyId);
     res.json({
       success: true,

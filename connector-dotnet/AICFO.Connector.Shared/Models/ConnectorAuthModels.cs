@@ -11,6 +11,12 @@ public sealed class LoginResponse
     public LoginUser? User { get; init; }
 }
 
+public sealed class DeviceLoginResponse
+{
+    [JsonPropertyName("deviceToken")]
+    public string DeviceToken { get; init; } = string.Empty;
+}
+
 public sealed class LoginUser
 {
     [JsonPropertyName("id")]
@@ -54,6 +60,33 @@ public sealed class RegisterDeviceResponse
 
     [JsonPropertyName("expiresInDays")]
     public int ExpiresInDays { get; init; }
+}
+
+public sealed class ConnectorDeviceLink
+{
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    [JsonPropertyName("companyId")]
+    public string CompanyId { get; init; } = string.Empty;
+
+    [JsonPropertyName("webCompanyName")]
+    public string WebCompanyName { get; init; } = string.Empty;
+
+    [JsonPropertyName("tallyCompanyId")]
+    public string TallyCompanyId { get; init; } = string.Empty;
+
+    [JsonPropertyName("tallyCompanyName")]
+    public string TallyCompanyName { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("lastSyncAt")]
+    public DateTimeOffset? LastSyncAt { get; init; }
+
+    [JsonPropertyName("lastSyncError")]
+    public string? LastSyncError { get; init; }
 }
 
 public sealed class ConnectorStatusV1Response

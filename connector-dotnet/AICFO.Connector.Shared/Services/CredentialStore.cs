@@ -10,12 +10,16 @@ public interface ICredentialStore
     void SaveMappingToken(string mappingId, string token);
     string? LoadMappingToken(string mappingId);
     void DeleteMappingToken(string mappingId);
+    void SaveDeviceAuthToken(string token);
+    string? LoadDeviceAuthToken();
+    void DeleteDeviceAuthToken();
 }
 
 public sealed class CredentialStore : ICredentialStore
 {
     private static string CompanyTarget(string companyId) => $"{ConnectorPaths.CredentialPrefix}{companyId}";
     private static string MappingTarget(string mappingId) => $"{ConnectorPaths.CredentialPrefix}MAPPING_{mappingId}";
+    private static string DeviceAuthTarget() => $"{ConnectorPaths.CredentialPrefix}DEVICE_AUTH";
 
     private static Credential BuildCredential(string target) => new()
     {
@@ -67,6 +71,28 @@ public sealed class CredentialStore : ICredentialStore
     public void DeleteMappingToken(string mappingId)
     {
         var credential = BuildCredential(MappingTarget(mappingId));
+        credential.Delete();
+    }
+
+    public void SaveDeviceAuthToken(string token)
+    {
+        var credential = BuildCredential(DeviceAuthTarget());
+        credential.Password = token;
+        if (!credential.Save())
+        {
+            throw new InvalidOperationException("Failed to store device auth token in Windows Credential Manager.");
+        }
+    }
+
+    public string? LoadDeviceAuthToken()
+    {
+        var credential = BuildCredential(DeviceAuthTarget());
+        return credential.Load() ? credential.Password : null;
+    }
+
+    public void DeleteDeviceAuthToken()
+    {
+        var credential = BuildCredential(DeviceAuthTarget());
         credential.Delete();
     }
 }

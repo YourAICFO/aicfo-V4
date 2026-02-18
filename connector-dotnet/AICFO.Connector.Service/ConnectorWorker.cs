@@ -46,7 +46,7 @@ public sealed class ConnectorWorker(
                                 throw new InvalidOperationException($"Connector token missing for mapping {mapping.Id}.");
                             }
 
-                            await apiClient.SendHeartbeatAsync(config, token, cancellationToken);
+                            await apiClient.SendHeartbeatAsync(config, mapping, token, cancellationToken);
                             await PersistMappingState(mapping.Id, m =>
                             {
                                 m.LastHeartbeatAt = DateTimeOffset.UtcNow;
@@ -118,10 +118,9 @@ public sealed class ConnectorWorker(
                 }
 
                 logger.LogInformation(
-                    "Sync started reason={Reason} mapping={MappingId} companyId={CompanyId} tallyCompany={TallyCompany}",
+                    "Sync started reason={Reason} mapping={MappingId} tallyCompany={TallyCompany}",
                     reason,
                     mapping.Id,
-                    mapping.CompanyId,
                     mapping.TallyCompanyName);
 
                 var tallyAvailable = await tallyClient.TestConnectionAsync(config, cancellationToken);
@@ -131,18 +130,18 @@ public sealed class ConnectorWorker(
                         $"Tally is not reachable at {config.TallyHost}:{config.TallyPort}. Ensure Tally is running and XML over HTTP is enabled.");
                 }
 
-                var runId = await apiClient.StartSyncRunAsync(config, token, cancellationToken);
+                var runId = await apiClient.StartSyncRunAsync(config, mapping, token, cancellationToken);
                 try
                 {
                     var snapshot = await tallyClient.FetchSnapshotAsync(config, mapping.TallyCompanyName, cancellationToken);
                     var payload = payloadBuilder.BuildPayload(snapshot);
-                    await apiClient.SendSyncPayloadAsync(config, token, payload, cancellationToken);
+                    await apiClient.SendSyncPayloadAsync(config, mapping, token, payload, cancellationToken);
                     var hasMissingMonths = snapshot.MissingClosedMonths.Count > 0;
                     var completionStatus = hasMissingMonths ? "partial" : "success";
                     var completionError = hasMissingMonths
                         ? $"Historical months missing: {string.Join(", ", snapshot.MissingClosedMonths)}"
                         : null;
-                    await apiClient.CompleteSyncRunAsync(config, token, runId, completionStatus, completionError, cancellationToken);
+                    await apiClient.CompleteSyncRunAsync(config, mapping, token, runId, completionStatus, completionError, cancellationToken);
 
                     await PersistMappingState(mapping.Id, m =>
                     {
@@ -152,17 +151,16 @@ public sealed class ConnectorWorker(
                     });
 
                     logger.LogInformation(
-                        "Sync completed reason={Reason} mapping={MappingId} companyId={CompanyId} ledgers={LedgerCount} closedMonths={ClosedMonths} missingMonths={MissingMonths}",
+                        "Sync completed reason={Reason} mapping={MappingId} ledgers={LedgerCount} closedMonths={ClosedMonths} missingMonths={MissingMonths}",
                         reason,
                         mapping.Id,
-                        mapping.CompanyId,
                         snapshot.Ledgers.Count,
                         snapshot.ClosedMonths.Count,
                         snapshot.MissingClosedMonths.Count);
                 }
                 catch (Exception ex)
                 {
-                    await apiClient.CompleteSyncRunAsync(config, token, runId, "failed", ex.Message, cancellationToken);
+                    await apiClient.CompleteSyncRunAsync(config, mapping, token, runId, "failed", ex.Message, cancellationToken);
                     await PersistMappingState(mapping.Id, m =>
                     {
                         m.LastSyncAt = DateTimeOffset.UtcNow;
@@ -198,10 +196,9 @@ public sealed class ConnectorWorker(
                     var delay = TimeSpan.FromMilliseconds(Math.Min(Math.Pow(2, cappedAttempt) * 1000, TimeSpan.FromMinutes(10).TotalMilliseconds) + jitterMs);
                     logger.LogWarning(
                         ex,
-                        "Connector {Operation} failed mapping={MappingId} companyId={CompanyId} attempt={Attempt}; retrying in {Delay}",
+                        "Connector {Operation} failed mapping={MappingId} attempt={Attempt}; retrying in {Delay}",
                         operationName,
                         mapping.Id,
-                        mapping.CompanyId,
                         attempts,
                         delay);
                     await Task.Delay(delay, cancellationToken);

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { ConnectorDevice } = require('../models');
 const syncStatusService = require('../services/syncStatusService');
 
@@ -9,6 +10,8 @@ const getBearerToken = (req) => {
 };
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const verifyConnectorDeviceLoginToken = (token) =>
+  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
 
 const authenticateConnectorDevice = async (req, res, next) => {
   try {
@@ -36,6 +39,7 @@ const authenticateConnectorDevice = async (req, res, next) => {
     }
 
     req.companyId = device.companyId;
+    req.userId = device.userId;
     req.deviceId = device.deviceId;
     req.connectorDeviceId = device.id;
     req.connectorClientId = null;
@@ -72,11 +76,35 @@ const authenticateConnectorOrLegacy = async (req, res, next) => {
 
     if (device) {
       req.companyId = device.companyId;
+      req.userId = device.userId;
       req.deviceId = device.deviceId;
       req.connectorDeviceId = device.id;
       req.connectorClientId = null;
       await device.update({ lastSeenAt: new Date() });
       return next();
+    }
+
+    try {
+      const payload = verifyConnectorDeviceLoginToken(token);
+      if (payload?.type === 'connector_device_login' && payload?.userId) {
+        req.userId = payload.userId;
+        req.deviceId = payload.deviceId || null;
+        req.deviceName = payload.deviceName || null;
+        req.companyId = null;
+        req.connectorClientId = null;
+        req.connectorDeviceId = null;
+        req.connectorAuthMode = 'device_login';
+        return next();
+      }
+    } catch {
+      // Try legacy connector token flow next.
+    }
+
+    if (process.env.CONNECTOR_ENABLE_LEGACY_TOKEN_FLOW === '0') {
+      return res.status(401).json({
+        success: false,
+        error: 'Legacy connector token flow is disabled'
+      });
     }
 
     const payload = syncStatusService.verifyConnectorToken(token);
@@ -89,8 +117,10 @@ const authenticateConnectorOrLegacy = async (req, res, next) => {
 
     req.connectorClientId = payload.clientId;
     req.companyId = payload.companyId;
+    req.userId = null;
     req.deviceId = null;
     req.connectorDeviceId = null;
+    req.connectorAuthMode = 'legacy_connector_token';
     return next();
   } catch (error) {
     return res.status(401).json({
@@ -103,5 +133,6 @@ const authenticateConnectorOrLegacy = async (req, res, next) => {
 module.exports = {
   authenticateConnectorDevice,
   authenticateConnectorOrLegacy,
-  hashToken
+  hashToken,
+  verifyConnectorDeviceLoginToken
 };

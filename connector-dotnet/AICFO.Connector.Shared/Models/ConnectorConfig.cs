@@ -106,6 +106,9 @@ public sealed class ConnectorMapping
     [JsonPropertyName("auth_method")]
     public string? AuthMethod { get; set; }
 
+    [JsonPropertyName("link_id")]
+    public string? LinkId { get; set; }
+
     [JsonPropertyName("last_sync_at")]
     public DateTimeOffset? LastSyncAt { get; set; }
 

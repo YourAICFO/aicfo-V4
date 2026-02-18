@@ -10,16 +10,20 @@ namespace AICFO.Connector.Shared.Services;
 
 public interface IAicfoApiClient
 {
+    Task<DeviceLoginResponse> DeviceLoginAsync(string baseUrl, string email, string password, string? deviceId, string? deviceName, CancellationToken cancellationToken);
     Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken);
-    Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken);
+    Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string authToken, bool useDeviceRoute, CancellationToken cancellationToken);
+    Task<List<ConnectorDeviceLink>> GetDeviceLinksAsync(string baseUrl, string deviceToken, CancellationToken cancellationToken);
+    Task<ConnectorDeviceLink> CreateDeviceLinkAsync(string baseUrl, string deviceToken, string companyId, string tallyCompanyId, string tallyCompanyName, CancellationToken cancellationToken);
+    Task UnlinkDeviceLinkAsync(string baseUrl, string deviceToken, string linkId, CancellationToken cancellationToken);
     Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken);
     Task<ConnectorStatusV1Response> GetConnectorStatusV1Async(string baseUrl, string userJwt, string companyId, CancellationToken cancellationToken);
     Task<bool> TestBackendReachableAsync(string apiUrl, CancellationToken cancellationToken);
-    Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
-    Task SendHeartbeatAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
-    Task<string?> StartSyncRunAsync(ConnectorConfig config, string token, CancellationToken cancellationToken);
-    Task SendSyncPayloadAsync(ConnectorConfig config, string token, CoaContractPayload payload, CancellationToken cancellationToken);
-    Task CompleteSyncRunAsync(ConnectorConfig config, string token, string? runId, string status, string? lastError, CancellationToken cancellationToken);
+    Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken);
+    Task SendHeartbeatAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken);
+    Task<string?> StartSyncRunAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken);
+    Task SendSyncPayloadAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CoaContractPayload payload, CancellationToken cancellationToken);
+    Task CompleteSyncRunAsync(ConnectorConfig config, ConnectorMapping mapping, string token, string? runId, string status, string? lastError, CancellationToken cancellationToken);
 }
 
 public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient> logger) : IAicfoApiClient
@@ -32,6 +36,41 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
+    public async Task<DeviceLoginResponse> DeviceLoginAsync(string baseUrl, string email, string password, string? deviceId, string? deviceName, CancellationToken cancellationToken)
+    {
+        const string endpointPath = "/api/connector/device/login";
+        var body = new
+        {
+            email,
+            password,
+            deviceId,
+            deviceName
+        };
+        var responseEnvelope = await PostJsonAsync(baseUrl, endpointPath, body, cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(responseEnvelope.responseBody);
+        if (!responseEnvelope.isSuccessStatusCode || !envelope.success)
+        {
+            throw new ApiRequestException(
+                envelope.error ?? "Login failed.",
+                baseUrl,
+                endpointPath,
+                responseEnvelope.statusCode,
+                responseEnvelope.responseBody);
+        }
+        var loginData = envelope.data;
+        if (loginData.ValueKind != JsonValueKind.Object || !loginData.TryGetProperty("deviceToken", out var tokenElement))
+        {
+            throw new InvalidOperationException("Login failed: missing device token in response.");
+        }
+        var token = tokenElement.GetString();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("Login failed: empty device token in response.");
+        }
+
+        return new DeviceLoginResponse { DeviceToken = token };
+    }
 
     public async Task<LoginResponse> LoginAsync(string baseUrl, string email, string password, CancellationToken cancellationToken)
     {
@@ -66,10 +105,11 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         return new LoginResponse { Token = token };
     }
 
-    public async Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string userJwt, CancellationToken cancellationToken)
+    public async Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string authToken, bool useDeviceRoute, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, "/api/connector/companies"));
-        request.Headers.Authorization = new("Bearer", userJwt);
+        var route = useDeviceRoute ? "/api/connector/device/companies" : "/api/connector/companies";
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, route));
+        request.Headers.Authorization = new("Bearer", authToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var envelope = ParseEnvelope<JsonElement>(body);
@@ -105,6 +145,55 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         }
 
         return companies;
+    }
+
+    public async Task<List<ConnectorDeviceLink>> GetDeviceLinksAsync(string baseUrl, string deviceToken, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, "/api/connector/device/links"));
+        request.Headers.Authorization = new("Bearer", deviceToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<List<ConnectorDeviceLink>>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Failed to fetch links.");
+        }
+        return envelope.data ?? [];
+    }
+
+    public async Task<ConnectorDeviceLink> CreateDeviceLinkAsync(string baseUrl, string deviceToken, string companyId, string tallyCompanyId, string tallyCompanyName, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(baseUrl, "/api/connector/device/links"))
+        {
+            Content = JsonContent.Create(new
+            {
+                companyId,
+                tallyCompanyId,
+                tallyCompanyName
+            })
+        };
+        request.Headers.Authorization = new("Bearer", deviceToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<ConnectorDeviceLink>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success || envelope.data is null)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Failed to create link.");
+        }
+        return envelope.data;
+    }
+
+    public async Task UnlinkDeviceLinkAsync(string baseUrl, string deviceToken, string linkId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(baseUrl, $"/api/connector/device/links/{Uri.EscapeDataString(linkId)}/unlink"));
+        request.Headers.Authorization = new("Bearer", deviceToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var envelope = ParseEnvelope<JsonElement>(body);
+        if (!response.IsSuccessStatusCode || !envelope.success)
+        {
+            throw new InvalidOperationException(envelope.error ?? "Failed to unlink.");
+        }
     }
 
     public async Task<RegisterDeviceResponse> RegisterDeviceAsync(string baseUrl, string userJwt, string companyId, string deviceId, string deviceName, CancellationToken cancellationToken)
@@ -182,25 +271,36 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, string token, CancellationToken cancellationToken)
+    public async Task<Dictionary<string, object>?> GetConnectorStatusAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(HttpMethod.Get, config, "/api/connector/status/connector", token);
+        var path = string.IsNullOrWhiteSpace(mapping.LinkId)
+            ? "/api/connector/status/connector"
+            : $"/api/connector/status/connector?linkId={Uri.EscapeDataString(mapping.LinkId)}";
+        using var request = CreateRequest(HttpMethod.Get, config, path, token);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<Dictionary<string, object>>(body, JsonOptions);
     }
 
-    public async Task SendHeartbeatAsync(ConnectorConfig config, string token, CancellationToken cancellationToken)
+    public async Task SendHeartbeatAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/heartbeat", token, new { at = DateTime.UtcNow.ToString("O") });
+        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/heartbeat", token, new
+        {
+            at = DateTime.UtcNow.ToString("O"),
+            linkId = mapping.LinkId
+        });
         using var response = await httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<string?> StartSyncRunAsync(ConnectorConfig config, string token, CancellationToken cancellationToken)
+    public async Task<string?> StartSyncRunAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/sync/start", token, new { at = DateTime.UtcNow.ToString("O") });
+        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/sync/start", token, new
+        {
+            at = DateTime.UtcNow.ToString("O"),
+            linkId = mapping.LinkId
+        });
         using var response = await httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -214,12 +314,22 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         return null;
     }
 
-    public async Task SendSyncPayloadAsync(ConnectorConfig config, string token, CoaContractPayload payload, CancellationToken cancellationToken)
+    public async Task SendSyncPayloadAsync(ConnectorConfig config, ConnectorMapping mapping, string token, CoaContractPayload payload, CancellationToken cancellationToken)
     {
-        var serialized = JsonSerializer.Serialize(payload, JsonOptions);
+        var syncEnvelope = new
+        {
+            linkId = mapping.LinkId,
+            chartOfAccounts = payload.ChartOfAccounts,
+            asOfDate = payload.AsOfDate,
+            partyBalances = payload.PartyBalances,
+            loans = payload.Loans,
+            interestSummary = payload.InterestSummary,
+            metadata = payload.Metadata
+        };
+        var serialized = JsonSerializer.Serialize(syncEnvelope, JsonOptions);
         var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serialized))).ToLowerInvariant();
 
-        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/sync", token, payload, payloadHash);
+        using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/sync", token, syncEnvelope, payloadHash);
         using var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -231,12 +341,13 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task CompleteSyncRunAsync(ConnectorConfig config, string token, string? runId, string status, string? lastError, CancellationToken cancellationToken)
+    public async Task CompleteSyncRunAsync(ConnectorConfig config, ConnectorMapping mapping, string token, string? runId, string status, string? lastError, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(runId)) return;
 
         using var request = CreateRequest(HttpMethod.Post, config, "/api/connector/sync/complete", token, new
         {
+            linkId = mapping.LinkId,
             runId,
             status,
             finishedAt = DateTime.UtcNow.ToString("O"),

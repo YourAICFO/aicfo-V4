@@ -40,6 +40,7 @@ const { AppLog } = require('./AppLog');
 const { AuditLog } = require('./AuditLog');
 const { ConnectorClient } = require('./ConnectorClient');
 const { ConnectorDevice } = require('./ConnectorDevice');
+const { ConnectorCompanyLink } = require('./ConnectorCompanyLink');
 const { IntegrationSyncRun } = require('./IntegrationSyncRun');
 const { IntegrationSyncEvent } = require('./IntegrationSyncEvent');
 const { IngestionLog } = require('./IngestionLog');
@@ -155,6 +156,11 @@ ConnectorDevice.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 User.hasMany(ConnectorDevice, { foreignKey: 'user_id', as: 'connectorDevices' });
 ConnectorDevice.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+Company.hasMany(ConnectorCompanyLink, { foreignKey: 'company_id', as: 'connectorCompanyLinks' });
+ConnectorCompanyLink.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+User.hasMany(ConnectorCompanyLink, { foreignKey: 'user_id', as: 'connectorCompanyLinks' });
+ConnectorCompanyLink.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 Company.hasMany(IntegrationSyncRun, { foreignKey: 'company_id', as: 'syncRuns' });
 IntegrationSyncRun.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
@@ -237,6 +243,7 @@ module.exports = {
   PartyBalanceLatest,
   ConnectorClient,
   ConnectorDevice,
+  ConnectorCompanyLink,
   IntegrationSyncRun,
   IntegrationSyncEvent,
   IngestionLog,
