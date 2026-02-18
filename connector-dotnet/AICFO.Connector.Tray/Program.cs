@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.ServiceProcess;
 using System.Text.Json;
 using System.Linq;
+using Microsoft.Win32;
 using AICFO.Connector.Shared.Models;
 using AICFO.Connector.Shared.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -151,6 +152,8 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Label _lastSync = new() { AutoSize = true, Text = "Never" };
     private readonly Label _lastResult = new() { AutoSize = true, Text = "Never" };
     private readonly Label _lastError = new() { AutoSize = true, Text = "None" };
+    private readonly CheckBox _startWithWindowsToggle = new() { AutoSize = true, Text = "Start with Windows" };
+    private readonly Label _startWithWindowsStatus = new() { AutoSize = true, Text = "Disabled" };
     private readonly Label _statusHint = new() { AutoSize = true, Text = string.Empty, ForeColor = Color.DimGray };
     private readonly DataGridView _statusGrid = new()
     {
@@ -192,6 +195,7 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Dictionary<string, string> _statusDiagnosticsByMappingId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, MappingStatusSnapshot> _statusSnapshotByMappingId = new(StringComparer.OrdinalIgnoreCase);
     private LoginDiagnostics? _lastLoginDiagnostics;
+    private bool _suppressAutostartEvent;
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -239,6 +243,7 @@ internal sealed class ConnectorControlPanel : Form
 
         _statusMappingCombo.SelectedIndexChanged += (_, _) => RefreshStatusView();
         _mappingsList.SelectedIndexChanged += (_, _) => SyncSelectionToStatusMapping();
+        _startWithWindowsToggle.CheckedChanged += (_, _) => HandleStartWithWindowsChanged();
         _statusPollTimer.Tick += async (_, _) => await RefreshStatusGridAsync();
         Shown += async (_, _) =>
         {
@@ -306,6 +311,10 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(_lastResult, 1, 6);
         panel.Controls.Add(new Label { Text = "Last Error", AutoSize = true }, 2, 6);
         panel.Controls.Add(_lastError, 3, 6);
+
+        panel.Controls.Add(_startWithWindowsToggle, 0, 7);
+        panel.Controls.Add(new Label { Text = "Autostart Status", AutoSize = true }, 2, 7);
+        panel.Controls.Add(_startWithWindowsStatus, 3, 7);
 
         var buttonBar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var testBackend = new Button { Text = "Test Backend", Width = 120 };
@@ -799,8 +808,43 @@ internal sealed class ConnectorControlPanel : Form
         _config.TallyPort = (int)_tallyPort.Value;
         _config.HeartbeatIntervalSeconds = (int)_heartbeatSeconds.Value;
         _config.SyncIntervalMinutes = (int)_syncMinutes.Value;
+        _config.StartWithWindows = _startWithWindowsToggle.Checked;
         _config.EnsureCompatibility();
         _configStore.Save(_config);
+    }
+
+    private void HandleStartWithWindowsChanged()
+    {
+        if (_suppressAutostartEvent) return;
+        try
+        {
+            if (_startWithWindowsToggle.Checked)
+            {
+                AutoStartManager.EnableAutoStart();
+            }
+            else
+            {
+                AutoStartManager.DisableAutoStart();
+            }
+
+            _config.StartWithWindows = _startWithWindowsToggle.Checked;
+            _configStore.Save(_config);
+            UpdateAutoStartStatusLabel();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to update startup setting: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _suppressAutostartEvent = true;
+            _startWithWindowsToggle.Checked = AutoStartManager.IsAutoStartEnabled();
+            _suppressAutostartEvent = false;
+            UpdateAutoStartStatusLabel();
+        }
+    }
+
+    private void UpdateAutoStartStatusLabel()
+    {
+        var enabled = AutoStartManager.IsAutoStartEnabled();
+        _startWithWindowsStatus.Text = enabled ? "Enabled" : "Disabled";
     }
 
     private void LinkMapping()
@@ -866,6 +910,19 @@ internal sealed class ConnectorControlPanel : Form
         _tallyPort.Value = Math.Clamp(_config.TallyPort, 1, 65535);
         _heartbeatSeconds.Value = Math.Clamp(_config.HeartbeatIntervalSeconds, 10, 300);
         _syncMinutes.Value = Math.Clamp(_config.SyncIntervalMinutes, 1, 240);
+        _suppressAutostartEvent = true;
+        _startWithWindowsToggle.Checked = _config.StartWithWindows;
+        _suppressAutostartEvent = false;
+        try
+        {
+            if (_config.StartWithWindows) AutoStartManager.EnableAutoStart();
+            else AutoStartManager.DisableAutoStart();
+        }
+        catch
+        {
+            // Non-fatal. UI status still reflects real registry state.
+        }
+        UpdateAutoStartStatusLabel();
 
         _statusMappingCombo.Items.Clear();
         foreach (var mapping in _config.Mappings)
@@ -1260,6 +1317,43 @@ internal sealed class ConnectorControlPanel : Form
             FileName = ConnectorPaths.LogsDirectory,
             UseShellExecute = true
         });
+    }
+}
+
+internal static class AutoStartManager
+{
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string ValueName = "AICFOConnector";
+
+    private static string CurrentExecutablePath()
+    {
+        var path = Application.ExecutablePath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new InvalidOperationException("Unable to resolve tray executable path.");
+        }
+        return path;
+    }
+
+    public static void EnableAutoStart()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true)
+            ?? throw new InvalidOperationException("Unable to open Windows startup registry key.");
+        key.SetValue(ValueName, $"\"{CurrentExecutablePath()}\"", RegistryValueKind.String);
+    }
+
+    public static void DisableAutoStart()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+        key?.DeleteValue(ValueName, false);
+    }
+
+    public static bool IsAutoStartEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
+        var value = key?.GetValue(ValueName) as string;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return string.Equals(value, $"\"{CurrentExecutablePath()}\"", StringComparison.OrdinalIgnoreCase);
     }
 }
 

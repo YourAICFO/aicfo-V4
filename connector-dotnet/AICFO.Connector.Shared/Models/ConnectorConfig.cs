@@ -19,6 +19,9 @@ public sealed class ConnectorConfig
     [JsonPropertyName("sync_interval_minutes")]
     public int SyncIntervalMinutes { get; set; } = 15;
 
+    [JsonPropertyName("start_with_windows")]
+    public bool StartWithWindows { get; set; } = false;
+
     [JsonPropertyName("historical_months_to_sync")]
     public int HistoricalMonthsToSync { get; set; } = 24;
 
