@@ -163,13 +163,15 @@ export const creditorsApi = {
 
 // Admin API
 export const adminApi = {
+  getMetricsSummary: () => api.get('/admin/metrics/summary'),
   getUsageSummary: () => api.get('/admin/usage/summary'),
   getAIQuestions: () => api.get('/admin/ai/questions'),
   getCompaniesActivity: () => api.get('/admin/companies/activity'),
   getSystemMetrics: () => api.get('/admin/metrics/system'),
   getBusinessMetrics: () => api.get('/admin/metrics/business'),
   getUsageMetrics: () => api.get('/admin/metrics/usage'),
-  getAIMetrics: () => api.get('/admin/metrics/ai'),
+  getAIMetrics: (days = 30) => api.get('/admin/metrics/ai', { params: { days } }),
+  getConnectorMetrics: (days = 30) => api.get('/admin/metrics/connector', { params: { days } }),
   getAccountingMetrics: () => api.get('/admin/metrics/accounting'),
   getRiskMetrics: () => api.get('/admin/metrics/risk'),
 };

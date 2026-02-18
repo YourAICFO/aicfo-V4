@@ -4,6 +4,14 @@ const { v4: uuidv4 } = require('uuid');
 const { User, Company, Subscription } = require('../models');
 const { jwtSecret, jwtExpiresIn, bcryptSaltRounds } = require('../config/auth');
 
+const isAllowedAdmin = (email) => {
+  const allowlist = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean);
+  return allowlist.includes((email || '').toLowerCase());
+};
+
 const generateToken = (userId) => {
   return jwt.sign({ userId }, jwtSecret, { expiresIn: jwtExpiresIn });
 };
@@ -44,7 +52,8 @@ const register = async (userData) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      emailVerified: user.emailVerified
+      emailVerified: user.emailVerified,
+      isAdmin: isAllowedAdmin(user.email)
     },
     token
   };
@@ -77,7 +86,8 @@ const login = async (email, password) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      emailVerified: user.emailVerified
+      emailVerified: user.emailVerified,
+      isAdmin: isAllowedAdmin(user.email)
     },
     token
   };
@@ -92,15 +102,6 @@ const getProfile = async (userId) => {
     throw new Error('User not found');
   }
 
-  // Check if user is admin
-  const isAllowedAdmin = (email) => {
-    const allowlist = (process.env.ADMIN_EMAILS || '')
-      .split(',')
-      .map(e => e.trim().toLowerCase())
-      .filter(Boolean);
-    return allowlist.includes((email || '').toLowerCase());
-  };
-  
   const isAdmin = isAllowedAdmin(user.email);
 
   return {

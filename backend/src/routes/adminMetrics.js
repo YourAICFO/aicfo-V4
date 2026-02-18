@@ -58,13 +58,24 @@ router.get('/usage', authenticate, requireAdminEmail, async (req, res) => {
 
 router.get('/ai', authenticate, requireAdminEmail, async (req, res) => {
   try {
+    const days = Number(req.query.days || 30);
     const detailed = req.query.detailed === 'true';
     if (detailed) {
       const months = Number(req.query.months || 12);
       const data = await adminUsageService.getAIAnalytics(months);
       return res.json({ success: true, data });
     }
-    const data = await adminControlTowerService.getAIMetrics();
+    const data = await adminControlTowerService.getAIMetrics(days);
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/connector', authenticate, requireAdminEmail, async (req, res) => {
+  try {
+    const days = Number(req.query.days || 30);
+    const data = await adminControlTowerService.getConnectorMetrics(days);
     return res.json({ success: true, data });
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });

@@ -9,7 +9,7 @@ export default function AdminRoute() {
   }
 
   if (!user?.isAdmin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/dashboard" replace state={{ message: 'Admin access required.' }} />;
   }
 
   return <Outlet />;

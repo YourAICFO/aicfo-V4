@@ -24,10 +24,14 @@ const StatCard = ({ label, value, tone = 'text-gray-900' }: { label: string; val
 export default function AdminControlTower() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [windowDays, setWindowDays] = useState<7 | 30>(30);
+  const [search, setSearch] = useState('');
+  const [summary, setSummary] = useState<AnyObject>({});
   const [system, setSystem] = useState<AnyObject>({});
   const [business, setBusiness] = useState<AnyObject>({});
   const [usage, setUsage] = useState<AnyObject>({});
   const [ai, setAi] = useState<AnyObject>({});
+  const [connector, setConnector] = useState<AnyObject>({});
   const [accounting, setAccounting] = useState<AnyObject>({});
   const [risk, setRisk] = useState<AnyObject>({});
 
@@ -36,19 +40,23 @@ export default function AdminControlTower() {
       try {
         setLoading(true);
         setError('');
-        const [systemRes, businessRes, usageRes, aiRes, accountingRes, riskRes] = await Promise.all([
+        const [summaryRes, systemRes, businessRes, usageRes, aiRes, connectorRes, accountingRes, riskRes] = await Promise.all([
+          adminApi.getMetricsSummary(),
           adminApi.getSystemMetrics(),
           adminApi.getBusinessMetrics(),
           adminApi.getUsageMetrics(),
-          adminApi.getAIMetrics(),
+          adminApi.getAIMetrics(windowDays),
+          adminApi.getConnectorMetrics(windowDays),
           adminApi.getAccountingMetrics(),
           adminApi.getRiskMetrics()
         ]);
 
+        setSummary(summaryRes.data?.data || {});
         setSystem(systemRes.data?.data || {});
         setBusiness(businessRes.data?.data || {});
         setUsage(usageRes.data?.data || {});
         setAi(aiRes.data?.data || {});
+        setConnector(connectorRes.data?.data || {});
         setAccounting(accountingRes.data?.data || {});
         setRisk(riskRes.data?.data || {});
       } catch (err: any) {
@@ -59,7 +67,7 @@ export default function AdminControlTower() {
     };
 
     load();
-  }, []);
+  }, [windowDays]);
 
   const businessChartData = useMemo(() => business?.companies_created_per_month || [], [business]);
   const unansweredData = useMemo(
@@ -69,6 +77,26 @@ export default function AdminControlTower() {
     })),
     [ai]
   );
+  const filteredConnectorFailures = useMemo(() => {
+    const value = search.trim().toLowerCase();
+    const rows = connector?.recent_failures || [];
+    if (!value) return rows;
+    return rows.filter((row: AnyObject) =>
+      [row.company_name, row.user_email, row.tally_company_name, row.last_sync_error]
+        .filter(Boolean)
+        .some((item: string) => item.toLowerCase().includes(value))
+    );
+  }, [connector, search]);
+  const filteredAIFailures = useMemo(() => {
+    const value = search.trim().toLowerCase();
+    const rows = ai?.recent_failures || [];
+    if (!value) return rows;
+    return rows.filter((row: AnyObject) =>
+      [row.question, row.key, row.company_name, row.user_email]
+        .filter(Boolean)
+        .some((item: string) => item.toLowerCase().includes(value))
+    );
+  }, [ai, search]);
 
   if (loading) {
     return (
@@ -93,6 +121,17 @@ export default function AdminControlTower() {
         <h1 className="text-2xl font-bold text-gray-900">Admin Control Tower</h1>
         <p className="text-gray-600">System health, business metrics, AI quality, accounting coverage and risk posture.</p>
       </div>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900">Summary</h2>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <StatCard label="Total Users" value={Number(summary.users_total || business.total_users || 0)} />
+          <StatCard label="Total Companies" value={Number(business.total_companies || summary.companies_total || 0)} />
+          <StatCard label="Deleted Companies" value={Number(business.deleted_companies || 0)} />
+          <StatCard label="Trialing Subs" value={Number(business.subscription_statuses?.trialing || 0)} />
+          <StatCard label="Active Subs" value={Number(business.subscription_statuses?.active || 0)} />
+        </div>
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-gray-900">System Health</h2>
@@ -147,6 +186,30 @@ export default function AdminControlTower() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-gray-900">AI Quality</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-md border border-gray-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setWindowDays(7)}
+              className={`rounded px-3 py-1 text-sm ${windowDays === 7 ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              Last 7d
+            </button>
+            <button
+              type="button"
+              onClick={() => setWindowDays(30)}
+              className={`rounded px-3 py-1 text-sm ${windowDays === 30 ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              Last 30d
+            </button>
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search company or email"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <StatCard label="Total AI Questions" value={Number(ai.ai_questions_total || 0)} />
           <StatCard label="Unanswered" value={Number(ai.unanswered_questions || 0)} tone={Number(ai.unanswered_questions || 0) > 0 ? 'text-red-700' : 'text-green-700'} />
@@ -166,6 +229,91 @@ export default function AdminControlTower() {
                 <Bar dataKey="count" fill="#dc2626" />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card">
+            <h3 className="font-semibold mb-3">Top Missing Metric Keys</h3>
+            <ul className="space-y-2 text-sm">
+              {(ai?.top_missing_metric_keys || []).map((row: AnyObject) => (
+                <li key={row.metric_key} className="flex justify-between">
+                  <span>{row.metric_key}</span>
+                  <span className="text-gray-500">{row.count}</span>
+                </li>
+              ))}
+              {(!ai?.top_missing_metric_keys || ai.top_missing_metric_keys.length === 0) && <li className="text-gray-500">No missing metrics</li>}
+            </ul>
+          </div>
+          <div className="card">
+            <h3 className="font-semibold mb-3">Top Detected Question Failures</h3>
+            <ul className="space-y-2 text-sm">
+              {(ai?.top_detected_question_failures || []).map((row: AnyObject) => (
+                <li key={row.key} className="flex justify-between">
+                  <span>{row.key}</span>
+                  <span className="text-gray-500">{row.count}</span>
+                </li>
+              ))}
+              {(!ai?.top_detected_question_failures || ai.top_detected_question_failures.length === 0) && <li className="text-gray-500">No failures</li>}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900">Connector Health</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StatCard label="Linked Companies" value={Number(connector.linked_companies || 0)} />
+          <StatCard label="Sync Success" value={Number(connector.sync_status_counts?.success || 0)} />
+          <StatCard label="Sync Failed" value={Number(connector.sync_status_counts?.failed || 0)} tone={Number(connector.sync_status_counts?.failed || 0) > 0 ? 'text-red-700' : 'text-green-700'} />
+          <StatCard label="Syncing" value={Number(connector.sync_status_counts?.syncing || 0)} />
+        </div>
+        <div className="card">
+          <h3 className="font-semibold mb-3">Devices & Last Heartbeat</h3>
+          <div className="space-y-2 text-sm">
+            {(connector?.devices || []).slice(0, 10).map((row: AnyObject, idx: number) => (
+              <div key={`${row.device_id}-${idx}`} className="flex items-center justify-between border-b border-gray-100 py-2 last:border-0">
+                <div>
+                  <div className="font-medium">{row.device_name || row.device_id}</div>
+                  <div className="text-gray-500">{row.company_name || '-'}</div>
+                </div>
+                <div className="text-right">
+                  <div className="capitalize">{row.status || '-'}</div>
+                  <div className="text-gray-500">{row.last_seen_at ? new Date(row.last_seen_at).toLocaleString('en-IN') : '-'}</div>
+                </div>
+              </div>
+            ))}
+            {(!connector?.devices || connector.devices.length === 0) && <div className="text-gray-500">No connector devices</div>}
+          </div>
+        </div>
+        <div className="card">
+          <h3 className="font-semibold mb-3">Recent Connector Failures</h3>
+          <div className="space-y-2 text-sm">
+            {filteredConnectorFailures.slice(0, 20).map((row: AnyObject, idx: number) => (
+              <div key={`${row.id}-${idx}`} className="rounded border border-red-100 bg-red-50 p-3">
+                <div className="font-medium">{row.company_name || '-'}</div>
+                <div className="text-gray-600">{row.user_email || '-'}</div>
+                <div className="text-gray-600">{row.tally_company_name || '-'}</div>
+                <div className="text-red-700">{row.last_sync_error || 'Sync failed'}</div>
+              </div>
+            ))}
+            {filteredConnectorFailures.length === 0 && <div className="text-gray-500">No recent connector failures</div>}
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900">AI Feedback Loop</h2>
+        <div className="card">
+          <h3 className="font-semibold mb-3">Recent Unanswered Questions</h3>
+          <div className="space-y-2 text-sm">
+            {filteredAIFailures.slice(0, 20).map((row: AnyObject, idx: number) => (
+              <div key={`${row.id}-${idx}`} className="rounded border border-amber-100 bg-amber-50 p-3">
+                <div className="font-medium">{row.question}</div>
+                <div className="text-gray-600">{row.key || '-'}</div>
+                <div className="text-gray-600">{row.company_name || '-'} · {row.user_email || '-'}</div>
+              </div>
+            ))}
+            {filteredAIFailures.length === 0 && <div className="text-gray-500">No unanswered questions in selected window</div>}
           </div>
         </div>
       </section>

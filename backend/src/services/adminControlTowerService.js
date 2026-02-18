@@ -146,10 +146,31 @@ const getBusinessMetrics = async () => {
     const summary = await fetchOne(`
       SELECT
         COUNT(*) AS total_companies,
+        SUM(CASE WHEN c.is_deleted = true OR c.deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS deleted_companies,
         SUM(CASE WHEN c.subscription_status = 'trial' THEN 1 ELSE 0 END) AS trial_companies,
         SUM(CASE WHEN c.subscription_status = 'active' THEN 1 ELSE 0 END) AS paying_companies
       FROM companies c
     `);
+
+    const users = await fetchOne(`
+      SELECT COUNT(*) AS total_users
+      FROM users
+    `).catch(() => ({ total_users: 0 }));
+
+    const subscriptionStatuses = await fetchOne(`
+      SELECT
+        SUM(CASE WHEN status = 'trialing' THEN 1 ELSE 0 END) AS trialing,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+        SUM(CASE WHEN status = 'past_due' THEN 1 ELSE 0 END) AS past_due,
+        SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END) AS canceled
+      FROM company_subscriptions
+    `).catch(() => ({ trialing: 0, active: 0, past_due: 0, canceled: 0 }));
+
+    const expiredCompanyStatus = await fetchOne(`
+      SELECT COUNT(*) AS expired
+      FROM companies
+      WHERE subscription_status = 'expired'
+    `).catch(() => ({ expired: 0 }));
 
     const active = await fetchOne(`
       SELECT COUNT(DISTINCT company_id) AS active_companies
@@ -174,9 +195,18 @@ const getBusinessMetrics = async () => {
 
     return {
       total_companies: asNumber(summary.total_companies),
+      total_users: asNumber(users.total_users),
+      deleted_companies: asNumber(summary.deleted_companies),
       active_companies: asNumber(active.active_companies),
       trial_companies: trialCompanies,
       paying_companies: payingCompanies,
+      subscription_statuses: {
+        trialing: asNumber(subscriptionStatuses.trialing),
+        active: asNumber(subscriptionStatuses.active),
+        past_due: asNumber(subscriptionStatuses.past_due),
+        canceled: asNumber(subscriptionStatuses.canceled),
+        expired: asNumber(expiredCompanyStatus.expired)
+      },
       companies_created_per_month: perMonth,
       conversion_trial_to_paid: toPercent(payingCompanies, conversionBase)
     };
@@ -229,22 +259,23 @@ const getUsageMetrics = async () => {
   });
 };
 
-const getAIMetrics = async () => {
-  return withCache('admin:ai', async () => {
+const getAIMetrics = async (days = 30) => {
+  const safeDays = Number.isFinite(Number(days)) && Number(days) > 0 ? Math.min(Number(days), 180) : 30;
+  return withCache(`admin:ai:${safeDays}`, async () => {
     const totals = await fetchOne(`
       SELECT
         COUNT(*) AS ai_questions_total,
         SUM(CASE WHEN success = false THEN 1 ELSE 0 END) AS unanswered_questions,
         SUM(CASE WHEN detected_question_key IS NOT NULL THEN 1 ELSE 0 END) AS deterministic_hits
       FROM admin_ai_questions
-      WHERE "createdAt" >= NOW() - INTERVAL '30 days'
+      WHERE "createdAt" >= NOW() - INTERVAL '${safeDays} days'
     `);
 
     const fallbacks = await fetchOne(`
       SELECT COUNT(*) AS llm_fallback
       FROM admin_usage_events
       WHERE event_type = 'ai_chat'
-        AND "createdAt" >= NOW() - INTERVAL '30 days'
+        AND "createdAt" >= NOW() - INTERVAL '${safeDays} days'
         AND COALESCE((metadata->>'usedRewrite')::boolean, false) = true
     `);
 
@@ -252,7 +283,7 @@ const getAIMetrics = async () => {
       SELECT AVG((metadata->>'answerMs')::numeric) AS avg_answer_time
       FROM admin_usage_events
       WHERE event_type = 'ai_chat'
-        AND "createdAt" >= NOW() - INTERVAL '30 days'
+        AND "createdAt" >= NOW() - INTERVAL '${safeDays} days'
         AND metadata ? 'answerMs'
     `);
 
@@ -260,10 +291,49 @@ const getAIMetrics = async () => {
       SELECT question, COUNT(*)::int AS count
       FROM admin_ai_questions
       WHERE success = false
-        AND "createdAt" >= NOW() - INTERVAL '30 days'
+        AND "createdAt" >= NOW() - INTERVAL '${safeDays} days'
       GROUP BY question
       ORDER BY count DESC
       LIMIT 10
+    `);
+
+    const topMissingMetricKeys = await fetchRows(`
+      SELECT m.key AS metric_key, COUNT(*)::int AS count
+      FROM admin_ai_questions q
+      CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(q.missing_metric_keys, '[]'::jsonb)) AS m(key)
+      WHERE q.success = false
+        AND q."createdAt" >= NOW() - INTERVAL '${safeDays} days'
+      GROUP BY m.key
+      ORDER BY count DESC
+      LIMIT 10
+    `).catch(() => []);
+
+    const topDetectedQuestionFailures = await fetchRows(`
+      SELECT COALESCE(detected_question_key, question) AS key, COUNT(*)::int AS count
+      FROM admin_ai_questions
+      WHERE success = false
+        AND "createdAt" >= NOW() - INTERVAL '${safeDays} days'
+      GROUP BY key
+      ORDER BY count DESC
+      LIMIT 10
+    `);
+
+    const recentFailures = await fetchRows(`
+      SELECT
+        q.id,
+        q.question,
+        q.detected_question_key AS key,
+        q.failure_reason,
+        q."createdAt" AS created_at,
+        c.name AS company_name,
+        u.email AS user_email
+      FROM admin_ai_questions q
+      LEFT JOIN companies c ON c.id = q.company_id
+      LEFT JOIN users u ON u.id = q.user_id
+      WHERE q.success = false
+        AND q."createdAt" >= NOW() - INTERVAL '${safeDays} days'
+      ORDER BY q."createdAt" DESC
+      LIMIT 100
     `);
 
     const totalQuestions = asNumber(totals.ai_questions_total);
@@ -276,7 +346,75 @@ const getAIMetrics = async () => {
       deterministic_hit_rate: toPercent(deterministicHits, totalQuestions),
       llm_fallback_rate: toPercent(fallbackCount, totalQuestions),
       avg_answer_time: Math.round(asNumber(answerTime.avg_answer_time)),
-      top_unanswered_questions: topUnanswered
+      top_unanswered_questions: topUnanswered,
+      top_missing_metric_keys: topMissingMetricKeys,
+      top_detected_question_failures: topDetectedQuestionFailures,
+      recent_failures: recentFailures
+    };
+  });
+};
+
+const getConnectorMetrics = async (days = 30) => {
+  const safeDays = Number.isFinite(Number(days)) && Number(days) > 0 ? Math.min(Number(days), 180) : 30;
+  return withCache(`admin:connector:${safeDays}`, async () => {
+    const linkedCompanies = await fetchOne(`
+      SELECT COUNT(*) AS linked_companies
+      FROM connector_company_links
+      WHERE is_active = true
+    `).catch(() => ({ linked_companies: 0 }));
+
+    const syncStatusCounts = await fetchOne(`
+      SELECT
+        SUM(CASE WHEN last_sync_status = 'success' THEN 1 ELSE 0 END) AS success,
+        SUM(CASE WHEN last_sync_status = 'failed' THEN 1 ELSE 0 END) AS failed,
+        SUM(CASE WHEN last_sync_status = 'syncing' THEN 1 ELSE 0 END) AS syncing
+      FROM connector_company_links
+      WHERE is_active = true
+    `).catch(() => ({ success: 0, failed: 0, syncing: 0 }));
+
+    const devices = await fetchRows(`
+      SELECT
+        cd.device_id,
+        cd.device_name,
+        cd.status,
+        cd.last_seen_at,
+        c.name AS company_name,
+        u.email AS user_email
+      FROM connector_devices cd
+      LEFT JOIN companies c ON c.id = cd.company_id
+      LEFT JOIN users u ON u.id = cd.user_id
+      ORDER BY cd.last_seen_at DESC NULLS LAST
+      LIMIT 100
+    `).catch(() => []);
+
+    const recentFailures = await fetchRows(`
+      SELECT
+        l.id,
+        c.name AS company_name,
+        u.email AS user_email,
+        l.tally_company_name,
+        l.last_sync_status,
+        l.last_sync_error,
+        l.last_sync_at
+      FROM connector_company_links l
+      JOIN companies c ON c.id = l.company_id
+      LEFT JOIN users u ON u.id = l.user_id
+      WHERE l.is_active = true
+        AND l.last_sync_status = 'failed'
+        AND l.updated_at >= NOW() - INTERVAL '${safeDays} days'
+      ORDER BY l.updated_at DESC
+      LIMIT 100
+    `).catch(() => []);
+
+    return {
+      linked_companies: asNumber(linkedCompanies.linked_companies),
+      sync_status_counts: {
+        success: asNumber(syncStatusCounts.success),
+        failed: asNumber(syncStatusCounts.failed),
+        syncing: asNumber(syncStatusCounts.syncing)
+      },
+      devices,
+      recent_failures: recentFailures
     };
   });
 };
@@ -368,6 +506,7 @@ module.exports = {
   getBusinessMetrics,
   getUsageMetrics,
   getAIMetrics,
+  getConnectorMetrics,
   getAccountingMetrics,
   getRiskMetrics
 };

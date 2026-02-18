@@ -21,6 +21,7 @@ const ModernLayout: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const location = useLocation();
+  const isAdmin = user?.isAdmin === true;
   const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
   const userEmail = user?.email || '';
   const companyName = companies.find((item) => item.id === selectedCompanyId)?.name || 'AI CFO';
@@ -78,6 +79,12 @@ const ModernLayout: React.FC = () => {
     { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
     { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
     { name: 'Integrations', href: '/integrations', icon: '🔗' },
+    ...(isAdmin
+      ? [
+          { name: 'Admin Control Tower', href: '/admin/control-tower', icon: '🛡️' },
+          { name: 'Admin Dashboard', href: '/admin', icon: '🧭' }
+        ]
+      : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;

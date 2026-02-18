@@ -158,6 +158,7 @@ app.use('/api/dev', devToolsRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/api/admin/connector', adminConnectorRoutes);
 app.use('/api/admin/ingestion', adminIngestionRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
