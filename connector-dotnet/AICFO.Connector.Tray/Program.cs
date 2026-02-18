@@ -179,6 +179,33 @@ internal sealed class ConnectorControlPanel : Form
         ForeColor = Color.DarkGoldenrod,
         Text = "This mapping controls where data is synced. Double-check company selection."
     };
+    private readonly Label _webCompaniesEmptyState = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.DimGray,
+        Text = "No companies found in your AICFO account.\n1) Open AICFO web portal\n2) Create a company\n3) Return here and click Refresh companies",
+        Visible = false
+    };
+    private readonly Label _tallyCompaniesEmptyState = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.DimGray,
+        Text = "No Tally companies detected. Please open Tally and ensure the company is accessible.",
+        Visible = false
+    };
+    private readonly Label _linksEmptyState = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.DimGray,
+        Text = "No companies linked yet. Select a Web Company and a Tally Company and click Link.",
+        Visible = false
+    };
+    private readonly Label _actionBanner = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.DimGray,
+        Text = string.Empty
+    };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true, ShowItemToolTips = true };
     private readonly Label _linkedOnline = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedLastHeartbeat = new() { AutoSize = true, Text = "-" };
@@ -196,6 +223,8 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Dictionary<string, MappingStatusSnapshot> _statusSnapshotByMappingId = new(StringComparer.OrdinalIgnoreCase);
     private LoginDiagnostics? _lastLoginDiagnostics;
     private bool _suppressAutostartEvent;
+    private Button? _linkButton;
+    private Button? _syncSelectedButton;
 
     public ConnectorControlPanel(
         IConfigStore configStore,
@@ -255,6 +284,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             if (Visible && !_statusPollTimer.Enabled) _statusPollTimer.Start();
             if (!Visible && _statusPollTimer.Enabled) _statusPollTimer.Stop();
+            UpdateAutoStartStatusLabel();
         };
 
         LoadConfig();
@@ -354,7 +384,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 18,
+            RowCount = 24,
             Padding = new Padding(12),
             AutoScroll = true
         };
@@ -377,17 +407,25 @@ internal sealed class ConnectorControlPanel : Form
 
         panel.Controls.Add(new Label { Text = "Web Company", AutoSize = true }, 0, 5);
         panel.Controls.Add(_webCompanyCombo, 1, 5);
+        var refreshCompaniesButton = new Button { Text = "Refresh companies", Width = 140 };
+        refreshCompaniesButton.Click += async (_, _) => await RefreshDeviceLinkDataAsync();
+        panel.Controls.Add(refreshCompaniesButton, 1, 6);
+        panel.Controls.Add(_webCompaniesEmptyState, 1, 7);
         panel.Controls.Add(new Label { Text = "Tally Company", AutoSize = true }, 0, 6);
-        panel.Controls.Add(_tallyCompanyCombo, 1, 6);
-        panel.Controls.Add(new Label { Text = "Device ID", AutoSize = true }, 0, 7);
-        panel.Controls.Add(_deviceId, 1, 7);
-        panel.Controls.Add(new Label { Text = "Device Name", AutoSize = true }, 0, 8);
-        panel.Controls.Add(_deviceName, 1, 8);
+        panel.Controls.Add(_tallyCompanyCombo, 1, 8);
+        var rescanTallyButton = new Button { Text = "Rescan Tally companies", Width = 170 };
+        rescanTallyButton.Click += async (_, _) => await DetectTallyAsync();
+        panel.Controls.Add(rescanTallyButton, 1, 9);
+        panel.Controls.Add(_tallyCompaniesEmptyState, 1, 10);
+        panel.Controls.Add(new Label { Text = "Device ID", AutoSize = true }, 0, 11);
+        panel.Controls.Add(_deviceId, 1, 11);
+        panel.Controls.Add(new Label { Text = "Device Name", AutoSize = true }, 0, 12);
+        panel.Controls.Add(_deviceName, 1, 12);
 
-        var registerButton = new Button { Text = "LINK", Width = 120 };
-        registerButton.Click += async (_, _) => await RegisterAndSaveMappingAsync();
-        panel.Controls.Add(registerButton, 1, 9);
-        panel.Controls.Add(_mappingWarning, 1, 10);
+        _linkButton = new Button { Text = "LINK", Width = 120 };
+        _linkButton.Click += async (_, _) => await RegisterAndSaveMappingAsync();
+        panel.Controls.Add(_linkButton, 1, 13);
+        panel.Controls.Add(_mappingWarning, 1, 14);
 
         var mappingButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var detectButton = new Button { Text = "Detect Tally Companies", Width = 170 };
@@ -396,15 +434,21 @@ internal sealed class ConnectorControlPanel : Form
         removeButton.Click += (_, _) => RemoveSelectedMapping();
         var reRegisterButton = new Button { Text = "Re-login", Width = 120 };
         reRegisterButton.Click += async (_, _) => await ReRegisterSelectedMappingAsync();
-        var syncButton = new Button { Text = "Sync Selected", Width = 120 };
-        syncButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
-        mappingButtons.Controls.AddRange([detectButton, removeButton, reRegisterButton, syncButton]);
-        panel.Controls.Add(mappingButtons, 0, 11);
+        var refreshLinksButton = new Button { Text = "Refresh links", Width = 120 };
+        refreshLinksButton.Click += async (_, _) => await RefreshDeviceLinkDataAsync();
+        _syncSelectedButton = new Button { Text = "Sync Selected", Width = 120 };
+        _syncSelectedButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
+        mappingButtons.Controls.AddRange([detectButton, refreshLinksButton, removeButton, reRegisterButton, _syncSelectedButton]);
+        panel.Controls.Add(mappingButtons, 0, 15);
         panel.SetColumnSpan(mappingButtons, 2);
+        panel.Controls.Add(_actionBanner, 0, 16);
+        panel.SetColumnSpan(_actionBanner, 2);
 
-        panel.Controls.Add(new Label { Text = "Linked Companies", AutoSize = true }, 0, 12);
+        panel.Controls.Add(new Label { Text = "Linked Companies", AutoSize = true }, 0, 17);
         panel.SetColumnSpan(_mappingsList, 2);
-        panel.Controls.Add(_mappingsList, 0, 13);
+        panel.Controls.Add(_mappingsList, 0, 18);
+        panel.Controls.Add(_linksEmptyState, 0, 19);
+        panel.SetColumnSpan(_linksEmptyState, 2);
 
         var linkedStatusPanel = new TableLayoutPanel
         {
@@ -422,7 +466,7 @@ internal sealed class ConnectorControlPanel : Form
         linkedStatusPanel.Controls.Add(_linkedLastSyncStatus, 1, 3);
         linkedStatusPanel.Controls.Add(new Label { Text = "Readiness Month:", AutoSize = true }, 0, 4);
         linkedStatusPanel.Controls.Add(_linkedReadinessMonth, 1, 4);
-        panel.Controls.Add(linkedStatusPanel, 0, 14);
+        panel.Controls.Add(linkedStatusPanel, 0, 20);
         panel.SetColumnSpan(linkedStatusPanel, 2);
 
         tab.Controls.Add(panel);
@@ -440,13 +484,51 @@ internal sealed class ConnectorControlPanel : Form
         if (mapping is null)
         {
             await _syncNowTriggerClient.TriggerAllAsync(CancellationToken.None);
-            MessageBox.Show("No mapping selected. Triggered sync for all mappings.", "AI CFO Connector");
+            SetActionBanner("No mapping selected. Triggered sync for all mappings.", Color.DarkGoldenrod);
             return;
         }
 
-        await _syncNowTriggerClient.TriggerMappingAsync(mapping.Id, CancellationToken.None);
+        var previousSyncAt = mapping.LastSyncAt;
         var webName = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "selected company" : mapping.WebCompanyName;
-        MessageBox.Show($"Triggered sync for {webName}.", "AI CFO Connector");
+
+        if (_syncSelectedButton is not null)
+        {
+            _syncSelectedButton.Enabled = false;
+            _syncSelectedButton.Text = "Syncing...";
+        }
+        SetActionBanner("Syncing...", Color.DimGray);
+
+        try
+        {
+            await _syncNowTriggerClient.TriggerMappingAsync(mapping.Id, CancellationToken.None);
+            var completed = await WaitForSyncCompletionAsync(mapping.Id, previousSyncAt, TimeSpan.FromMinutes(5));
+            if (completed is null)
+            {
+                SetActionBanner($"Sync started for {webName}. Refresh status in a moment.", Color.DarkGreen);
+            }
+            else if (string.Equals(completed.LastSyncResult, "Failed", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(completed.LastSyncResult, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                SetActionBanner("Sync failed. Please retry.", Color.Firebrick);
+            }
+            else
+            {
+                SetActionBanner($"Sync completed at {FormatDate(completed.LastSyncAt, "now")}.", Color.DarkGreen);
+            }
+        }
+        catch
+        {
+            SetActionBanner("Sync failed. Please retry.", Color.Firebrick);
+        }
+        finally
+        {
+            if (_syncSelectedButton is not null)
+            {
+                _syncSelectedButton.Enabled = true;
+                _syncSelectedButton.Text = "Sync Selected";
+            }
+            await RefreshStatusGridAsync();
+        }
     }
 
     private ConnectorMapping? GetSelectedMapping()
@@ -527,7 +609,7 @@ internal sealed class ConnectorControlPanel : Form
             }
 
             await RefreshDeviceLinkDataAsync();
-            MessageBox.Show("Login successful. Select web company and tally company, then click LINK.", "AI CFO Connector");
+            SetActionBanner("Login successful. Select a Web Company and a Tally Company, then click Link.", Color.DarkGreen);
 
             await RefreshStatusGridAsync();
         }
@@ -550,6 +632,7 @@ internal sealed class ConnectorControlPanel : Form
                 "AI CFO Connector",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+            SetActionBanner("Login failed. Check API URL and credentials.", Color.Firebrick);
         }
         catch (Exception ex)
         {
@@ -562,7 +645,8 @@ internal sealed class ConnectorControlPanel : Form
                 "/api/connector/device/login",
                 null,
                 TruncateForUi(ex.Message, 500));
-            MessageBox.Show($"Login failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Login failed. Check API URL and credentials.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            SetActionBanner("Login failed. Check API URL and credentials.", Color.Firebrick);
         }
     }
 
@@ -647,12 +731,14 @@ internal sealed class ConnectorControlPanel : Form
             _configStore.Save(_config);
             await RefreshDeviceLinkDataAsync();
             LoadConfig();
-            MessageBox.Show("Link created successfully.", "AI CFO Connector");
+            SetActionBanner($"Linked successfully: {companyItem.Company.Name} ↔ {tallyCompany}", Color.DarkGreen);
             await RefreshStatusGridAsync();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Link failed: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            var friendly = GetFriendlyLinkError(ex.Message);
+            MessageBox.Show(friendly, "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            SetActionBanner(friendly, Color.Firebrick);
         }
     }
 
@@ -677,87 +763,173 @@ internal sealed class ConnectorControlPanel : Form
 
     private async Task RefreshDeviceLinkDataAsync()
     {
-        SaveGlobalSettings();
-        if (string.IsNullOrWhiteSpace(_deviceAuthToken) || string.IsNullOrWhiteSpace(_config.ApiUrl))
+        try
         {
-            _webCompanyCombo.Items.Clear();
-            _webCompanyCombo.Enabled = false;
+            SaveGlobalSettings();
+            if (string.IsNullOrWhiteSpace(_deviceAuthToken) || string.IsNullOrWhiteSpace(_config.ApiUrl))
+            {
+                _webCompanyCombo.Items.Clear();
+                _webCompanyCombo.Enabled = false;
+                _deviceLinks.Clear();
+                _webCompaniesEmptyState.Visible = false;
+                _tallyCompaniesEmptyState.Visible = _tallyCompanyCombo.Items.Count == 0;
+                _linksEmptyState.Visible = _config.Mappings.Count == 0;
+                SetLinkFlowEnabled(false);
+                return;
+            }
+
+            var selectedWebCompanyId = (_webCompanyCombo.SelectedItem as WebCompanyComboItem)?.Company.Id;
+            var companies = await _apiClient.GetCompaniesAsync(_config.ApiUrl, _deviceAuthToken, true, CancellationToken.None);
+            var links = await _apiClient.GetDeviceLinksAsync(_config.ApiUrl, _deviceAuthToken, CancellationToken.None);
+
             _deviceLinks.Clear();
-            return;
-        }
-
-        var companies = await _apiClient.GetCompaniesAsync(_config.ApiUrl, _deviceAuthToken, true, CancellationToken.None);
-        var links = await _apiClient.GetDeviceLinksAsync(_config.ApiUrl, _deviceAuthToken, CancellationToken.None);
-
-        _deviceLinks.Clear();
-        _deviceLinks.AddRange(links);
-        foreach (var link in links)
-        {
-            var mapping = _config.Mappings.FirstOrDefault(m =>
-                (!string.IsNullOrWhiteSpace(m.LinkId) && string.Equals(m.LinkId, link.Id, StringComparison.OrdinalIgnoreCase)) ||
-                (string.Equals(m.CompanyId, link.CompanyId, StringComparison.OrdinalIgnoreCase) &&
-                 NormalizeCompanyName(m.TallyCompanyName) == NormalizeCompanyName(link.TallyCompanyName)));
-            if (mapping is null)
+            _deviceLinks.AddRange(links);
+            foreach (var link in links)
             {
-                mapping = new ConnectorMapping
+                var mapping = _config.Mappings.FirstOrDefault(m =>
+                    (!string.IsNullOrWhiteSpace(m.LinkId) && string.Equals(m.LinkId, link.Id, StringComparison.OrdinalIgnoreCase)) ||
+                    (string.Equals(m.CompanyId, link.CompanyId, StringComparison.OrdinalIgnoreCase) &&
+                     NormalizeCompanyName(m.TallyCompanyName) == NormalizeCompanyName(link.TallyCompanyName)));
+                if (mapping is null)
                 {
-                    Id = Guid.NewGuid().ToString("N"),
-                    LastSyncResult = "Never"
-                };
-                _config.Mappings.Add(mapping);
+                    mapping = new ConnectorMapping
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        LastSyncResult = "Never"
+                    };
+                    _config.Mappings.Add(mapping);
+                }
+
+                mapping.CompanyId = link.CompanyId;
+                mapping.WebCompanyName = link.WebCompanyName;
+                mapping.TallyCompanyName = link.TallyCompanyName;
+                mapping.AuthMethod = "device_token";
+                mapping.LinkId = link.Id;
+                mapping.LastSyncAt = link.LastSyncAt;
+                mapping.LastSyncResult = string.IsNullOrWhiteSpace(link.Status)
+                    ? mapping.LastSyncResult
+                    : link.Status!.Trim().ToLowerInvariant();
+                mapping.LastError = link.LastSyncError;
+
+                if (!string.IsNullOrWhiteSpace(_deviceAuthToken))
+                {
+                    _credentialStore.SaveMappingToken(mapping.Id, _deviceAuthToken);
+                }
             }
+            _configStore.Save(_config);
 
-            mapping.CompanyId = link.CompanyId;
-            mapping.WebCompanyName = link.WebCompanyName;
-            mapping.TallyCompanyName = link.TallyCompanyName;
-            mapping.AuthMethod = "device_token";
-            mapping.LinkId = link.Id;
-            mapping.LastSyncAt = link.LastSyncAt;
-            mapping.LastSyncResult = string.IsNullOrWhiteSpace(link.Status)
-                ? mapping.LastSyncResult
-                : link.Status!.Trim().ToLowerInvariant();
-            mapping.LastError = link.LastSyncError;
+            var linkedCompanyIds = new HashSet<string>(
+                links.Where(l => !string.IsNullOrWhiteSpace(l.CompanyId)).Select(l => l.CompanyId),
+                StringComparer.OrdinalIgnoreCase);
+            var linkedTallyNames = new HashSet<string>(
+                links.Where(l => !string.IsNullOrWhiteSpace(l.TallyCompanyName)).Select(l => NormalizeCompanyName(l.TallyCompanyName)),
+                StringComparer.OrdinalIgnoreCase);
 
-            if (!string.IsNullOrWhiteSpace(_deviceAuthToken))
+            _webCompanyCombo.Items.Clear();
+            foreach (var company in companies.Where(c => !linkedCompanyIds.Contains(c.Id)))
             {
-                _credentialStore.SaveMappingToken(mapping.Id, _deviceAuthToken);
+                _webCompanyCombo.Items.Add(new WebCompanyComboItem(company));
+            }
+            _webCompanyCombo.Enabled = _webCompanyCombo.Items.Count > 0;
+            if (_webCompanyCombo.Enabled)
+            {
+                var selectedIndex = -1;
+                if (!string.IsNullOrWhiteSpace(selectedWebCompanyId))
+                {
+                    for (var i = 0; i < _webCompanyCombo.Items.Count; i++)
+                    {
+                        if (_webCompanyCombo.Items[i] is WebCompanyComboItem item &&
+                            string.Equals(item.Company.Id, selectedWebCompanyId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                _webCompanyCombo.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            }
+            _webCompaniesEmptyState.Visible = _webCompanyCombo.Items.Count == 0;
+
+            var selectedTally = _tallyCompanyCombo.SelectedItem?.ToString();
+            var tallyChoices = _tallyCompanyCombo.Items.Cast<object>()
+                .Select(item => item.ToString())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(name => !linkedTallyNames.Contains(NormalizeCompanyName(name!)))
+                .ToList();
+
+            _tallyCompanyCombo.Items.Clear();
+            foreach (var name in tallyChoices)
+            {
+                _tallyCompanyCombo.Items.Add(name);
+            }
+            if (_tallyCompanyCombo.Items.Count > 0)
+            {
+                var next = tallyChoices.FirstOrDefault(name => string.Equals(name, selectedTally, StringComparison.OrdinalIgnoreCase));
+                _tallyCompanyCombo.SelectedItem = next ?? tallyChoices[0];
+            }
+            _tallyCompaniesEmptyState.Visible = _tallyCompanyCombo.Items.Count == 0;
+            _linksEmptyState.Visible = _config.Mappings.Count == 0;
+            SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
+            if (_webCompanyCombo.Items.Count == 0)
+            {
+                SetActionBanner("No companies found. Create one in AICFO web portal, then click Refresh companies.", Color.DarkGoldenrod);
+            }
+            else if (_tallyCompanyCombo.Items.Count == 0)
+            {
+                SetActionBanner("No Tally companies detected. Click Rescan Tally companies.", Color.DarkGoldenrod);
+            }
+            else if (_config.Mappings.Count == 0)
+            {
+                SetActionBanner("No companies linked yet. Select both companies and click Link.", Color.DimGray);
             }
         }
-        _configStore.Save(_config);
-
-        var linkedCompanyIds = new HashSet<string>(
-            links.Where(l => !string.IsNullOrWhiteSpace(l.CompanyId)).Select(l => l.CompanyId),
-            StringComparer.OrdinalIgnoreCase);
-        var linkedTallyNames = new HashSet<string>(
-            links.Where(l => !string.IsNullOrWhiteSpace(l.TallyCompanyName)).Select(l => NormalizeCompanyName(l.TallyCompanyName)),
-            StringComparer.OrdinalIgnoreCase);
-
-        _webCompanyCombo.Items.Clear();
-        foreach (var company in companies.Where(c => !linkedCompanyIds.Contains(c.Id)))
+        catch
         {
-            _webCompanyCombo.Items.Add(new WebCompanyComboItem(company));
+            SetActionBanner("Unable to refresh companies right now. Please retry.", Color.Firebrick);
         }
-        _webCompanyCombo.Enabled = _webCompanyCombo.Items.Count > 0;
-        if (_webCompanyCombo.Enabled) _webCompanyCombo.SelectedIndex = 0;
+    }
 
-        var selectedTally = _tallyCompanyCombo.SelectedItem?.ToString();
-        var tallyChoices = _tallyCompanyCombo.Items.Cast<object>()
-            .Select(item => item.ToString())
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(name => !linkedTallyNames.Contains(NormalizeCompanyName(name!)))
-            .ToList();
+    private void SetLinkFlowEnabled(bool enabled)
+    {
+        _webCompanyCombo.Enabled = enabled && _webCompanyCombo.Items.Count > 0;
+        _tallyCompanyCombo.Enabled = enabled && _tallyCompanyCombo.Items.Count > 0;
+        if (_linkButton is not null) _linkButton.Enabled = enabled;
+    }
 
-        _tallyCompanyCombo.Items.Clear();
-        foreach (var name in tallyChoices)
+    private void SetActionBanner(string message, Color color)
+    {
+        _actionBanner.Text = message;
+        _actionBanner.ForeColor = color;
+    }
+
+    private static string GetFriendlyLinkError(string raw)
+    {
+        var text = (raw ?? string.Empty).ToLowerInvariant();
+        if (text.Contains("already linked") || text.Contains("unique")) return "This company pair is already linked. Unlink old mapping first.";
+        if (text.Contains("trial has expired") || text.Contains("subscription")) return "Subscription access required. Please check billing in AICFO web portal.";
+        if (text.Contains("access denied") || text.Contains("forbidden")) return "Access denied. Please login with the company owner account.";
+        return "Unable to link right now. Please retry.";
+    }
+
+    private async Task<ConnectorMapping?> WaitForSyncCompletionAsync(string mappingId, DateTimeOffset? previousSyncAt, TimeSpan timeout)
+    {
+        var started = DateTime.UtcNow;
+        while (DateTime.UtcNow - started < timeout)
         {
-            _tallyCompanyCombo.Items.Add(name);
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            var latest = _configStore.Load();
+            latest?.EnsureCompatibility();
+            var mapping = latest?.Mappings.FirstOrDefault(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase));
+            if (mapping is null) return null;
+            if (mapping.LastSyncAt.HasValue && (!previousSyncAt.HasValue || mapping.LastSyncAt.Value > previousSyncAt.Value))
+            {
+                _config = latest!;
+                LoadConfig();
+                return mapping;
+            }
         }
-        if (_tallyCompanyCombo.Items.Count > 0)
-        {
-            var next = tallyChoices.FirstOrDefault(name => string.Equals(name, selectedTally, StringComparison.OrdinalIgnoreCase));
-            _tallyCompanyCombo.SelectedItem = next ?? tallyChoices[0];
-        }
+        return null;
     }
 
     private async Task TestTallyAsync()
@@ -788,6 +960,7 @@ internal sealed class ConnectorControlPanel : Form
                     _tallyStatus.Text = $"Reachable ({host}:{port})";
                     _configStore.Save(_config);
                     await RefreshDeviceLinkDataAsync();
+                    _tallyCompaniesEmptyState.Visible = false;
                     return;
                 }
             }
@@ -798,7 +971,8 @@ internal sealed class ConnectorControlPanel : Form
         }
 
         _tallyStatus.Text = "Detection failed";
-        MessageBox.Show("Could not detect Tally. Verify host/port and ensure Tally XML over HTTP is enabled.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        _tallyCompaniesEmptyState.Visible = true;
+        MessageBox.Show("Could not detect Tally. Verify host/port and ensure Tally company is open.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void SaveGlobalSettings()
@@ -959,6 +1133,9 @@ internal sealed class ConnectorControlPanel : Form
             }
             _mappingsList.Items.Add(item);
         }
+
+        _linksEmptyState.Visible = _config.Mappings.Count == 0;
+        SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
 
         RefreshStatusView();
     }
