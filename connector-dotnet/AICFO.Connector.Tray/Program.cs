@@ -176,7 +176,7 @@ internal sealed class ConnectorControlPanel : Form
         ForeColor = Color.DarkGoldenrod,
         Text = "This mapping controls where data is synced. Double-check company selection."
     };
-    private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true };
+    private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true, ShowItemToolTips = true };
     private readonly Label _linkedOnline = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedLastHeartbeat = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedLastSyncStatus = new() { AutoSize = true, Text = "-" };
@@ -704,7 +704,9 @@ internal sealed class ConnectorControlPanel : Form
             mapping.AuthMethod = "device_token";
             mapping.LinkId = link.Id;
             mapping.LastSyncAt = link.LastSyncAt;
-            mapping.LastSyncResult = string.IsNullOrWhiteSpace(link.Status) ? mapping.LastSyncResult : link.Status!;
+            mapping.LastSyncResult = string.IsNullOrWhiteSpace(link.Status)
+                ? mapping.LastSyncResult
+                : link.Status!.Trim().ToLowerInvariant();
             mapping.LastError = link.LastSyncError;
 
             if (!string.IsNullOrWhiteSpace(_deviceAuthToken))
@@ -879,7 +881,10 @@ internal sealed class ConnectorControlPanel : Form
             var authMethod = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
                 ? "Device Token"
                 : "Legacy";
-            var linkStatus = _deviceLinks.FirstOrDefault(l => string.Equals(l.Id, mapping.LinkId, StringComparison.OrdinalIgnoreCase))?.Status ?? "-";
+            var linkStatus = (_deviceLinks.FirstOrDefault(l => string.Equals(l.Id, mapping.LinkId, StringComparison.OrdinalIgnoreCase))?.Status ?? mapping.LastSyncResult ?? "-")
+                .Trim()
+                .ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(linkStatus)) linkStatus = "-";
 
             var item = new ListViewItem(webName)
             {
@@ -891,6 +896,10 @@ internal sealed class ConnectorControlPanel : Form
             item.SubItems.Add(mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never");
             item.SubItems.Add(mapping.LastSyncResult);
             item.SubItems.Add(string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError);
+            if (string.Equals(linkStatus, "failed", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(mapping.LastError))
+            {
+                item.ToolTipText = mapping.LastError;
+            }
             _mappingsList.Items.Add(item);
         }
 

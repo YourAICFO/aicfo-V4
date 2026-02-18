@@ -4,6 +4,7 @@ const { QueryTypes } = require('sequelize');
 const router = express.Router();
 
 const { integrationService, authService } = require('../services');
+const { checkAccess } = require('../services/subscriptionService');
 const syncStatusService = require('../services/syncStatusService');
 const {
   IntegrationSyncRun,
@@ -46,12 +47,12 @@ const resolveLinkContext = async (req) => {
   const linkId = req.body?.linkId || req.query?.linkId || null;
   if (!linkId) {
     if (req.connectorAuthMode === 'device_login') {
-      return { link: null, error: 'linkId is required for device login sync operations' };
+      return { link: null, error: 'linkId is required for device login sync operations', statusCode: 400 };
     }
-    return { link: null, error: null };
+    return { link: null, error: null, statusCode: null };
   }
   if (!req.userId) {
-    return { link: null, error: 'linkId requires device login authentication' };
+    return { link: null, error: 'linkId requires device login authentication', statusCode: 403 };
   }
 
   const link = await ConnectorCompanyLink.findOne({
@@ -60,16 +61,29 @@ const resolveLinkContext = async (req) => {
       userId: req.userId,
       isActive: true
     },
+    include: [
+      {
+        model: Company,
+        as: 'company',
+        required: true,
+        where: { isDeleted: false, deletedAt: null },
+        attributes: ['id']
+      }
+    ],
     raw: false
   });
 
   if (!link) {
-    return { link: null, error: 'Active link not found' };
+    return { link: null, error: 'Active link not found', statusCode: 404 };
   }
 
   req.companyId = link.companyId;
   req.linkId = link.id;
-  return { link, error: null };
+  const access = await checkAccess(req.companyId, req.userId);
+  if (!access.allowed) {
+    return { link: null, error: access.reason || 'Access denied', statusCode: 403 };
+  }
+  return { link, error: null, statusCode: null };
 };
 
 const buildStableStatusResponse = async (companyId) => {
@@ -382,7 +396,8 @@ router.get('/device/companies', authenticateConnectorOrLegacy, async (req, res) 
     const companies = await Company.findAll({
       where: {
         ownerId: req.userId,
-        isDeleted: false
+        isDeleted: false,
+        deletedAt: null
       },
       attributes: ['id', 'name'],
       order: [['createdAt', 'DESC']]
@@ -423,7 +438,7 @@ router.get('/device/links', authenticateConnectorOrLegacy, async (req, res) => {
           model: Company,
           as: 'company',
           required: true,
-          where: { isDeleted: false },
+          where: { isDeleted: false, deletedAt: null },
           attributes: ['id', 'name']
         }
       ],
@@ -476,7 +491,8 @@ router.post('/device/links', authenticateConnectorOrLegacy, async (req, res) => 
       where: {
         id: companyId,
         ownerId: req.userId,
-        isDeleted: false
+        isDeleted: false,
+        deletedAt: null
       }
     });
     if (!company) {
@@ -711,11 +727,21 @@ router.post('/register-device', authenticate, async (req, res) => {
 ================================ */
 router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { link, error } = await resolveLinkContext(req);
+    const { link, error, statusCode } = await resolveLinkContext(req);
     if (error) {
-      return res.status(400).json({ success: false, error });
+      return res.status(statusCode || 400).json({ success: false, error });
     }
     const { companyId } = req;
+
+    if (link) {
+      await ConnectorCompanyLink.update(
+        {
+          lastSyncStatus: 'syncing',
+          lastSyncError: null
+        },
+        { where: { id: link.id, userId: req.userId, isActive: true } }
+      );
+    }
     
     // Create new sync run
     const syncRun = await syncStatusService.createRun(
@@ -759,9 +785,9 @@ router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
 ================================ */
 router.post('/sync', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { error } = await resolveLinkContext(req);
+    const { error, statusCode } = await resolveLinkContext(req);
     if (error) {
-      return res.status(400).json({ success: false, error });
+      return res.status(statusCode || 400).json({ success: false, error });
     }
     const validation = validateChartOfAccountsPayload(req.body || {});
     if (!validation.ok) {
@@ -859,9 +885,9 @@ router.post('/sync/progress', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { link, error: linkError } = await resolveLinkContext(req);
+    const { link, error: linkError, statusCode } = await resolveLinkContext(req);
     if (linkError) {
-      return res.status(400).json({ success: false, error: linkError });
+      return res.status(statusCode || 400).json({ success: false, error: linkError });
     }
     const {
       runId,
@@ -941,13 +967,18 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
     );
 
     if (link) {
+      const isSuccessLike = ['success', 'partial', 'partial_success'].includes(String(status || '').toLowerCase());
+      const normalizedStatus = isSuccessLike ? 'success' : 'failed';
+      const normalizedError = isSuccessLike
+        ? null
+        : (String(lastError || 'Sync failed').slice(0, 500));
       await ConnectorCompanyLink.update(
         {
           lastSyncAt: completedRun.finishedAt || new Date(),
-          lastSyncStatus: status,
-          lastSyncError: lastError || null
+          lastSyncStatus: normalizedStatus,
+          lastSyncError: normalizedError
         },
-        { where: { id: link.id } }
+        { where: { id: link.id, userId: req.userId, isActive: true } }
       );
     }
 
@@ -974,9 +1005,9 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
 ================================ */
 router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { link, error } = await resolveLinkContext(req);
+    const { link, error, statusCode } = await resolveLinkContext(req);
     if (error) {
-      return res.status(400).json({ success: false, error });
+      return res.status(statusCode || 400).json({ success: false, error });
     }
     const { companyId, connectorClientId, deviceId } = req;
 
@@ -1026,9 +1057,9 @@ router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
 ================================ */
 router.get('/status/connector', authenticateConnectorOrLegacy, async (req, res) => {
   try {
-    const { error } = await resolveLinkContext(req);
+    const { error, statusCode } = await resolveLinkContext(req);
     if (error) {
-      return res.status(400).json({ success: false, error });
+      return res.status(statusCode || 400).json({ success: false, error });
     }
     const status = await syncStatusService.getSyncStatus(req.companyId);
     res.json({
