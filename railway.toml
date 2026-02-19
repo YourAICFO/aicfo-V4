@@ -4,6 +4,6 @@ dockerfilePath = "backend/Dockerfile"
 
 [deploy]
 # Same command for both services. Entrypoint reads RAILWAY_PROCESS: worker service sets RAILWAY_PROCESS=worker.
-startCommand = "node scripts/railway-entrypoint.js"
+startCommand = "node src/railway-entrypoint.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
