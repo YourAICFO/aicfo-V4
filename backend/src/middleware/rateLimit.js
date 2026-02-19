@@ -11,10 +11,10 @@ const defaultHandler = (req, res) => {
   });
 };
 
-/** Auth: login/signup/token – prevent brute force. Per IP. */
+/** Auth: login/signup/me – prevent brute force. Per IP. Default 80/15min allows retries and multiple tabs. */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '20', 10),
+  max: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '80', 10),
   message: { success: false, error: 'Too many auth attempts. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
