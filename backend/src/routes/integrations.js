@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
 const { integrationService } = require('../services');
+const { logger } = require('../utils/logger');
 
 // GET /api/integrations
 router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
@@ -13,7 +14,7 @@ router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (re
       data: integrations
     });
   } catch (error) {
-    console.error('Get integrations error:', error);
+    logger.error({ err: error }, 'Get integrations error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -24,14 +25,14 @@ router.get('/', authenticate, requireCompany, checkSubscriptionAccess, async (re
 // POST /api/integrations/tally
 router.post('/tally', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
-    const integration = await integrationService.connectTally(req.companyId, req.body);
+    const integration = await integrationService.connectTally(req.companyId, req.body, req.userId);
     res.status(201).json({
       success: true,
       message: 'Tally connected successfully',
       data: integration
     });
   } catch (error) {
-    console.error('Connect Tally error:', error);
+    logger.error({ err: error }, 'Connect Tally error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -42,14 +43,14 @@ router.post('/tally', authenticate, requireCompany, checkSubscriptionAccess, asy
 // POST /api/integrations/zoho
 router.post('/zoho', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
-    const integration = await integrationService.connectZoho(req.companyId, req.body);
+    const integration = await integrationService.connectZoho(req.companyId, req.body, req.userId);
     res.status(201).json({
       success: true,
       message: 'Zoho Books connected successfully',
       data: integration
     });
   } catch (error) {
-    console.error('Connect Zoho error:', error);
+    logger.error({ err: error }, 'Connect Zoho error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -60,14 +61,14 @@ router.post('/zoho', authenticate, requireCompany, checkSubscriptionAccess, asyn
 // POST /api/integrations/quickbooks
 router.post('/quickbooks', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
-    const integration = await integrationService.connectQuickBooks(req.companyId, req.body);
+    const integration = await integrationService.connectQuickBooks(req.companyId, req.body, req.userId);
     res.status(201).json({
       success: true,
       message: 'QuickBooks connected successfully',
       data: integration
     });
   } catch (error) {
-    console.error('Connect QuickBooks error:', error);
+    logger.error({ err: error }, 'Connect QuickBooks error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -84,7 +85,7 @@ router.post('/:id/disconnect', authenticate, requireCompany, checkSubscriptionAc
       message: result.message
     });
   } catch (error) {
-    console.error('Disconnect integration error:', error);
+    logger.error({ err: error }, 'Disconnect integration error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -104,7 +105,7 @@ router.post('/:id/sync', authenticate, requireCompany, checkSubscriptionAccess, 
       }
     });
   } catch (error) {
-    console.error('Sync integration error:', error);
+    logger.error({ err: error }, 'Sync integration error');
     res.status(400).json({
       success: false,
       error: error.message

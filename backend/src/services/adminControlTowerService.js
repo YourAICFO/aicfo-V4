@@ -18,6 +18,20 @@ const toPercent = (value, total) => {
   return Math.round((value / total) * 10000) / 100;
 };
 
+const MAX_ERROR_DISPLAY = 200;
+/** Sanitize error message for admin UI: no stack traces, no tokens/URLs, truncated. */
+const sanitizeErrorForAdmin = (raw) => {
+  if (raw == null || typeof raw !== 'string') return null;
+  let s = raw
+    .split(/\n/)
+    .filter((line) => !/^\s*at\s+/.test(line) && !/^\s*at\s+Object\./.test(line))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (s.length > MAX_ERROR_DISPLAY) s = s.slice(0, MAX_ERROR_DISPLAY) + '…';
+  return s || null;
+};
+
 const fetchRows = async (sql, replacements = {}) => {
   return sequelize.query(sql, {
     type: Sequelize.QueryTypes.SELECT,
@@ -271,12 +285,12 @@ const getAIMetrics = async (days = 30) => {
       WHERE "createdAt" >= NOW() - INTERVAL '${safeDays} days'
     `);
 
-    const fallbacks = await fetchOne(`
-      SELECT COUNT(*) AS llm_fallback
-      FROM admin_usage_events
-      WHERE event_type = 'ai_chat'
+    const missingMetrics = await fetchOne(`
+      SELECT COUNT(*) AS missing_metrics_count
+      FROM admin_ai_questions
+      WHERE success = false
         AND "createdAt" >= NOW() - INTERVAL '${safeDays} days'
-        AND COALESCE((metadata->>'usedRewrite')::boolean, false) = true
+        AND failure_reason = 'MISSING_METRICS'
     `);
 
     const answerTime = await fetchOne(`
@@ -318,7 +332,7 @@ const getAIMetrics = async (days = 30) => {
       LIMIT 10
     `);
 
-    const recentFailures = await fetchRows(`
+    const recentFailuresRaw = await fetchRows(`
       SELECT
         q.id,
         q.question,
@@ -335,16 +349,21 @@ const getAIMetrics = async (days = 30) => {
       ORDER BY q."createdAt" DESC
       LIMIT 100
     `);
+    const recentFailures = (recentFailuresRaw || []).map((row) => ({
+      ...row,
+      failure_reason: sanitizeErrorForAdmin(row.failure_reason) || 'Unknown'
+    }));
 
     const totalQuestions = asNumber(totals.ai_questions_total);
     const deterministicHits = asNumber(totals.deterministic_hits);
-    const fallbackCount = asNumber(fallbacks.llm_fallback);
+    const missingMetricsCount = asNumber(missingMetrics.missing_metrics_count);
 
     return {
       ai_questions_total: totalQuestions,
       unanswered_questions: asNumber(totals.unanswered_questions),
       deterministic_hit_rate: toPercent(deterministicHits, totalQuestions),
-      llm_fallback_rate: toPercent(fallbackCount, totalQuestions),
+      missing_metrics_count: missingMetricsCount,
+      missing_metrics_rate: toPercent(missingMetricsCount, totalQuestions),
       avg_answer_time: Math.round(asNumber(answerTime.avg_answer_time)),
       top_unanswered_questions: topUnanswered,
       top_missing_metric_keys: topMissingMetricKeys,
@@ -387,7 +406,7 @@ const getConnectorMetrics = async (days = 30) => {
       LIMIT 100
     `).catch(() => []);
 
-    const recentFailures = await fetchRows(`
+    const recentFailuresRaw = await fetchRows(`
       SELECT
         l.id,
         c.name AS company_name,
@@ -405,6 +424,10 @@ const getConnectorMetrics = async (days = 30) => {
       ORDER BY l.updated_at DESC
       LIMIT 100
     `).catch(() => []);
+    const recentFailures = (recentFailuresRaw || []).map((row) => ({
+      ...row,
+      last_sync_error: sanitizeErrorForAdmin(row.last_sync_error) || 'Sync failed'
+    }));
 
     return {
       linked_companies: asNumber(linkedCompanies.linked_companies),

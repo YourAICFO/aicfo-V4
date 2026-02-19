@@ -6,6 +6,7 @@ const router = express.Router();
 const { integrationService, authService } = require('../services');
 const { checkAccess } = require('../services/subscriptionService');
 const syncStatusService = require('../services/syncStatusService');
+const { jwtSecret } = require('../config/auth');
 const {
   IntegrationSyncRun,
   IntegrationSyncEvent,
@@ -88,6 +89,7 @@ const resolveLinkContext = async (req) => {
 
 const buildStableStatusResponse = async (companyId) => {
   const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
+  // Identity and health are ConnectorDevice-first; ConnectorClient is legacy fallback for old tokens.
   const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
     ConnectorDevice.findOne({
       where: { companyId, status: 'active' },
@@ -254,7 +256,7 @@ router.post('/auth', async (req, res) => {
     const jwt = require('jsonwebtoken');
     let decodedUser;
     try {
-      decodedUser = jwt.verify(userJwt, process.env.JWT_SECRET || 'fallback-secret');
+      decodedUser = jwt.verify(userJwt, jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -272,23 +274,49 @@ router.post('/auth', async (req, res) => {
       });
     }
 
-    // Create/upsert connector client
+    // Legacy: create/upsert connector client for backward-compat token
     const connectorClient = await syncStatusService.upsertConnectorClient(
       companyId,
       { deviceId, deviceName, os, appVersion }
     );
-
-    // Generate connector token
     const connectorToken = syncStatusService.generateConnectorToken(
       connectorClient.id,
       companyId
     );
+
+    // Canonical identity: create/update ConnectorDevice so health and identity are device-centric
+    const rawDeviceToken = `aicfo_dev_${crypto.randomBytes(48).toString('hex')}`;
+    const deviceTokenHash = hashToken(rawDeviceToken);
+    const [deviceRecord, deviceCreated] = await ConnectorDevice.findOrCreate({
+      where: { companyId, deviceId },
+      defaults: {
+        companyId,
+        userId: decodedUser.userId,
+        deviceId,
+        deviceName: deviceName || null,
+        deviceTokenHash,
+        status: 'active',
+        lastSeenAt: new Date()
+      }
+    });
+    if (!deviceCreated) {
+      await deviceRecord.update({
+        userId: decodedUser.userId,
+        deviceName: deviceName || null,
+        deviceTokenHash,
+        status: 'active',
+        lastSeenAt: new Date()
+      });
+    }
 
     res.json({
       success: true,
       data: {
         connectorToken,
         connectorClientId: connectorClient.id,
+        deviceToken: rawDeviceToken,
+        deviceId,
+        companyId,
         serverTime: new Date().toISOString()
       }
     });
@@ -362,7 +390,7 @@ router.post('/device/login', connectorLoginLimiter, async (req, res) => {
     };
     const deviceToken = require('jsonwebtoken').sign(
       tokenPayload,
-      process.env.JWT_SECRET || 'fallback-secret',
+      jwtSecret,
       { expiresIn: '365d' }
     );
 

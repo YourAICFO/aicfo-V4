@@ -1,4 +1,5 @@
 const { Subscription, CompanySubscription, Company, UserBillingProfile, sequelize } = require('../models');
+const { logger } = require('../utils/logger');
 
 const TRIAL_DAYS = 30;
 
@@ -33,7 +34,7 @@ const createTrialSubscription = async (companyId) => {
     }
   });
 
-  console.log(`[trial] created for company=${companyId} ends=${trialEnd.toISOString()}`);
+  logger.info({ companyId, trialEnd: trialEnd.toISOString() }, 'Trial subscription created (legacy)');
   return subscription;
 };
 
@@ -84,7 +85,7 @@ const lockExpiredTrialIfNeeded = async (subscription) => {
         subscriptionStatus: 'expired',
         accountLocked: true
       });
-      console.log(`[trial] expired company=${subscription.companyId}`);
+      logger.info({ companyId: subscription.companyId }, 'Trial expired and locked');
       return subscription.reload();
     }
   }
@@ -223,7 +224,7 @@ const lockExpiredTrials = async () => {
      WHERE trial_end_date < NOW()
        AND subscription_status = 'trial'`
   );
-  console.log('[trial] lock job executed');
+  logger.info('Lock expired trials job executed');
   return result;
 };
 

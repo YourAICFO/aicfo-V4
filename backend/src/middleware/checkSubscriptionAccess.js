@@ -12,7 +12,7 @@ const checkSubscriptionAccess = async (req, res, next) => {
     }
     next();
   } catch (error) {
-    console.error('Subscription access error:', error);
+    require('../utils/logger').logger.error({ err: error }, 'Subscription access error');
     res.status(500).json({
       success: false,
       error: 'Subscription access check failed'

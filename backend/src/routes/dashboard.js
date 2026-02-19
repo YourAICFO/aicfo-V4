@@ -19,7 +19,7 @@ router.get('/overview', authenticate, requireCompany, checkSubscriptionAccess, a
       data
     });
   } catch (error) {
-    console.error('Overview error:', error);
+    require('../utils/logger').logger.error({ err: error }, 'Overview error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -37,7 +37,7 @@ router.get('/revenue', authenticate, requireCompany, checkSubscriptionAccess, as
       data
     });
   } catch (error) {
-    console.error('Revenue dashboard error:', error);
+    require('../utils/logger').logger.error({ err: error }, 'Revenue dashboard error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -55,7 +55,7 @@ router.get('/expenses', authenticate, requireCompany, checkSubscriptionAccess, a
       data
     });
   } catch (error) {
-    console.error('Expense dashboard error:', error);
+    require('../utils/logger').logger.error({ err: error }, 'Expense dashboard error');
     res.status(400).json({
       success: false,
       error: error.message
@@ -73,7 +73,7 @@ router.get('/cashflow', authenticate, requireCompany, checkSubscriptionAccess, a
       data
     });
   } catch (error) {
-    console.error('Cashflow dashboard error:', error);
+    require('../utils/logger').logger.error({ err: error }, 'Cashflow dashboard error');
     res.status(400).json({
       success: false,
       error: error.message

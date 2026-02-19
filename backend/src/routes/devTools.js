@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const { authenticate, requireCompany } = require('../middleware/auth');
-const { requireAdminEmail } = require('../middleware/requireAdminEmail');
+const { requireAdmin } = require('../middleware/adminAuth');
 const { z, validate, ValidationError } = require('../utils/validation');
 const { parseDateStrict } = require('../utils/dates');
 const { sequelize, LedgerMonthlyBalance } = require('../models');
@@ -39,7 +39,7 @@ const buildMockPayload = () => {
   return { groups, ledgers };
 };
 
-router.post('/mock-coa-sync', authenticate, requireCompany, requireAdminEmail, async (req, res) => {
+router.post('/mock-coa-sync', authenticate, requireCompany, requireAdmin, async (req, res) => {
   if (process.env.NODE_ENV === 'production' && process.env.DEV_MOCK_ENABLED !== 'true') {
     return res.status(403).json({ success: false, error: 'Disabled in production' });
   }
@@ -123,7 +123,7 @@ router.post('/mock-coa-sync', authenticate, requireCompany, requireAdminEmail, a
   }
 });
 
-router.get('/doctor-last', authenticate, requireCompany, requireAdminEmail, (req, res) => {
+router.get('/doctor-last', authenticate, requireCompany, requireAdmin, (req, res) => {
   if (process.env.NODE_ENV === 'production' && process.env.DEV_MOCK_ENABLED !== 'true') {
     return res.status(403).json({ success: false, error: 'Disabled in production', run_id: req.run_id || null });
   }

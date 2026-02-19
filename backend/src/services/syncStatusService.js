@@ -204,7 +204,8 @@ class SyncStatusService {
   }
 
   /**
-   * Upsert connector client
+   * Upsert connector client (legacy). Identity and health reporting are ConnectorDevice-centric;
+   * this is kept for backward compatibility with short-lived connector tokens.
    * @param {string} companyId - Company ID
    * @param {Object} clientInfo - Client information
    * @returns {Promise<ConnectorClient>} Upserted client

@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { MonthlyCreditor, MonthlyTrialBalanceSummary, CurrentCreditor, CurrentCashBalance } = require('../models');
+const { MonthlyCreditor, MonthlyTrialBalanceSummary, CurrentCreditor, CurrentCashBalance, CFOMetric } = require('../models');
 const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
 const { listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 
@@ -33,7 +33,13 @@ const getSummary = async (companyId) => {
   });
   if (currentRows.length === 0) return { month: latestMonth, totalBalance: 0 };
 
-  const totalBalance = currentRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
+  const creditorsLiveRow = await CFOMetric.findOne({
+    where: { companyId, metricKey: 'creditors_balance_live', timeScope: 'live' },
+    raw: true
+  });
+  const totalBalance = creditorsLiveRow?.metric_value != null
+    ? Number(creditorsLiveRow.metric_value)
+    : currentRows.reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const top1 = currentRows[0]?.balance ? Number(currentRows[0].balance) : 0;
   const top5 = currentRows.slice(0, 5).reduce((sum, r) => sum + Number(r.balance || 0), 0);
   const concentrationRatio = totalBalance > 0 ? top5 / totalBalance : 0;

@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
-const { requireAdminEmail } = require('../middleware/requireAdminEmail');
+const { requireAdmin } = require('../middleware/adminAuth');
 const { adminUsageService } = require('../services');
 const adminControlTowerService = require('../services/adminControlTowerService');
 
-router.get('/summary', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/summary', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminUsageService.getMetricsSummary();
     res.json({ success: true, data });
@@ -14,7 +14,7 @@ router.get('/summary', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/customers', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/customers', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminUsageService.getCustomerMetrics();
     res.json({ success: true, data });
@@ -23,7 +23,7 @@ router.get('/customers', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/system', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/system', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminControlTowerService.getSystemMetrics();
     res.json({ success: true, data });
@@ -32,7 +32,7 @@ router.get('/system', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/business', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/business', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminControlTowerService.getBusinessMetrics();
     res.json({ success: true, data });
@@ -41,7 +41,7 @@ router.get('/business', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/usage', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/usage', authenticate, requireAdmin, async (req, res) => {
   try {
     const detailed = req.query.detailed === 'true';
     if (detailed) {
@@ -56,7 +56,7 @@ router.get('/usage', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/ai', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/ai', authenticate, requireAdmin, async (req, res) => {
   try {
     const days = Number(req.query.days || 30);
     const detailed = req.query.detailed === 'true';
@@ -72,7 +72,7 @@ router.get('/ai', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/connector', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/connector', authenticate, requireAdmin, async (req, res) => {
   try {
     const days = Number(req.query.days || 30);
     const data = await adminControlTowerService.getConnectorMetrics(days);
@@ -82,7 +82,7 @@ router.get('/connector', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/accounting', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/accounting', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminControlTowerService.getAccountingMetrics();
     res.json({ success: true, data });
@@ -91,7 +91,7 @@ router.get('/accounting', authenticate, requireAdminEmail, async (req, res) => {
   }
 });
 
-router.get('/risk', authenticate, requireAdminEmail, async (req, res) => {
+router.get('/risk', authenticate, requireAdmin, async (req, res) => {
   try {
     const data = await adminControlTowerService.getRiskMetrics();
     res.json({ success: true, data });

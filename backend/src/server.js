@@ -8,6 +8,7 @@ require('dotenv').config();
 const { sequelize } = require('./models');
 const { logger, logError } = require('./utils/logger');
 const { requestContext } = require('./middleware/requestContext');
+const { authLimiter, connectorLimiter, aiLimiter } = require('./middleware/rateLimit');
 const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./utils/sentry');
 
 // Import routes
@@ -139,10 +140,10 @@ app.get('/health', (req, res) => {
 /* ===============================
    API routes
 ================================ */
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
@@ -162,7 +163,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
-app.use('/api/connector', connectorRoutes);
+app.use('/api/connector', connectorLimiter, connectorRoutes);
 app.use('/api/billing', billingRouter);
 app.use('/api/settings/notifications', settingsNotificationsRoutes);
 

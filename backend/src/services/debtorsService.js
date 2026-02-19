@@ -1,5 +1,5 @@
 const { Sequelize } = require('sequelize');
-const { MonthlyDebtor, MonthlyTrialBalanceSummary, CurrentDebtor } = require('../models');
+const { MonthlyDebtor, MonthlyTrialBalanceSummary, CurrentDebtor, CFOMetric } = require('../models');
 const { getLatestClosedMonthKey } = require('./monthlySnapshotService');
 const { listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 
@@ -45,18 +45,25 @@ const getSummary = async (companyId) => {
     ? listMonthKeysBetween(latestMonth, latestMonth)[0]
     : latestMonth;
 
-  const revenueRow = await MonthlyTrialBalanceSummary.findOne({
-    where: { companyId, month: latestMonth },
-    raw: true
-  });
-  const prevRevenueRow = await MonthlyTrialBalanceSummary.findOne({
-    where: { companyId, month: getMonthKeyOffset(latestMonth, -1) },
-    raw: true
-  });
-
-  const revenue = Number(revenueRow?.total_revenue || 0);
-  const prevRevenue = Number(prevRevenueRow?.total_revenue || 0);
-  const revenueGrowth = prevRevenue > 0 ? (revenue - prevRevenue) / prevRevenue : 0;
+  const [revenueLastClosedRow, revenueGrowth3mRow] = await Promise.all([
+    CFOMetric.findOne({ where: { companyId, metricKey: 'revenue_last_closed', timeScope: 'last_closed_month' }, raw: true }),
+    CFOMetric.findOne({ where: { companyId, metricKey: 'revenue_growth_3m', timeScope: '3m' }, raw: true })
+  ]);
+  let revenue = revenueLastClosedRow?.metric_value != null ? Number(revenueLastClosedRow.metric_value) : null;
+  let revenueGrowth = revenueGrowth3mRow?.metric_value != null ? Number(revenueGrowth3mRow.metric_value) : null;
+  if (revenue == null || revenueGrowth == null) {
+    const revenueRow = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: latestMonth },
+      raw: true
+    });
+    const prevRevenueRow = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: getMonthKeyOffset(latestMonth, -1) },
+      raw: true
+    });
+    if (revenue == null) revenue = Number(revenueRow?.total_revenue || 0);
+    const prevRevenue = Number(prevRevenueRow?.total_revenue || 0);
+    if (revenueGrowth == null) revenueGrowth = prevRevenue > 0 ? (revenue - prevRevenue) / prevRevenue : 0;
+  }
 
   const prevTotalRow = await MonthlyDebtor.findOne({
     where: { companyId, month: getMonthKeyOffset(latestMonth, -1) },

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { User, Company, Subscription } = require('../models');
 const { jwtSecret } = require('../config/auth');
 const { markCompanyActiveToday } = require('../services/usageMeteringService');
+const { logger } = require('../utils/logger');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -41,7 +42,7 @@ const authenticate = async (req, res, next) => {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired.' });
     }
-    console.error('Auth middleware error:', error);
+    logger.error({ err: error }, 'Auth middleware error');
     res.status(500).json({ error: 'Authentication error.' });
   }
 };
@@ -82,7 +83,7 @@ const requireCompany = async (req, res, next) => {
     markCompanyActiveToday(company.id).catch(() => {});
     next();
   } catch (error) {
-    console.error('Company middleware error:', error);
+    logger.error({ err: error }, 'Company middleware error');
     res.status(500).json({ error: 'Error loading company.' });
   }
 };
@@ -102,7 +103,7 @@ const requirePaidPlan = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Paid plan middleware error:', error);
+    logger.error({ err: error }, 'Paid plan middleware error');
     res.status(500).json({ error: 'Error checking subscription.' });
   }
 };

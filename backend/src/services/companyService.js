@@ -11,19 +11,13 @@ const isAdminEmail = (email) => {
 };
 
 const createCompany = async (userId, companyData) => {
-  const now = new Date();
-  const trialEnd = new Date(now);
-  trialEnd.setDate(trialEnd.getDate() + 30);
-
   const company = await Company.create({
     ...companyData,
-    ownerId: userId,
-    trialStartDate: now,
-    trialEndDate: trialEnd,
-    subscriptionStatus: 'trial'
+    ownerId: userId
+    // Trial is user-level (UserBillingProfile); no per-company trial fields set here.
   });
 
-  // Create trial subscription
+  // Legacy: ensure a Subscription row exists for backward compatibility with ensureSubscription/checkAccess fallback.
   await createTrialSubscription(company.id);
 
   return company;
@@ -32,11 +26,11 @@ const createCompany = async (userId, companyData) => {
 const getUserCompanies = async (userId, opts = {}, userEmail = null) => {
   if (process.env.NODE_ENV !== 'production' && !loggedCompanyModelMapping) {
     loggedCompanyModelMapping = true;
-    console.log('[companyService] Company model mapping', {
+    require('../utils/logger').logger.debug({
       tableName: Company.getTableName(),
       createdAtField: Company.rawAttributes?.createdAt?.field,
       updatedAtField: Company.rawAttributes?.updatedAt?.field
-    });
+    }, 'Company model mapping');
   }
 
   const includeDeleted = opts.includeDeleted === true && isAdminEmail(userEmail);

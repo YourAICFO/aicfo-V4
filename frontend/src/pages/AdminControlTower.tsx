@@ -214,7 +214,7 @@ export default function AdminControlTower() {
           <StatCard label="Total AI Questions" value={Number(ai.ai_questions_total || 0)} />
           <StatCard label="Unanswered" value={Number(ai.unanswered_questions || 0)} tone={Number(ai.unanswered_questions || 0) > 0 ? 'text-red-700' : 'text-green-700'} />
           <StatCard label="Deterministic Hit Rate" value={`${Number(ai.deterministic_hit_rate || 0)}%`} />
-          <StatCard label="LLM Fallback Rate" value={`${Number(ai.llm_fallback_rate || 0)}%`} />
+          <StatCard label="Skipped (missing metrics)" value={`${Number(ai.missing_metrics_rate || 0)}%`} />
           <StatCard label="Avg Answer Time (ms)" value={Number(ai.avg_answer_time || 0)} />
         </div>
         <div className="card">

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { ConnectorDevice } = require('../models');
 const syncStatusService = require('../services/syncStatusService');
+const { jwtSecret } = require('../config/auth');
 
 const getBearerToken = (req) => {
   const authHeader = req.headers.authorization;
@@ -11,7 +12,7 @@ const getBearerToken = (req) => {
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const verifyConnectorDeviceLoginToken = (token) =>
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+  jwt.verify(token, jwtSecret);
 
 const authenticateConnectorDevice = async (req, res, next) => {
   try {

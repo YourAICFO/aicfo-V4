@@ -1,6 +1,5 @@
 const {
   Integration,
-  Subscription,
   FinancialTransaction,
   LedgerMonthlyBalance,
   PartyBalanceLatest,
@@ -9,7 +8,9 @@ const {
   CurrentLoan,
   CFOMetric,
   IntegrationSyncRun,
-  IntegrationSyncEvent
+  IntegrationSyncEvent,
+  CompanySubscription,
+  BillingPlan
 } = require('../models');
 const { enqueueJob } = require('../worker/queue');
 const { normalizeMonth } = require('../utils/monthKeyUtils');
@@ -18,14 +19,29 @@ const { upsertSourceLedgersFromChartOfAccounts, upsertSourceLedgersFromTransacti
 const { mapLedgersToCFOTotals } = require('./cfoAccountMappingService');
 const { TallyClient } = require('./tallyClient');
 const { logger } = require('../utils/logger');
+const { checkAccess } = require('./subscriptionService');
 
-const enforceIntegrationLimit = async (companyId, subscription) => {
-  if (!subscription) return;
-  if (subscription.subscriptionStatus === 'trial') return;
-  if (!Number.isFinite(subscription.maxIntegrations)) return;
+const DEFAULT_MAX_INTEGRATIONS = 10;
 
+/** Mock (non-Tally) integration sync is only allowed when explicitly enabled; disabled in production by default. */
+const allowMockIntegrations = () => process.env.ENABLE_MOCK_INTEGRATIONS === 'true' && process.env.NODE_ENV !== 'production';
+
+const getMaxIntegrationsForCompany = async (companyId) => {
+  const sub = await CompanySubscription.findOne({
+    where: { companyId },
+    order: [['updatedAt', 'DESC']]
+  });
+  if (!sub || !sub.planCode) return DEFAULT_MAX_INTEGRATIONS;
+  const plan = await BillingPlan.findOne({ where: { code: sub.planCode }, raw: true });
+  if (!plan || !plan.featuresJson || typeof plan.featuresJson !== 'object') return DEFAULT_MAX_INTEGRATIONS;
+  const max = plan.featuresJson.maxIntegrations;
+  return Number.isFinite(max) && max >= 0 ? max : DEFAULT_MAX_INTEGRATIONS;
+};
+
+const enforceIntegrationLimit = async (companyId) => {
+  const max = await getMaxIntegrationsForCompany(companyId);
   const integrationCount = await Integration.count({ where: { companyId } });
-  if (integrationCount >= subscription.maxIntegrations) {
+  if (integrationCount >= max) {
     throw new Error('Integration limit reached');
   }
 };
@@ -39,14 +55,12 @@ const getIntegrations = async (companyId) => {
   return integrations;
 };
 
-const connectTally = async (companyId, config) => {
-  // Check subscription
-  const subscription = await Subscription.findOne({ where: { companyId } });
-  if (!subscription || subscription.subscriptionStatus === 'expired') {
-    throw new Error('Your free trial has expired. Please upgrade.');
+const connectTally = async (companyId, config, userId = null) => {
+  const access = await checkAccess(companyId, userId);
+  if (!access.allowed) {
+    throw new Error(access.reason || 'Your free trial has expired. Please upgrade.');
   }
-
-  await enforceIntegrationLimit(companyId, subscription);
+  await enforceIntegrationLimit(companyId);
 
   // Check if already connected
   const existing = await Integration.findOne({
@@ -72,14 +86,12 @@ const connectTally = async (companyId, config) => {
   return integration;
 };
 
-const connectZoho = async (companyId, config) => {
-  // Check subscription
-  const subscription = await Subscription.findOne({ where: { companyId } });
-  if (!subscription || subscription.subscriptionStatus === 'expired') {
-    throw new Error('Your free trial has expired. Please upgrade.');
+const connectZoho = async (companyId, config, userId = null) => {
+  const access = await checkAccess(companyId, userId);
+  if (!access.allowed) {
+    throw new Error(access.reason || 'Your free trial has expired. Please upgrade.');
   }
-
-  await enforceIntegrationLimit(companyId, subscription);
+  await enforceIntegrationLimit(companyId);
 
   // Check if already connected
   const existing = await Integration.findOne({
@@ -109,14 +121,12 @@ const connectZoho = async (companyId, config) => {
   return integration;
 };
 
-const connectQuickBooks = async (companyId, config) => {
-  // Check subscription
-  const subscription = await Subscription.findOne({ where: { companyId } });
-  if (!subscription || subscription.subscriptionStatus === 'expired') {
-    throw new Error('Your free trial has expired. Please upgrade.');
+const connectQuickBooks = async (companyId, config, userId = null) => {
+  const access = await checkAccess(companyId, userId);
+  if (!access.allowed) {
+    throw new Error(access.reason || 'Your free trial has expired. Please upgrade.');
   }
-
-  await enforceIntegrationLimit(companyId, subscription);
+  await enforceIntegrationLimit(companyId);
 
   // Check if already connected
   const existing = await Integration.findOne({
@@ -180,7 +190,9 @@ const syncIntegration = async (integrationId, companyId) => {
     if (integration.type === 'TALLY') {
       syncResult = await syncTallyIntegration(integration, companyId);
     } else {
-      // For other integrations, use mock data for now
+      if (!allowMockIntegrations()) {
+        throw new Error('Sync is only supported for Tally in this environment. Mock integrations are disabled.');
+      }
       syncResult = await syncMockIntegration(integration, companyId);
     }
 
