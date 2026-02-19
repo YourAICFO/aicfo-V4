@@ -1,4 +1,16 @@
 # Backend Dockerfile that works with both Railway root_dir=backend and root_dir=repo
+# Stage 1: build frontend when context includes it (e.g. repo root)
+FROM node:22-alpine AS frontend-builder
+WORKDIR /build
+COPY . /tmp/context
+RUN set -eux; \
+  if [ -f /tmp/context/frontend/package.json ]; then \
+    cd /tmp/context/frontend && npm ci && npm run build; \
+  else \
+    mkdir -p /tmp/context/frontend/dist; \
+  fi
+
+# Stage 2: backend runtime
 FROM node:22-alpine
 
 WORKDIR /app
@@ -8,7 +20,7 @@ RUN apk add --no-cache dumb-init
 # Copy the available build context (could be repo root or backend root)
 COPY . /tmp/context
 
-# Normalize layout to /app as backend project root
+# Normalize layout to /app as backend project root; copy built frontend into public
 RUN set -eux; \
     if [ -f /tmp/context/backend/package.json ]; then SRC=/tmp/context/backend; else SRC=/tmp/context; fi; \
     cp "$SRC"/package*.json /app/; \
@@ -17,6 +29,7 @@ RUN set -eux; \
     if [ -d "$SRC/docs" ]; then cp -R "$SRC/docs/." /app/docs/; fi; \
     if [ -d "$SRC/migrations" ]; then cp -R "$SRC/migrations/." /app/migrations/; fi; \
     if [ -d "$SRC/downloads" ]; then cp -R "$SRC/downloads/." /app/downloads/; fi
+COPY --from=frontend-builder /tmp/context/frontend/dist /app/public
 
 RUN npm ci --omit=dev
 

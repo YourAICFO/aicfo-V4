@@ -172,8 +172,8 @@ app.use('/api/settings/notifications', settingsNotificationsRoutes);
    Static file serving for frontend (Production)
 ================================ */
 if (process.env.NODE_ENV === 'production') {
-  // Check if frontend static files exist
-  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  // Check if frontend static files exist (backend/public, filled by Docker build or deploy)
+  const frontendPath = path.join(__dirname, '..', 'public');
   const fs = require('fs');
   
   try {
