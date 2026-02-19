@@ -151,11 +151,12 @@ export default function AIChat() {
       setMessages((prev) => [...prev, assistantMessage]);
       await loadThreads();
     } catch (err: any) {
+      const backendError = err.response?.data?.error;
       if (err.response?.status === 403) {
         await refresh();
-        setError(err.response?.data?.error || 'Your free trial has expired. Please upgrade.');
+        setError(backendError || 'Your free trial has expired. Please upgrade.');
       } else {
-        setError('Failed to get response. Please try again.');
+        setError(backendError || err.message || 'Failed to get response. Please try again.');
       }
     } finally {
       setLoading(false);
