@@ -177,7 +177,7 @@ internal sealed class ConnectorControlPanel : Form
     {
         AutoSize = true,
         ForeColor = Color.DarkGoldenrod,
-        Text = "This mapping controls where data is synced. Double-check company selection."
+        Text = "Be careful: linking wrong company will sync wrong data."
     };
     private readonly Label _webCompaniesEmptyState = new()
     {
@@ -207,10 +207,19 @@ internal sealed class ConnectorControlPanel : Form
         Text = string.Empty
     };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true, ShowItemToolTips = true };
+    private readonly Label _linkedSummaryTitle = new() { AutoSize = true, Text = "Select a mapping above", Font = new Font(default!, FontStyle.Bold) };
+    private readonly Label _linkedWebCompany = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedShortId = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };
+    private readonly Label _linkedTallyName = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedAuthMethod = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedTallyHostPort = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };
     private readonly Label _linkedOnline = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedLastHeartbeat = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedLastSyncStatus = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedReadinessMonth = new() { AutoSize = true, Text = "-" };
+    private readonly Label _linkedLastError = new() { AutoSize = true, Text = "-", ForeColor = Color.DarkRed, MaximumSize = new Size(400, 0), AutoEllipsis = true };
+    private readonly ListBox _recentActionsList = new() { Width = 400, Height = 120, IntegralHeight = true };
+    private const int MaxRecentActions = 20;
 
     private ConnectorConfig _config = new();
     private string? _onboardingJwt;
@@ -343,7 +352,7 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(_lastError, 3, 6);
 
         panel.Controls.Add(_startWithWindowsToggle, 0, 7);
-        panel.Controls.Add(new Label { Text = "Autostart Status", AutoSize = true }, 2, 7);
+        panel.Controls.Add(new Label { Text = "Start at login:", AutoSize = true }, 2, 7);
         panel.Controls.Add(_startWithWindowsStatus, 3, 7);
 
         var buttonBar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
@@ -453,24 +462,61 @@ internal sealed class ConnectorControlPanel : Form
         var linkedStatusPanel = new TableLayoutPanel
         {
             ColumnCount = 2,
-            RowCount = 5,
+            RowCount = 11,
             AutoSize = true,
-            Dock = DockStyle.Top
+            Dock = DockStyle.Top,
+            Padding = new Padding(0, 8, 0, 0)
         };
-        linkedStatusPanel.Controls.Add(new Label { Text = "Linked Status", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
-        linkedStatusPanel.Controls.Add(new Label { Text = "Online/Offline:", AutoSize = true }, 0, 1);
-        linkedStatusPanel.Controls.Add(_linkedOnline, 1, 1);
-        linkedStatusPanel.Controls.Add(new Label { Text = "Last Heartbeat:", AutoSize = true }, 0, 2);
-        linkedStatusPanel.Controls.Add(_linkedLastHeartbeat, 1, 2);
-        linkedStatusPanel.Controls.Add(new Label { Text = "Last Sync Status:", AutoSize = true }, 0, 3);
-        linkedStatusPanel.Controls.Add(_linkedLastSyncStatus, 1, 3);
-        linkedStatusPanel.Controls.Add(new Label { Text = "Readiness Month:", AutoSize = true }, 0, 4);
-        linkedStatusPanel.Controls.Add(_linkedReadinessMonth, 1, 4);
+        linkedStatusPanel.Controls.Add(_linkedSummaryTitle, 0, 0);
+        linkedStatusPanel.SetColumnSpan(_linkedSummaryTitle, 2);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Web Company:", AutoSize = true }, 0, 1);
+        linkedStatusPanel.Controls.Add(_linkedWebCompany, 1, 1);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Short ID:", AutoSize = true }, 0, 2);
+        linkedStatusPanel.Controls.Add(_linkedShortId, 1, 2);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Tally Company:", AutoSize = true }, 0, 3);
+        linkedStatusPanel.Controls.Add(_linkedTallyName, 1, 3);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Auth:", AutoSize = true }, 0, 4);
+        linkedStatusPanel.Controls.Add(_linkedAuthMethod, 1, 4);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Tally (Host:Port):", AutoSize = true }, 0, 5);
+        linkedStatusPanel.Controls.Add(_linkedTallyHostPort, 1, 5);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Online:", AutoSize = true }, 0, 6);
+        linkedStatusPanel.Controls.Add(_linkedOnline, 1, 6);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Last Seen:", AutoSize = true }, 0, 7);
+        linkedStatusPanel.Controls.Add(_linkedLastHeartbeat, 1, 7);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Last Sync:", AutoSize = true }, 0, 8);
+        linkedStatusPanel.Controls.Add(_linkedLastSyncStatus, 1, 8);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Readiness:", AutoSize = true }, 0, 9);
+        linkedStatusPanel.Controls.Add(_linkedReadinessMonth, 1, 9);
+        linkedStatusPanel.Controls.Add(new Label { Text = "Last Error:", AutoSize = true }, 0, 10);
+        linkedStatusPanel.Controls.Add(_linkedLastError, 1, 10);
         panel.Controls.Add(linkedStatusPanel, 0, 20);
         panel.SetColumnSpan(linkedStatusPanel, 2);
 
+        panel.Controls.Add(new Label { Text = "Recent actions", AutoSize = true }, 0, 21);
+        panel.SetColumnSpan(_recentActionsList, 2);
+        panel.Controls.Add(_recentActionsList, 0, 22);
+
         tab.Controls.Add(panel);
         return tab;
+    }
+
+    private void AddRecentAction(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() =>
+            {
+                _recentActionsList.Items.Insert(0, line);
+                while (_recentActionsList.Items.Count > MaxRecentActions)
+                    _recentActionsList.Items.RemoveAt(_recentActionsList.Items.Count - 1);
+            }));
+            return;
+        }
+        _recentActionsList.Items.Insert(0, line);
+        while (_recentActionsList.Items.Count > MaxRecentActions)
+            _recentActionsList.Items.RemoveAt(_recentActionsList.Items.Count - 1);
     }
 
     public async Task TriggerSyncAllAsync()
@@ -505,20 +551,24 @@ internal sealed class ConnectorControlPanel : Form
             if (completed is null)
             {
                 SetActionBanner($"Sync started for {webName}. Refresh status in a moment.", Color.DarkGreen);
+                AddRecentAction("Sync triggered (pending)");
             }
             else if (string.Equals(completed.LastSyncResult, "Failed", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(completed.LastSyncResult, "failed", StringComparison.OrdinalIgnoreCase))
             {
                 SetActionBanner("Sync failed. Please retry.", Color.Firebrick);
+                AddRecentAction("Sync failed");
             }
             else
             {
                 SetActionBanner($"Sync completed at {FormatDate(completed.LastSyncAt, "now")}.", Color.DarkGreen);
+                AddRecentAction($"Sync OK at {FormatDate(completed.LastSyncAt, "now")}");
             }
         }
         catch
         {
             SetActionBanner("Sync failed. Please retry.", Color.Firebrick);
+            AddRecentAction("Sync trigger failed");
         }
         finally
         {
@@ -610,7 +660,7 @@ internal sealed class ConnectorControlPanel : Form
 
             await RefreshDeviceLinkDataAsync();
             SetActionBanner("Login successful. Select a Web Company and a Tally Company, then click Link.", Color.DarkGreen);
-
+            AddRecentAction("Login OK");
             await RefreshStatusGridAsync();
         }
         catch (ApiRequestException ex)
@@ -689,8 +739,9 @@ internal sealed class ConnectorControlPanel : Form
             return;
         }
 
+        var shortId = ShortCompanyId(companyItem.Company.Id);
         var confirm = MessageBox.Show(
-            $"You are linking Web Company: {companyItem.Company.Name} to Tally Company: {tallyCompany}. Continue?",
+            $"You are linking Web Company: {companyItem.Company.Name} ({shortId}) to Tally Company: {tallyCompany}\n\nContinue?",
             "Confirm Company Linking",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question);
@@ -732,6 +783,7 @@ internal sealed class ConnectorControlPanel : Form
             await RefreshDeviceLinkDataAsync();
             LoadConfig();
             SetActionBanner($"Linked successfully: {companyItem.Company.Name} ↔ {tallyCompany}", Color.DarkGreen);
+            AddRecentAction($"Saved mapping: {companyItem.Company.Name} ↔ {tallyCompany}");
             await RefreshStatusGridAsync();
         }
         catch (Exception ex)
@@ -739,6 +791,7 @@ internal sealed class ConnectorControlPanel : Form
             var friendly = GetFriendlyLinkError(ex.Message);
             MessageBox.Show(friendly, "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetActionBanner(friendly, Color.Firebrick);
+            AddRecentAction($"Save mapping failed: {GetFriendlyLinkError(ex.Message)}");
         }
     }
 
@@ -935,15 +988,30 @@ internal sealed class ConnectorControlPanel : Form
     private async Task TestTallyAsync()
     {
         SaveGlobalSettings();
-        var ok = await _tallyClient.TestConnectionAsync(_config.TallyHost, _config.TallyPort, CancellationToken.None);
-        _tallyStatus.Text = ok ? "Reachable" : "Unreachable";
+        var host = string.IsNullOrWhiteSpace(_config.TallyHost) ? "127.0.0.1" : _config.TallyHost.Trim();
+        var port = _config.TallyPort;
+        var ok = await _tallyClient.TestConnectionAsync(host, port, CancellationToken.None);
+        if (!ok)
+        {
+            _tallyStatus.Text = "Unreachable";
+            return;
+        }
+        try
+        {
+            var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
+            _tallyStatus.Text = $"Connected ({names.Count} companies)";
+        }
+        catch
+        {
+            _tallyStatus.Text = "Reachable (company list failed)";
+        }
     }
 
     private async Task DetectTallyAsync()
     {
         SaveGlobalSettings();
-        var host = _config.TallyHost;
-        var candidates = new[] { _config.TallyPort, 9000, 9001, 9010, 9020 }.Distinct().ToList();
+        var host = string.IsNullOrWhiteSpace(_config.TallyHost) ? "127.0.0.1" : _config.TallyHost.Trim();
+        var candidates = new[] { 9000, _config.TallyPort, 9001, 9002 }.Distinct().ToList();
 
         foreach (var port in candidates)
         {
@@ -952,12 +1020,14 @@ internal sealed class ConnectorControlPanel : Form
                 var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
                 if (names.Count > 0)
                 {
+                    _config.TallyHost = host;
                     _config.TallyPort = port;
-                    _tallyPort.Value = port;
+                    _tallyHost.Text = host;
+                    _tallyPort.Value = Math.Clamp(port, 1, 65535);
                     _tallyCompanyCombo.Items.Clear();
                     foreach (var name in names) _tallyCompanyCombo.Items.Add(name);
                     if (_tallyCompanyCombo.Items.Count > 0) _tallyCompanyCombo.SelectedIndex = 0;
-                    _tallyStatus.Text = $"Reachable ({host}:{port})";
+                    _tallyStatus.Text = $"Detected ({host}:{port}, {names.Count} companies)";
                     _configStore.Save(_config);
                     await RefreshDeviceLinkDataAsync();
                     _tallyCompaniesEmptyState.Visible = false;
@@ -1018,7 +1088,7 @@ internal sealed class ConnectorControlPanel : Form
     private void UpdateAutoStartStatusLabel()
     {
         var enabled = AutoStartManager.IsAutoStartEnabled();
-        _startWithWindowsStatus.Text = enabled ? "Enabled" : "Disabled";
+        _startWithWindowsStatus.Text = enabled ? "On" : "Off";
     }
 
     private void LinkMapping()
@@ -1058,6 +1128,7 @@ internal sealed class ConnectorControlPanel : Form
         _config.Mappings.Remove(mapping);
         _credentialStore.DeleteMappingToken(mapping.Id);
         _configStore.Save(_config);
+        AddRecentAction($"Unlinked: {mapping.WebCompanyName ?? "Web"} ↔ {mapping.TallyCompanyName}");
         _ = RefreshDeviceLinkDataAsync();
         LoadConfig();
         _ = RefreshStatusGridAsync();
@@ -1142,7 +1213,11 @@ internal sealed class ConnectorControlPanel : Form
 
     private void SyncSelectionToStatusMapping()
     {
-        if (_mappingsList.SelectedItems.Count == 0) return;
+        if (_mappingsList.SelectedItems.Count == 0)
+        {
+            RefreshLinkedStatusPanel("");
+            return;
+        }
         var mappingId = _mappingsList.SelectedItems[0].Tag?.ToString();
         if (string.IsNullOrWhiteSpace(mappingId)) return;
         for (var i = 0; i < _statusMappingCombo.Items.Count; i++)
@@ -1239,7 +1314,9 @@ internal sealed class ConnectorControlPanel : Form
                     Online = online,
                     LastSeen = lastSeen,
                     LastSyncStatus = lastSyncStatus,
-                    ReadinessMonth = readinessMonth
+                    LastSyncCompletedAt = lastSyncCompleted,
+                    ReadinessMonth = readinessMonth,
+                    LastError = Truncate(lastError, 200)
                 }));
             }
 
@@ -1450,27 +1527,62 @@ internal sealed class ConnectorControlPanel : Form
     {
         if (string.IsNullOrWhiteSpace(mappingId))
         {
+            _linkedSummaryTitle.Text = "Select a mapping above";
+            _linkedWebCompany.Text = "-";
+            _linkedShortId.Text = "-";
+            _linkedTallyName.Text = "-";
+            _linkedAuthMethod.Text = "-";
+            _linkedTallyHostPort.Text = "-";
             _linkedOnline.Text = "-";
             _linkedLastHeartbeat.Text = "-";
             _linkedLastSyncStatus.Text = "-";
             _linkedReadinessMonth.Text = "-";
+            _linkedLastError.Text = "-";
             return;
         }
+
+        var mapping = _config.Mappings.FirstOrDefault(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase));
+        if (mapping is null)
+        {
+            _linkedSummaryTitle.Text = "Select a mapping above";
+            _linkedWebCompany.Text = "-";
+            _linkedShortId.Text = "-";
+            _linkedTallyName.Text = "-";
+            _linkedAuthMethod.Text = "-";
+            _linkedTallyHostPort.Text = "-";
+            _linkedOnline.Text = "-";
+            _linkedLastHeartbeat.Text = "-";
+            _linkedLastSyncStatus.Text = "-";
+            _linkedReadinessMonth.Text = "-";
+            _linkedLastError.Text = "-";
+            return;
+        }
+
+        _linkedSummaryTitle.Text = "Linked Company Summary";
+        _linkedWebCompany.Text = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "(Unnamed)" : mapping.WebCompanyName;
+        _linkedShortId.Text = ShortCompanyId(mapping.CompanyId);
+        _linkedTallyName.Text = mapping.TallyCompanyName;
+        _linkedAuthMethod.Text = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase) ? "Device Token" : "Legacy";
+        _linkedTallyHostPort.Text = $"{_config.TallyHost}:{_config.TallyPort}";
 
         if (_statusSnapshotByMappingId.TryGetValue(mappingId, out var status))
         {
             _linkedOnline.Text = status.Online;
             _linkedLastHeartbeat.Text = status.LastSeen;
-            _linkedLastSyncStatus.Text = status.LastSyncStatus;
+            _linkedLastSyncStatus.Text = string.IsNullOrWhiteSpace(status.LastSyncCompletedAt) || status.LastSyncCompletedAt == "Never"
+                ? status.LastSyncStatus
+                : $"{status.LastSyncStatus} at {status.LastSyncCompletedAt}";
             _linkedReadinessMonth.Text = status.ReadinessMonth;
-            return;
+            _linkedLastError.Text = string.IsNullOrWhiteSpace(status.LastError) || status.LastError == "-" ? "None" : status.LastError;
         }
-
-        var mapping = _config.Mappings.FirstOrDefault(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase));
-        _linkedOnline.Text = "Unknown";
-        _linkedLastHeartbeat.Text = "Unknown";
-        _linkedLastSyncStatus.Text = mapping?.LastSyncResult ?? "-";
-        _linkedReadinessMonth.Text = "-";
+        else
+        {
+            _linkedOnline.Text = "Unknown";
+            _linkedLastHeartbeat.Text = "Unknown";
+            _linkedLastSyncStatus.Text = mapping.LastSyncResult ?? "-";
+            _linkedReadinessMonth.Text = "-";
+            _linkedLastError.Text = string.IsNullOrWhiteSpace(mapping.LastError) ? "None" : mapping.LastError;
+        }
     }
 
     private static string ShortCompanyId(string companyId)
@@ -1560,7 +1672,9 @@ internal sealed class MappingStatusSnapshot
     public string Online { get; init; } = "Unknown";
     public string LastSeen { get; init; } = "-";
     public string LastSyncStatus { get; init; } = "-";
+    public string LastSyncCompletedAt { get; init; } = "-";
     public string ReadinessMonth { get; init; } = "-";
+    public string LastError { get; init; } = "-";
 }
 
 internal sealed record LoginDiagnostics(string BaseUrl, string EndpointPath, int? StatusCode, string ResponseBody);
