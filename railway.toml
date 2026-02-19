@@ -3,6 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "backend/Dockerfile"
 
 [deploy]
-startCommand = "sh -lc 'echo RAILWAY_PROCESS=$RAILWAY_PROCESS; if [ \"$RAILWAY_PROCESS\" = \"worker\" ]; then npm run worker; else npm start; fi'"
+# Same command for both services. Entrypoint reads RAILWAY_PROCESS: worker service sets RAILWAY_PROCESS=worker.
+startCommand = "node scripts/railway-entrypoint.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
