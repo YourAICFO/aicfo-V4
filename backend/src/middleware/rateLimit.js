@@ -11,14 +11,15 @@ const defaultHandler = (req, res) => {
   });
 };
 
-/** Auth: login/signup/me – prevent brute force. Per IP. Default 80/15min allows retries and multiple tabs. */
+/** Auth: only limit POST (login/register/password) to prevent brute force; GET /me does not count. Per IP. */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '80', 10),
+  max: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '100', 10),
   message: { success: false, error: 'Too many auth attempts. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: defaultHandler
+  handler: defaultHandler,
+  skip: (req) => req.method === 'GET'
 });
 
 /** Connector API (devices, sync, link) – prevent abuse. Per IP. */
