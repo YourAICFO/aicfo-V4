@@ -105,9 +105,11 @@ const getRedisAndQueueHealth = async () => {
       workers = [];
     }
 
+    const workerUp = Array.isArray(workers) && workers.length > 0;
     return {
       redis_status: 'up',
-      worker_status: workers.length > 0 ? 'up' : 'degraded',
+      worker_status: workerUp ? 'up' : 'degraded',
+      worker_status_reason: workerUp ? null : 'no_workers_registered',
       queue_depth: asNumber(counts.waiting) + asNumber(counts.active) + asNumber(counts.delayed),
       failed_jobs_24h: asNumber(counts.failed)
     };
@@ -146,6 +148,7 @@ const getSystemMetrics = async () => {
       db_status: dbStatus,
       redis_status: queueHealth.redis_status,
       worker_status: queueHealth.worker_status,
+      worker_status_reason: queueHealth.worker_status_reason ?? null,
       queue_depth: queueHealth.queue_depth,
       failed_jobs_24h: asNumber(logStats.failed_jobs_24h, queueHealth.failed_jobs_24h),
       error_logs_24h: asNumber(logStats.error_logs_24h),

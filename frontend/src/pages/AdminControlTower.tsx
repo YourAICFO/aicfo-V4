@@ -145,6 +145,11 @@ export default function AdminControlTower() {
           <StatCard label="Warn Logs (24h)" value={Number(system.warn_logs_24h || 0)} />
           <StatCard label="Pending Migrations" value={Number(system.pending_migrations || 0)} tone={Number(system.pending_migrations || 0) > 0 ? 'text-amber-700' : 'text-green-700'} />
         </div>
+        {system.worker_status === 'degraded' && system.redis_status === 'up' && (
+          <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            <strong>Worker degraded:</strong> Redis is up but no worker process is connected. Ensure your <strong>worker service</strong> (separate from the web service) has the same <code className="bg-amber-100 px-1 rounded">REDIS_URL</code> as the web service and runs the worker (e.g. set <code className="bg-amber-100 px-1 rounded">RAILWAY_PROCESS=worker</code> so the start command runs <code className="bg-amber-100 px-1 rounded">node src/railway-entrypoint.js</code> → worker). Redeploy the worker and refresh.
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
