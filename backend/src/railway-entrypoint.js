@@ -7,7 +7,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const isWorker = process.env.RAILWAY_PROCESS === 'worker';
+const isWorker = String(process.env.RAILWAY_PROCESS || '').toLowerCase() === 'worker';
 const script = isWorker ? 'src/worker/worker.js' : 'src/server.js';
 const cwd = path.resolve(__dirname, '..');
 
