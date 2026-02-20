@@ -13,6 +13,9 @@ on:
       - ".github/workflows/build-windows-connector-msi.yml"
   workflow_dispatch:
 
+env:
+  TIMESTAMP_URL: "http://timestamp.digicert.com"
+
 jobs:
   build-msi:
     runs-on: windows-latest
@@ -61,7 +64,46 @@ jobs:
           }
           Write-Host "Smoke check passed. MSI size: $($msi.Length) bytes"
 
-      - name: Upload MSI artifact
+      - name: Sign binaries and MSI
+        id: sign
+        if: ${{ secrets.CODESIGN_PFX_BASE64 != '' && secrets.CODESIGN_PFX_PASSWORD != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfxB64 = "${{ secrets.CODESIGN_PFX_BASE64 }}"
+          $pfxPass = "${{ secrets.CODESIGN_PFX_PASSWORD }}"
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($pfxB64))
+
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) {
+            Write-Host "signtool not found under Windows Kits; trying default path."
+            $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+            if (-not (Test-Path $signtool)) { throw "signtool.exe not found. Install Windows SDK." }
+          }
+
+          $ts = $env:TIMESTAMP_URL
+          $sign = { param($f) & $signtool sign /tr $ts /td sha256 /fd sha256 /f $pfxPath /p $pfxPass $f }
+          & $sign "connector-dotnet\publish\service\AICFO.Connector.Service.exe"
+          & $sign "connector-dotnet\publish\tray\AICFO.Connector.Tray.exe"
+
+          dotnet build connector-dotnet/installer/AICFO.Connector.Installer.wixproj -c Release
+          $msiPath = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1 -ExpandProperty FullName
+          & $sign $msiPath
+
+          Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          Write-Host "Signing completed. Signed MSI: $msiPath"
+
+      - name: Upload MSI artifact (unsigned)
+        if: steps.sign.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AICFO-Connector-MSI
+          path: "connector-dotnet/installer/bin/**/AICFOConnectorSetup.msi"
+          if-no-files-found: error
+
+      - name: Upload MSI artifact (signed)
+        if: steps.sign.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: AICFO-Connector-MSI

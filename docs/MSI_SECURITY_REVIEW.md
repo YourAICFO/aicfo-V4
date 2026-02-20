@@ -13,7 +13,7 @@ This document is a security review of the **Windows MSI connector** (connector-d
 | **Logs** | `%ProgramData%\AICFO\logs\` — `agent.log` (service), `tray.log` (tray). Rolling daily, 14 days retained, shared write. |
 | **Start Menu** | Shortcut: "AI CFO Connector" → tray exe. |
 | **Desktop** | Optional shortcut: "AI CFO Connector" → tray exe. |
-| **Registry (per-user)** | `HKCU\Software\AICFO\Connector`: `TrayStartMenuShortcut`, `TrayDesktopShortcut`, `TrayAutoStart`. `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`: `AICFOConnectorTray` = path to tray exe (auto-start). |
+| **Registry (per-user)** | `HKCU\Software\AICFO\Connector`: `TrayStartMenuShortcut`, `TrayDesktopShortcut`. Tray auto-start is **not** set by the installer; the tray app adds `HKCU\...\Run\AICFOConnector` only when the user enables “Start with Windows” in config. |
 | **Service** | **AICFO Connector Service** — Win32 own process, auto-start, runs as **LocalSystem**. Binary: `AICFO.Connector.Service.exe`. |
 | **Scheduled tasks** | None. |
 | **Named pipe** | `\\.\pipe\AICFOConnectorSyncNow` — used for tray → service “sync now” trigger. |
@@ -27,7 +27,7 @@ This document is a security review of the **Windows MSI connector** (connector-d
 | Context | Permission |
 |---------|------------|
 | **Install** | Administrator (MSI installs to Program Files and installs a LocalSystem service). |
-| **Run (service)** | **LocalSystem** — full local machine access. Required to read ProgramData, Credential Manager (LocalComputer), and to open Tally on localhost. |
+| **Run (service)** | **LocalSystem** — full local machine access. Required to read ProgramData, Credential Manager (LocalComputer), and to open Tally on localhost. See **§ Service account (LocalSystem)** below for why LocalService is not used. |
 | **Run (tray)** | Interactive user. Needs read/write to `%ProgramData%\AICFO\config` and `logs`, and read of Credential Manager entries created by the same user or by the service (service uses LocalComputer credentials). |
 | **Firewall** | Outbound HTTPS to the configured API base URL (e.g. `https://api.aicfo.com` or custom). Outbound HTTP to `TallyHost:TallyPort` (default `127.0.0.1:9000`) for Tally. No inbound firewall rules. |
 | **Credential Manager** | Service and tray store secrets under Windows Credential Manager (Generic / LocalComputer). No DPAPI used directly; Credential Manager uses system protection. |
@@ -39,7 +39,7 @@ This document is a security review of the **Windows MSI connector** (connector-d
 | Mechanism | Behavior |
 |-----------|----------|
 | **Service** | `Start="auto"` — starts at boot. `ServiceControl Start="install"` — started after install. |
-| **Tray auto-start** | Optional: Run key `AICFOConnectorTray` set by installer. User can disable by removing shortcut or Run entry. |
+| **Tray auto-start** | **Disabled by default.** The installer does not set the Run key. The tray app adds `HKCU\...\Run\AICFOConnector` only when the user enables “Start with Windows” in settings (config `start_with_windows`). Enterprise can leave this off. |
 | **No scheduled task** | Sync is timer-based inside the service (e.g. every 15 minutes) and on-demand via pipe. |
 
 ---
@@ -54,6 +54,18 @@ This document is a security review of the **Windows MSI connector** (connector-d
 **TLS:** Default .NET certificate validation; no bypass. Retries: configurable `tally_request_max_retries` (default 3); API calls use normal `HttpClient` retry only if not customized.
 
 **Domains:** Only the host derived from `config.json` `api_url` and `tally_host` (usually localhost). No hardcoded alternate URLs or telemetry endpoints.
+
+---
+
+**Service account (LocalSystem vs LocalService):**
+
+The connector service runs as **LocalSystem** (not LocalService). Reasons:
+
+- **Credential Manager:** Tokens are stored in Windows Credential Manager with `PersistanceType.LocalComputer`. LocalSystem can read these; LocalService typically cannot access machine-level credentials in the same way without additional configuration.
+- **ProgramData:** The service reads/writes `%ProgramData%\AICFO\config` and `logs`. LocalSystem has access; LocalService would require explicit ACLs on that directory.
+- **Tally on localhost:** Tally ERP often runs as the logged-in user or a system account; LocalSystem can connect to `127.0.0.1:9000` without extra permission setup.
+
+Switching to **LocalService** would require: (1) Storing credentials in a store accessible to LocalService (e.g. a dedicated store or file with restricted ACLs), (2) Granting LocalService read/write to `%ProgramData%\AICFO`, and (3) Verifying Tally connectivity. For enterprise “least privilege” hardening, this can be revisited with proper testing; the current choice prioritizes compatibility and simplicity.
 
 ---
 
@@ -97,10 +109,16 @@ This document is a security review of the **Windows MSI connector** (connector-d
 | **Program Files binaries** (Service, Tray) | Yes. |
 | **Start Menu shortcut** | Yes (`RemoveFolder` on uninstall). |
 | **Desktop shortcut** | Yes (component removed). |
-| **Run key** `AICFOConnectorTray` | Yes (component `ConnectorTrayAutoStartRunKey` removed). |
+| **Run key** | The installer does not set a Run key. If the user enabled “Start with Windows”, the tray added `HKCU\...\Run\AICFOConnector`; the MSI does not remove it (no component). For full cleanup, see **Purge instructions** below. |
 | **Service** | Yes (`ServiceControl Remove="uninstall"`). |
-| **ProgramData** `%ProgramData%\AICFO\config` and `logs` | **No.** Left by design so user config and logs survive reinstall. For full cleanup, delete `%ProgramData%\AICFO` manually or via custom action (not implemented). |
-| **Credential Manager entries** | **No.** Must be removed by user or a custom action (not implemented). Recommendation: document that users may delete “AICFO_CONNECTOR_TOKEN_*” credentials after uninstall. |
+| **ProgramData** `%ProgramData%\AICFO\config` and `logs` | **No.** Left by design so user config and logs survive reinstall. |
+| **Credential Manager entries** | **No.** Must be removed manually if desired. |
+
+**Purge instructions (full cleanup after uninstall):**
+
+1. **ProgramData:** Delete folder `%ProgramData%\AICFO` (config and logs). From PowerShell: `Remove-Item -Recurse -Force $env:ProgramData\AICFO -ErrorAction SilentlyContinue`
+2. **Run key (if tray was set to start with Windows):** Remove `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `AICFOConnector`. From PowerShell: `Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'AICFOConnector' -ErrorAction SilentlyContinue`
+3. **Credential Manager:** Open Windows Credential Manager → Windows Credentials → remove any entry whose name starts with `AICFO_CONNECTOR_TOKEN_`. From PowerShell (requires `CredentialManager` module or manual UI): use Control Panel or `cmdkey /delete:TargetName` for each target.
 
 ---
 
@@ -108,20 +126,38 @@ This document is a security review of the **Windows MSI connector** (connector-d
 
 | Item | Current state | Recommendation |
 |------|----------------|----------------|
-| **MSI** | Not signed in CI. | Sign with a valid code-signing certificate (standard or EV). |
-| **Binaries** (.exe, .dll) | Not signed in CI. | Sign all shipped executables and key DLLs. |
-| **CI/CD (GitHub Actions)** | Build produces unsigned MSI. | Add step to sign binaries then MSI (e.g. `signtool.exe` or Azure Sign Tool). Store cert in GitHub Secrets or use OIDC with Azure Key Vault. |
-| **Local signing** | N/A. | Use same `signtool` (or equivalent) with your cert; sign after build, then optionally run smoke tests. |
+| **MSI** | Signed in CI when secrets provided; otherwise unsigned. | Use a valid code-signing certificate (standard or EV). |
+| **Binaries** (.exe) | Same as above. | Sign Service and Tray exes before MSI. |
+| **CI/CD (GitHub Actions)** | Workflow signs when `CODESIGN_PFX_BASE64` and `CODESIGN_PFX_PASSWORD` are set; otherwise builds unsigned and uploads as-is. | Add secrets for release builds. |
+| **Local signing** | See below. | Use signtool with PFX; always use timestamping. |
 
-**Steps to add signing (outline):**
+**Signing with signtool (no secrets committed):**
 
-1. **Obtain certificate:** EV or standard code-signing cert from a public CA (e.g. DigiCert, Sectigo). EV reduces SmartScreen warnings faster.
-2. **Install signtool:** Part of Windows SDK (e.g. `C:\Program Files (x86)\Windows Kits\10\bin\<arch>\signtool.exe`).
-3. **Sign binaries (local):**  
-   `signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f MyCert.pfx /p <password> connector-dotnet\publish\service\AICFO.Connector.Service.exe` (repeat for tray and other binaries).
-4. **Sign MSI:** After building MSI:  
-   `signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f MyCert.pfx /p <password> connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi`
-5. **In GitHub Actions:** Export cert (base64) and password as secrets; decode cert to a PFX in the runner; run the same signtool commands in the workflow after build, then upload the signed MSI artifact.
+- **signtool** is in the Windows SDK: `C:\Program Files (x86)\Windows Kits\10\bin\<arch>\signtool.exe` (e.g. `x64` for 64-bit). On GitHub Actions `windows-latest` it is available via the SDK.
+- **Timestamping** is required so signatures remain valid after the cert expires. Use an RFC 3161 timestamp server, e.g.:
+  - DigiCert: `http://timestamp.digicert.com`
+  - Sectigo: `http://timestamp.sectigo.com`
+- **Sign exes first, then the MSI.** Order: Service exe → Tray exe → MSI.
+
+**Local signing (no cert in repo):**
+
+1. Export your PFX (e.g. from CA or Key Vault). Do not commit the PFX or password.
+2. Sign each binary with timestamping:
+   ```cmd
+   signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f MyCert.pfx /p <password> connector-dotnet\publish\service\AICFO.Connector.Service.exe
+   signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f MyCert.pfx /p <password> connector-dotnet\publish\tray\AICFO.Connector.Tray.exe
+   ```
+3. Build the MSI (so it contains the signed exes), then sign the MSI:
+   ```cmd
+   signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f MyCert.pfx /p <password> connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi
+   ```
+4. Verify (see **Security Checklist for Release**).
+
+**CI (GitHub Actions):** When repository secrets are set, the workflow signs automatically. **Do not commit the PFX or password.**
+
+- **Secrets:** `CODESIGN_PFX_BASE64` (entire PFX file encoded as base64), `CODESIGN_PFX_PASSWORD` (PFX password).
+- To produce base64: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("MyCert.pfx"))` (PowerShell).
+- If either secret is missing, the build runs but skips signing and uploads the unsigned MSI.
 
 ---
 
@@ -151,11 +187,28 @@ This document is a security review of the **Windows MSI connector** (connector-d
 - [ ] **TLS:** No custom certificate validation; use default HTTPS (done).
 - [ ] **Updates:** No in-app download of code (done); updates via MSI only.
 - [ ] **Install path:** Program Files, stable UpgradeCode (done).
-- [ ] **Uninstall:** Service and Run key removed; ProgramData and credentials documented (done).
-- [ ] **Code signing:** Sign all binaries and MSI before release (steps above).
+- [ ] **Uninstall:** Service removed; Run key not set by installer (tray manages it if user enables). ProgramData and Credential Manager purge instructions in §8.
+- [ ] **Code signing:** Sign all binaries and MSI before release (signtool + timestamping; CI can sign when secrets are set).
 - [ ] **Permissions:** Document LocalSystem and admin install (done in this doc).
 - [ ] **Node.js connector:** If shipping, avoid storing production tokens in config; document secure configuration.
 
+**Signing verification (before release):**
+
+1. **signtool verify** (all signatures, including timestamp):
+   ```cmd
+   signtool verify /pa /v "connector-dotnet\publish\service\AICFO.Connector.Service.exe"
+   signtool verify /pa /v "connector-dotnet\publish\tray\AICFO.Connector.Tray.exe"
+   signtool verify /pa /v "connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi"
+   ```
+   `/pa` verifies the authenticode signature; `/v` is verbose. Exit code 0 means valid.
+
+2. **PowerShell Get-AuthenticodeSignature:**
+   ```powershell
+   Get-AuthenticodeSignature -FilePath "connector-dotnet\publish\service\AICFO.Connector.Service.exe" | Format-List *
+   Get-AuthenticodeSignature -FilePath "connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi" | Format-List *
+   ```
+   Check `Status -eq 'Valid'`, `SignerCertificate` is not null, and `TimeStamperCertificate` is present (timestamp applied).
+
 ---
 
-*Document version: 1.0. Last updated with connector-dotnet and WiX as of this review.*
+*Document version: 1.1. Release-ready: signing docs, CI signing, tray autostart optional, purge instructions, verification steps.*
