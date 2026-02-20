@@ -66,14 +66,19 @@ jobs:
 
       - name: Sign binaries and MSI
         id: sign
-        if: ${{ secrets.CODESIGN_PFX_BASE64 != '' && secrets.CODESIGN_PFX_PASSWORD != '' }}
+        env:
+          CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $pfxB64 = "${{ secrets.CODESIGN_PFX_BASE64 }}"
-          $pfxPass = "${{ secrets.CODESIGN_PFX_PASSWORD }}"
+          if ([string]::IsNullOrWhiteSpace($env:CODESIGN_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:CODESIGN_PFX_PASSWORD)) {
+            Write-Host "Signing secrets not set; skipping sign step."
+            "signed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
           $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($pfxB64))
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_BASE64))
 
           $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           if (-not $signtool) {
@@ -83,7 +88,7 @@ jobs:
           }
 
           $ts = $env:TIMESTAMP_URL
-          $sign = { param($f) & $signtool sign /tr $ts /td sha256 /fd sha256 /f $pfxPath /p $pfxPass $f }
+          $sign = { param($f) & $signtool sign /tr $ts /td sha256 /fd sha256 /f $pfxPath /p $env:CODESIGN_PFX_PASSWORD $f }
           & $sign "connector-dotnet\publish\service\AICFO.Connector.Service.exe"
           & $sign "connector-dotnet\publish\tray\AICFO.Connector.Tray.exe"
 
@@ -93,9 +98,10 @@ jobs:
 
           Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
           Write-Host "Signing completed. Signed MSI: $msiPath"
+          "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload MSI artifact (unsigned)
-        if: steps.sign.outcome != 'success'
+        if: steps.sign.outputs.signed != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AICFO-Connector-MSI
@@ -103,7 +109,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload MSI artifact (signed)
-        if: steps.sign.outcome == 'success'
+        if: steps.sign.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AICFO-Connector-MSI
