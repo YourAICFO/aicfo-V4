@@ -335,7 +335,8 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
         if (!response.IsSuccessStatusCode)
         {
             var failureBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogError("Sync payload rejected status={StatusCode} body={Body}", response.StatusCode, failureBody);
+            var redacted = LogRedaction.RedactSecrets(failureBody);
+            logger.LogError("Sync payload rejected status={StatusCode} body={Body}", response.StatusCode, redacted);
         }
 
         response.EnsureSuccessStatusCode();

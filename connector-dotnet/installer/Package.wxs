@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- UpgradeCode must remain stable across versions for MajorUpgrade to work. Do not change. -->
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
            Version="1.0.0"

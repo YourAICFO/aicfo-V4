@@ -670,7 +670,7 @@ internal sealed class ConnectorControlPanel : Form
             _webCompanyCombo.Enabled = false;
             _webCompanyCombo.Items.Clear();
 
-            var responsePreview = TruncateForUi(ex.ResponseBody, 500);
+            var responsePreview = TruncateForUi(LogRedaction.RedactSecrets(ex.ResponseBody), 500);
             _lastLoginDiagnostics = new LoginDiagnostics(
                 ex.BaseUrl,
                 ex.EndpointPath,
@@ -694,7 +694,7 @@ internal sealed class ConnectorControlPanel : Form
                 apiBaseUrl,
                 "/api/connector/device/login",
                 null,
-                TruncateForUi(ex.Message, 500));
+                TruncateForUi(LogRedaction.RedactSecrets(ex.Message), 500));
             MessageBox.Show("Login failed. Check API URL and credentials.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetActionBanner("Login failed. Check API URL and credentials.", Color.Firebrick);
         }
@@ -803,11 +803,12 @@ internal sealed class ConnectorControlPanel : Form
             return;
         }
 
+        var responseBodyForCopy = LogRedaction.RedactSecrets(_lastLoginDiagnostics.ResponseBody);
         var diagnostics = new
         {
             endpointPath = _lastLoginDiagnostics.EndpointPath,
             statusCode = _lastLoginDiagnostics.StatusCode,
-            responseBody = _lastLoginDiagnostics.ResponseBody
+            responseBody = responseBodyForCopy
         };
 
         Clipboard.SetText(JsonSerializer.Serialize(diagnostics, new JsonSerializerOptions { WriteIndented = true }));
