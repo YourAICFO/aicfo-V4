@@ -163,11 +163,45 @@ const chatWithCFO = async (companyId, message) => {
   };
 };
 
+/** Build CFO-style narrative for P&L Pack using only provided deterministic data. AI must not invent numbers. */
+const generatePlPackNarrative = async (structuredData) => {
+  if (!process.env.OPENAI_API_KEY || !OpenAI) {
+    return 'AI explanation is not configured. Enable OPENAI_API_KEY.';
+  }
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const prompt = `You are a CFO writing a short narrative for a P&L review pack. Use ONLY the numbers provided below. Do not invent or compute any numbers.
+
+Write:
+- 5–8 bullet points (or 1 short paragraph plus bullets)
+- Mention: Revenue, Gross Profit/Margin, Opex, and Net Profit — use MoM deltas and variance % (variances.revenue, variances.revenuePct, etc.) when present
+- Mention YTD vs last FY where provided: use ytd, ytdLastFy, ytdVarianceAmount, ytdVariancePct (same period prior financial year)
+- Cite the top 2–3 drivers per category from the "drivers" object where provided
+- End with exactly 3 "Suggested actions" (guidance only, no new numbers)
+- If a percentage is null or missing, do not invent one; say "vs prior period" or similar without a number
+
+Structured data (use only these values):
+${JSON.stringify(structuredData, null, 2)}
+
+Output plain text only. No JSON.`;
+
+  const response = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: 'You write concise CFO narratives. You never invent numbers; you only use the provided data.' },
+      { role: 'user', content: prompt }
+    ]
+  });
+  const content = response?.choices?.[0]?.message?.content?.trim();
+  return content || 'Unable to generate narrative.';
+};
+
 module.exports = {
   generateInsights,
   getInsights,
   markInsightRead,
   dismissInsight,
   chatWithCFO,
+  generatePlPackNarrative,
   SYSTEM_PROMPT
 };

@@ -17,6 +17,7 @@ import Home from './pages/Home';
 import Debtors from './pages/Debtors';
 import Creditors from './pages/Creditors';
 import WorkingCapital from './pages/WorkingCapital';
+import PLPack from './pages/PLPack';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminControlTower from './pages/AdminControlTower';
 import Download from './pages/Download';
@@ -54,6 +55,7 @@ function App() {
             <Route path="/debtors" element={<Debtors />} />
             <Route path="/creditors" element={<Creditors />} />
             <Route path="/working-capital" element={<WorkingCapital />} />
+            <Route path="/pl-pack" element={<PLPack />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/create-company" element={<CreateCompany />} />
             <Route element={<AdminRoute />}>

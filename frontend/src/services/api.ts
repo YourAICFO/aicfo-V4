@@ -150,7 +150,23 @@ export const financeApi = {
   getCreditorsTop: () => api.get('/finance/creditors/top'),
   getCreditorsTrends: () => api.get('/finance/creditors/trends'),
   getWorkingCapital: () => api.get('/finance/working-capital'),
+  getPlMonths: () => api.get<{ success: boolean; data: { months: string[]; latest: string | null } }>('/finance/pl-months'),
+  getPlPack: (month: string) => api.get('/finance/pl-pack', { params: { month } }),
+  getPlRemarks: (month: string) => api.get('/finance/pl-remarks', { params: { month } }),
+  savePlRemarks: (month: string, text: string) => api.post('/finance/pl-remarks', { month, text }),
+  generatePlAiExplanation: (month: string, forceRegenerate?: boolean) =>
+    api.post('/finance/pl-ai-explanation', { month, forceRegenerate: !!forceRegenerate }),
+  getAlerts: () => api.get<{ success: boolean; data: FinanceAlert[] }>('/finance/alerts'),
 };
+
+export interface FinanceAlert {
+  id: string;
+  ruleKey: string;
+  severity: 'critical' | 'high' | 'medium';
+  title: string;
+  message: string;
+  link: string;
+}
 
 // Debtors/Creditors (ledger-based)
 export const debtorsApi = {

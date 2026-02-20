@@ -13,6 +13,9 @@ const adminUsageService = require('./adminUsageService');
 const cfoQuestionService = require('./cfoQuestionService');
 const cfoContextService = require('./cfoContextService');
 const usageMeteringService = require('./usageMeteringService');
+const plPackService = require('./plPackService');
+const runwayService = require('./runwayService');
+const alertsService = require('./alertsService');
 
 module.exports = {
   authService,
@@ -29,5 +32,8 @@ module.exports = {
   adminUsageService,
   cfoQuestionService,
   cfoContextService,
-  usageMeteringService
+  usageMeteringService,
+  plPackService,
+  runwayService,
+  alertsService
 };

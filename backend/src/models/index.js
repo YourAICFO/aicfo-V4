@@ -53,6 +53,7 @@ const { UsageDaily } = require('./UsageDaily');
 const { UserBillingProfile } = require('./UserBillingProfile');
 const { CompanyNotificationSetting } = require('./CompanyNotificationSetting');
 const { EmailDelivery } = require('./EmailDelivery');
+const { PLRemarks } = require('./PLRemarks');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -200,6 +201,11 @@ CompanyNotificationSetting.belongsTo(Company, { foreignKey: 'company_id', as: 'c
 Company.hasMany(EmailDelivery, { foreignKey: 'company_id', as: 'emailDeliveries' });
 EmailDelivery.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+Company.hasMany(PLRemarks, { foreignKey: 'company_id', as: 'plRemarks' });
+PLRemarks.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+User.hasMany(PLRemarks, { foreignKey: 'updated_by', as: 'plRemarksUpdated' });
+PLRemarks.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
+
 module.exports = {
   sequelize,
   User,
@@ -255,5 +261,6 @@ module.exports = {
   UsageDaily,
   UserBillingProfile,
   CompanyNotificationSetting,
-  EmailDelivery
+  EmailDelivery,
+  PLRemarks
 };

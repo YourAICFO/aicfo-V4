@@ -3,7 +3,7 @@ const router = express.Router();
 const { Op, fn, col } = require('sequelize');
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { debtorsService, creditorsService, adminUsageService } = require('../services');
+const { debtorsService, creditorsService, adminUsageService, plPackService, alertsService } = require('../services');
 const { CFOMetric, CurrentLoan } = require('../models');
 
 const getLatestMetricValue = async (companyId, metricKey) => {
@@ -73,6 +73,93 @@ router.get('/creditors/trends', authenticate, requireCompany, checkSubscriptionA
   try {
     const data = await creditorsService.getTrends(req.companyId);
     res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+const normalizeMonthQuery = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  if (/^\d{4}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 7);
+};
+
+router.get('/pl-months', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const data = await plPackService.getPlMonths(req.companyId);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/pl-pack', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const monthKey = normalizeMonthQuery(req.query.month);
+    if (!monthKey) {
+      return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
+    }
+    const data = await plPackService.getPlPackWithDrivers(companyId, monthKey);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/pl-remarks', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const monthKey = normalizeMonthQuery(req.query.month);
+    if (!monthKey) {
+      return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
+    }
+    const data = await plPackService.getRemarks(companyId, monthKey);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pl-remarks', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const monthKey = normalizeMonthQuery(req.body?.month);
+    const text = req.body?.text != null ? String(req.body.text) : null;
+    if (!monthKey) {
+      return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
+    }
+    const result = await plPackService.upsertRemarks(companyId, monthKey, text, req.userId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pl-ai-explanation', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const monthKey = normalizeMonthQuery(req.body?.month);
+    const forceRegenerate = Boolean(req.body?.forceRegenerate);
+    if (!monthKey) {
+      return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
+    }
+    const result = await plPackService.getOrCreateAiExplanation(companyId, monthKey, {
+      forceRegenerate,
+      userId: req.userId
+    });
+    res.json({ success: true, aiDraftText: result.aiDraftText, aiDraftUpdatedAt: result.aiDraftUpdatedAt });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/alerts', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+  try {
+    const alerts = await alertsService.getAlerts(req.companyId);
+    res.json({ success: true, data: alerts });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }

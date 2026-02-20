@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { AlertTriangle, CheckCircle, AlertCircle, Wallet, RefreshCw, Info, FileText, Users, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { dashboardApi, syncApi, connectorApi, type ConnectorStatusV1Data } from '../../services/api';
+import { dashboardApi, syncApi, connectorApi, financeApi, type ConnectorStatusV1Data, type FinanceAlert } from '../../services/api';
 import { formatCurrency } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { useSubscriptionStore } from '../../store/subscriptionStore';
 import DashboardSkeleton from './DashboardSkeleton';
+
+interface CommandCenterItem {
+  amount?: number;
+  label: string;
+  link: string;
+}
 
 interface OverviewData {
   cashPosition: {
@@ -17,21 +22,19 @@ interface OverviewData {
     currency: string;
   };
   runway: {
-    months: number;
-    status: 'GREEN' | 'AMBER' | 'RED';
-    avgMonthlyInflow: number;
-    avgMonthlyOutflow: number;
-    netCashFlow: number;
+    months: number | null;
+    status: string;
+    statusLabel?: string;
+    runwaySeries?: Array<{ month: string; netChange: number; closing?: number }>;
   };
-  insights: {
+  commandCenter?: {
+    collectionsRisk: CommandCenterItem;
+    payablesPressure: CommandCenterItem;
+    profitSignal: { text: string; value: number; link: string };
+  } | null;
+  insights?: {
     unreadCount: number;
-    recent: Array<{
-      id: string;
-      type: string;
-      riskLevel: string;
-      title: string;
-      content: string;
-    }>;
+    recent: Array<{ id: string; type: string; riskLevel: string; title: string; content: string }>;
   };
 }
 
@@ -47,6 +50,7 @@ const ModernDashboard: React.FC = () => {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [connectorStatus, setConnectorStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [alerts, setAlerts] = useState<FinanceAlert[]>([]);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -88,9 +92,17 @@ const ModernDashboard: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const response = await dashboardApi.getOverview();
-      if (response?.data?.data) {
-        setData(response.data.data);
+      const [overviewRes, alertsRes] = await Promise.all([
+        dashboardApi.getOverview(),
+        financeApi.getAlerts().catch(() => ({ data: { data: [] } }))
+      ]);
+      if (overviewRes?.data?.data) {
+        setData(overviewRes.data.data);
+      }
+      if (alertsRes?.data?.data && Array.isArray(alertsRes.data.data)) {
+        setAlerts(alertsRes.data.data);
+      } else {
+        setAlerts([]);
       }
     } catch (error) {
       console.error('Failed to load overview:', error);
@@ -141,29 +153,16 @@ const ModernDashboard: React.FC = () => {
     }
   };
 
-  const getInsightIcon = (level: string) => {
-    switch (level) {
-      case 'GREEN':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'AMBER':
-        return <AlertCircle className="w-5 h-5 text-amber-600" />;
-      case 'RED':
-        return <AlertTriangle className="w-5 h-5 text-red-600" />;
+  const getAlertSeverityStyle = (severity: FinanceAlert['severity']) => {
+    switch (severity) {
+      case 'critical':
+        return 'border-l-red-500 bg-red-50/50 dark:bg-red-900/10';
+      case 'high':
+        return 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10';
+      case 'medium':
+        return 'border-l-blue-500 bg-blue-50/50 dark:bg-blue-900/10';
       default:
-        return null;
-    }
-  };
-
-  const getInsightBorder = (level: string) => {
-    switch (level) {
-      case 'GREEN':
-        return 'border-l-green-500';
-      case 'AMBER':
-        return 'border-l-amber-500';
-      case 'RED':
-        return 'border-l-red-500';
-      default:
-        return 'border-l-gray-300';
+        return 'border-l-gray-400 bg-gray-50 dark:bg-gray-800';
     }
   };
 
@@ -171,13 +170,11 @@ const ModernDashboard: React.FC = () => {
     return <DashboardSkeleton />;
   }
 
-  const inflow = data?.runway.avgMonthlyInflow || 0;
-  const outflow = data?.runway.avgMonthlyOutflow || 0;
-  const mixData = [
-    { name: 'Inflow', value: inflow },
-    { name: 'Outflow', value: outflow },
-  ];
-  const runwayStatusLabel = data?.runway.status || '—';
+  const runwayStatusLabel = data?.runway.statusLabel ?? data?.runway.status ?? '—';
+  const runwayMonths = data?.runway.months ?? null;
+  const runwayIsNumeric = typeof runwayMonths === 'number';
+  const runwaySeries = data?.runway.runwaySeries ?? [];
+  const cc = data?.commandCenter;
 
   return (
     <>
@@ -186,8 +183,8 @@ const ModernDashboard: React.FC = () => {
         {/* Header with refresh */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">CFO Overview</h1>
-            <p className="text-gray-600 dark:text-gray-400">Your financial health at a glance</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Command Center</h1>
+            <p className="text-gray-600 dark:text-gray-400">Safety and attention at a glance</p>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -278,234 +275,178 @@ const ModernDashboard: React.FC = () => {
           </Card>
         )}
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {/* Cash Position */}
-          <Card variant="gradient">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Current Cash</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {formatCurrency((data?.cashPosition.currentBalance || 0) + (data?.cashPosition.bankBalance || 0))}
-                  </p>
-                </div>
-                <div className="rounded-full bg-blue-100 p-3 dark:bg-blue-900/20">
-                  <Wallet className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Bank: </span>
-                <span className="font-medium text-gray-900 dark:text-gray-100 ml-1">
-                  {formatCurrency(data?.cashPosition.bankBalance || 0)}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Cash Runway */}
-          <Card variant="gradient">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cash Runway</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {data?.runway.months ?? 0} months
-                  </p>
-                </div>
-                <div className={`rounded-full p-3 ${getRiskColor(data?.runway.status || '')}`}>
-                  {getRiskIcon(data?.runway.status || '')}
-                </div>
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Status</span>
-                  <span className={`font-medium ${data?.runway.status === 'GREEN' ? 'text-green-600' : data?.runway.status === 'AMBER' ? 'text-amber-600' : 'text-red-600'}`}>
-                    {runwayStatusLabel}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div
-                    className={`h-2 rounded-full ${
-                      data?.runway.status === 'GREEN' ? 'bg-green-500' : 
-                      data?.runway.status === 'AMBER' ? 'bg-amber-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${Math.min(((data?.runway.months || 0) / 12) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Monthly Inflow */}
-          <Card variant="gradient">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Monthly Inflow</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {formatCurrency(data?.runway.avgMonthlyInflow || 0)}
-                  </p>
-                </div>
-                <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/20">
-                  <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-              </div>
-              <div className="mt-4 text-sm">
-                <span className="text-green-600 dark:text-green-400">↗ 12% from last month</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Monthly Outflow */}
-          <Card variant="gradient">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Monthly Outflow</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {formatCurrency(data?.runway.avgMonthlyOutflow || 0)}
-                  </p>
-                </div>
-                <div className="rounded-full bg-red-100 p-3 dark:bg-red-900/20">
-                  <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
-                </div>
-              </div>
-              <div className="mt-4 text-sm">
-                <span className="text-red-600 dark:text-red-400">↗ 5% from last month</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts and Insights */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          {/* Cash Flow Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Inflow vs Outflow Mix</CardTitle>
-              <CardDescription>Based on trailing 3 closed months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                <div className="h-56 w-full md:w-1/2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={mixData}
-                        dataKey="value"
-                        innerRadius={55}
-                        outerRadius={90}
-                        paddingAngle={3}
-                      >
-                        <Cell fill="#10b981" />
-                        <Cell fill="#ef4444" />
-                      </Pie>
-                      <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
-                        contentStyle={{
-                          background: '#0f172a',
-                          border: '1px solid rgba(148, 163, 184, 0.2)',
-                          borderRadius: '12px',
-                          color: '#f8fafc',
-                        }}
-                        labelStyle={{ color: '#cbd5f5' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-3 md:w-1/2">
-                  <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 dark:bg-emerald-900/20">
-                    <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Inflow
-                    </div>
-                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(inflow)}</p>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg bg-red-50 px-4 py-3 dark:bg-red-900/20">
-                    <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
-                      Outflow
-                    </div>
-                    <p className="font-semibold text-red-700 dark:text-red-400">{formatCurrency(outflow)}</p>
-                  </div>
-                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm text-blue-700 dark:text-blue-400">
-                      Net Cash Flow: <span className="font-semibold">{(data?.runway.netCashFlow || 0) >= 0 ? '+' : ''}{formatCurrency(data?.runway.netCashFlow || 0)}</span>
+        {/* Command Center: Cash & Bank, Runway, Collections Risk, Payables Pressure, Profit Signal */}
+        {data && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {/* Cash & Bank */}
+            <Card variant="gradient">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Cash & Bank</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {formatCurrency((data.cashPosition.currentBalance || 0) + (data.cashPosition.bankBalance || 0))}
                     </p>
                   </div>
+                  <div className="rounded-full bg-blue-100 p-2.5 dark:bg-blue-900/20">
+                    <Wallet className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                {data.cashPosition.bankBalance != null && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Bank {formatCurrency(data.cashPosition.bankBalance)}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* AI Insights */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>AI Insights</CardTitle>
-                  <CardDescription>Latest recommendations and risk alerts</CardDescription>
+            {/* Runway */}
+            <Card variant="gradient">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Runway</p>
+                    <span
+                      className="text-gray-400 dark:text-gray-500 cursor-help"
+                      title="Based on last 6 months average Cash & Bank movement from accounting ledgers."
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                  <div className={`rounded-full p-2.5 ${getRiskColor(data?.runway?.status || '')}`}>
+                    {getRiskIcon(data?.runway?.status || '')}
+                  </div>
                 </div>
-                <Button variant="ghost" size="sm">
-                  View All
-                </Button>
-              </div>
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
+                  {runwayIsNumeric ? `${runwayMonths} months` : runwayStatusLabel}
+                </p>
+                {runwayIsNumeric && (
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className={`h-1.5 rounded-full ${
+                        data?.runway?.status === 'GREEN' ? 'bg-green-500' :
+                        data?.runway?.status === 'AMBER' ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min((runwayMonths / 12) * 100, 100)}%` }}
+                    />
+                  </div>
+                )}
+                {runwaySeries.length > 0 && (
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400" title={runwaySeries.map((s) => `${s.month}: ${s.netChange >= 0 ? '+' : ''}${formatCurrency(s.netChange)}`).join('\n')}>
+                    Last {runwaySeries.length} mo net change on hover
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Collections Risk */}
+            <Card variant="gradient">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Collections Risk</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {cc?.collectionsRisk?.amount != null ? formatCurrency(cc.collectionsRisk.amount) : '—'}
+                    </p>
+                  </div>
+                  <Users className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                </div>
+                {cc?.collectionsRisk?.link && (
+                  <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs px-2" onClick={() => navigate(cc.collectionsRisk!.link)}>
+                    Working capital →
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payables Pressure */}
+            <Card variant="gradient">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Payables Pressure</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {cc?.payablesPressure?.amount != null ? formatCurrency(cc.payablesPressure.amount) : '—'}
+                    </p>
+                  </div>
+                  <CreditCard className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                </div>
+                {cc?.payablesPressure?.link && (
+                  <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs px-2" onClick={() => navigate(cc.payablesPressure!.link)}>
+                    Working capital →
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Profit Signal (one-line, link to pl-pack) */}
+            <Card variant="gradient">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Profit Signal</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {cc?.profitSignal?.value != null ? formatCurrency(cc.profitSignal.value) : '—'}
+                    </p>
+                  </div>
+                  <FileText className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                </div>
+                {cc?.profitSignal?.link && (
+                  <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs px-2" onClick={() => navigate(cc.profitSignal!.link)}>
+                    P&L Pack →
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Red Flag Alerts (deterministic, max 5) */}
+        {syncStatus === 'ready' && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Alerts</CardTitle>
+              <CardDescription>Red flags requiring attention. Click to open relevant screen.</CardDescription>
             </CardHeader>
             <CardContent>
-              {(data?.insights.recent || []).length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-gray-400 dark:text-gray-500 mb-2">
-                    <AlertCircle className="h-12 w-12 mx-auto" />
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    No insights yet. Connect accounting software to unlock AI recommendations.
-                  </p>
-                </div>
+              {alerts.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No alerts.</p>
               ) : (
-                <div className="space-y-3">
-                  {data?.insights.recent.map((insight) => (
-                    <div
-                      key={insight.id}
-                      className={`border-l-4 ${getInsightBorder(insight.riskLevel)} bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {getInsightIcon(insight.riskLevel)}
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 dark:text-gray-100">{insight.title}</h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{insight.content}</p>
-                        </div>
-                      </div>
-                    </div>
+                <ul className="space-y-2">
+                  {alerts.map((alert) => (
+                    <li key={alert.id}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(alert.link)}
+                        className={`w-full text-left border-l-4 rounded-r px-3 py-2 ${getAlertSeverityStyle(alert.severity)} hover:opacity-90 transition-opacity`}
+                      >
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{alert.title}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">{alert.message}</span>
+                      </button>
+                    </li>
                   ))}
-                  
-                  {data?.insights?.unreadCount && data.insights.unreadCount > 3 && (
-                    <Button variant="outline" size="sm" className="w-full">
-                      View {data.insights.unreadCount - 3} more insights
-                    </Button>
-                  )}
-                </div>
+                </ul>
               )}
             </CardContent>
           </Card>
-        </div>
+        )}
 
         {/* Quick Actions */}
         <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks and recommendations</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Quick Actions</CardTitle>
+            <CardDescription>Jump to detail screens</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Button variant="outline" size="sm" leftIcon={<TrendingUp className="h-4 w-4" />} onClick={() => navigate('/revenue')}>
-                View Revenue Trends
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" leftIcon={<FileText className="h-4 w-4" />} onClick={() => navigate('/pl-pack')}>
+                P&L Pack
               </Button>
               <Button variant="outline" size="sm" leftIcon={<Wallet className="h-4 w-4" />} onClick={() => navigate('/cashflow')}>
-                Check Cash Position
+                Cashflow
               </Button>
-              <Button variant="outline" size="sm" leftIcon={<AlertTriangle className="h-4 w-4" />} onClick={() => navigate('/ai-insights')}>
-                Review Alerts
+              <Button variant="outline" size="sm" leftIcon={<Users className="h-4 w-4" />} onClick={() => navigate('/working-capital')}>
+                Working Capital
               </Button>
             </div>
           </CardContent>

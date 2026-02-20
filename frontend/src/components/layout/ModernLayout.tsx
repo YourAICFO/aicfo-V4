@@ -76,6 +76,7 @@ const ModernLayout: React.FC = () => {
     { name: 'Debtors', href: '/debtors', icon: '👥' },
     { name: 'Creditors', href: '/creditors', icon: '🏢' },
     { name: 'Working Capital', href: '/working-capital', icon: '🏦' },
+    { name: 'P&L Pack', href: '/pl-pack', icon: '📋' },
     { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
     { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
     { name: 'Integrations', href: '/integrations', icon: '🔗' },

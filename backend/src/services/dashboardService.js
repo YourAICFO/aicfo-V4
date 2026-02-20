@@ -13,6 +13,7 @@ const {
   CFOMetric,
   FinancialTransaction
 } = require('../models');
+const runwayService = require('./runwayService');
 
 const normalizeMonth = (value) => {
   if (!value) return null;
@@ -122,6 +123,7 @@ const getCFOOverview = async (companyId) => {
         avgMonthlyOutflow: null,
         netCashFlow: null
       },
+      commandCenter: null,
       kpis: [],
       alerts: [],
       insights: {
@@ -147,17 +149,14 @@ const getCFOOverview = async (companyId) => {
   ];
   const cfo = await getCFOMetricsMap(companyId, cfoSpecs);
 
-  // Get monthly inflows and outflows for last 3 closed months from snapshots only
+  // Monthly inflows/outflows (revenue/expense proxy) for chart only — not used for runway
   const monthlyData = summaryRows.map((row) => ({
     month: row.month,
     revenue: parseFloat(row.total_revenue || 0),
     expenses: parseFloat(row.total_expenses || 0)
   }));
-
-  // Calculate averages
   const monthlyInflows = [];
   const monthlyOutflows = [];
-
   for (let i = 0; i < 3; i++) {
     const month = new Date(latestClosedStart.getFullYear(), latestClosedStart.getMonth() - i, 1);
     const monthStr = normalizeMonth(month) || getLatestClosedMonthKey(now);
@@ -165,32 +164,15 @@ const getCFOOverview = async (companyId) => {
     monthlyInflows.push(row ? parseFloat(row.revenue) : 0);
     monthlyOutflows.push(row ? parseFloat(row.expenses) : 0);
   }
-
   const availableCount = Math.max(monthlyInflows.filter(v => v !== 0).length || 0, 1);
   const avgMonthlyInflow = monthlyInflows.reduce((a, b) => a + b, 0) / availableCount;
   const avgMonthlyOutflow = monthlyOutflows.reduce((a, b) => a + b, 0) / availableCount;
   const netCashFlow = avgMonthlyInflow - avgMonthlyOutflow;
-  const avgNetCashFlow = netCashFlow;
 
-  // Calculate runway
-  let runwayMonths = 0;
-  let runwayStatus = 'RED';
-
-  const cashBase = cashBalance || (currentCash + bankBalance);
-  if (avgNetCashFlow >= 0) {
-    runwayMonths = 99;
-    runwayStatus = 'GREEN';
-  } else {
-    const denom = Math.abs(avgNetCashFlow);
-    runwayMonths = denom > 0 ? (cashBase / denom) : 0;
-    if (runwayMonths >= 6) {
-      runwayStatus = 'GREEN';
-    } else if (runwayMonths >= 3) {
-      runwayStatus = 'AMBER';
-    } else {
-      runwayStatus = 'RED';
-    }
-  }
+  // Runway from snapshot cash movement only (runwayService)
+  const runwayResult = await runwayService.getRunway(companyId);
+  const runwayMonths = runwayResult.runwayMonths;
+  const runwayStatus = runwayResult.status;
 
   // Get recent insights
   const recentInsights = await AIInsight.findAll({
@@ -258,31 +240,54 @@ const getCFOOverview = async (companyId) => {
   const liquidityMetric = await CurrentLiquidityMetric.findOne({ where: { companyId }, raw: true });
   const alerts = await CFOAlert.findAll({ where: { companyId }, order: [['generated_at', 'DESC']], raw: true });
 
+  const cashForDisplay = runwayResult.currentCashBankClosing ?? (cashBalance || (currentCash + bankBalance));
+
+  const commandCenter = {
+    collectionsRisk: {
+      amount: debtorsOutstanding,
+      label: 'Collections Risk (debtors)',
+      link: '/working-capital'
+    },
+    payablesPressure: {
+      amount: creditorsOutstanding,
+      label: 'Payables Pressure',
+      link: '/working-capital'
+    },
+    profitSignal: {
+      text: `Net profit (${latestClosedKey})`,
+      value: netProfitLatest,
+      link: '/pl-pack'
+    }
+  };
+
   return {
     dataReady: true,
     cashPosition: {
-      currentBalance: cashBalance || (currentCash + bankBalance),
+      currentBalance: cashForDisplay,
       bankBalance,
       currency: 'INR'
     },
     runway: {
-      months: cfo.cash_runway_months != null
-        ? Number(cfo.cash_runway_months)
-        : (liquidityMetric?.cash_runway_months !== null && liquidityMetric?.cash_runway_months !== undefined
-          ? Number(liquidityMetric.cash_runway_months)
-          : Math.round(runwayMonths * 10) / 10),
+      months: runwayMonths != null ? runwayMonths : null,
       status: runwayStatus,
+      statusLabel: runwayResult.statusLabel,
+      cashBase: runwayResult.cashBase ?? cashForDisplay,
+      avgNetCashChange6M: runwayResult.avgNetCashChange6M ?? null,
+      runwaySeries: runwayResult.runwaySeries ?? [],
+      revenueProxy3m: Math.round(avgMonthlyInflow),
+      expenseProxy3m: Math.round(avgMonthlyOutflow),
       avgMonthlyInflow: Math.round(avgMonthlyInflow),
       avgMonthlyOutflow: Math.round(avgMonthlyOutflow),
       netCashFlow: Math.round(netCashFlow)
     },
+    commandCenter,
     kpis: [
       { key: 'revenue', label: 'Revenue', value: revenueLatest, link: '/revenue' },
       { key: 'net_profit', label: 'Net Profit', value: netProfitLatest, link: '/revenue' },
       { key: 'margin', label: 'Margin', value: margin, link: '/revenue' },
-      { key: 'cash_balance', label: 'Cash Balance', value: cashBalance || (currentCash + bankBalance), link: '/cashflow' },
-      { key: 'burn_rate', label: 'Burn Rate', value: avgMonthlyOutflow, link: '/cashflow' },
-      { key: 'cash_runway', label: 'Cash Runway', value: cfo.cash_runway_months ?? liquidityMetric?.cash_runway_months ?? runwayMonths, link: '/dashboard' },
+      { key: 'cash_balance', label: 'Cash Balance', value: cashForDisplay, link: '/cashflow' },
+      { key: 'burn_rate', label: 'Expense proxy (3m)', value: avgMonthlyOutflow, link: '/cashflow' },
+      { key: 'cash_runway', label: 'Cash Runway', value: runwayMonths != null ? runwayMonths : runwayResult.statusLabel, link: '/dashboard' },
       { key: 'debtors', label: 'Debtors Outstanding', value: debtorsOutstanding, link: '/debtors' },
       { key: 'creditors', label: 'Creditors Outstanding', value: creditorsOutstanding, link: '/creditors' },
       { key: 'revenue_growth_3m', label: 'Revenue Growth (3M)', value: revenueGrowth3m, link: '/revenue' },
