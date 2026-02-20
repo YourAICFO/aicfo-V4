@@ -156,7 +156,20 @@ export const financeApi = {
   savePlRemarks: (month: string, text: string) => api.post('/finance/pl-remarks', { month, text }),
   generatePlAiExplanation: (month: string, forceRegenerate?: boolean) =>
     api.post('/finance/pl-ai-explanation', { month, forceRegenerate: !!forceRegenerate }),
+  getMonthlyReportPdf: (month: string) =>
+    api.get('/finance/monthly-report', { params: { month }, responseType: 'blob' }),
+  getDataHealth: () =>
+    api.get<{
+      success: boolean;
+      data: DataHealthResponse;
+    }>('/finance/data-health'),
   getAlerts: () => api.get<{ success: boolean; data: FinanceAlert[] }>('/finance/alerts'),
+  snoozeAlert: (ruleKey: string, days: 7 | 30) =>
+    api.post<{ success: boolean; data: FinanceAlert[] }>('/finance/alerts/snooze', { ruleKey, days }),
+  dismissAlert: (ruleKey: string) =>
+    api.post<{ success: boolean; data: FinanceAlert[] }>('/finance/alerts/dismiss', { ruleKey }),
+  clearAlert: (ruleKey: string) =>
+    api.post<{ success: boolean; data: FinanceAlert[] }>('/finance/alerts/clear', { ruleKey }),
 };
 
 export interface FinanceAlert {
@@ -166,6 +179,34 @@ export interface FinanceAlert {
   title: string;
   message: string;
   link: string;
+  isSnoozed?: boolean;
+  snoozedUntil?: string | null;
+  isDismissed?: boolean;
+}
+
+export interface DataHealthResponse {
+  classifiedPct: number;
+  totalLedgers: number;
+  classifiedLedgers: number;
+  unclassifiedLedgers: number;
+  topUnclassifiedLedgers: { name: string; balance: number | null; lastMonth: string | null; count: number | null }[];
+  cogsMappingStatus: { isAvailable: boolean; reason: string | null };
+  inventoryMappingStatus: {
+    inventoryTotal: number;
+    inventoryLedgersCount: number;
+    warning: string | null;
+  };
+  debtorsMappingStatus: { total: number; agingAvailable: boolean };
+  creditorsMappingStatus: { total: number; agingAvailable: boolean };
+  lastSync: {
+    last_sync_at: string | null;
+    last_sync_status: string | null;
+    last_sync_error: string | null;
+  };
+  availableMonthsCount: number;
+  latestMonth: string | null;
+  impactMessages?: string[];
+  suggestedNextSteps?: string[];
 }
 
 // Debtors/Creditors (ledger-based)

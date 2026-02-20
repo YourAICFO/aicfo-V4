@@ -80,6 +80,7 @@ const ModernLayout: React.FC = () => {
     { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
     { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
     { name: 'Integrations', href: '/integrations', icon: '🔗' },
+    { name: 'Data Health', href: '/data-health', icon: '📊' },
     ...(isAdmin
       ? [
           { name: 'Admin Control Tower', href: '/admin/control-tower', icon: '🛡️' },

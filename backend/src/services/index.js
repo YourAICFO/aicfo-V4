@@ -16,6 +16,9 @@ const usageMeteringService = require('./usageMeteringService');
 const plPackService = require('./plPackService');
 const runwayService = require('./runwayService');
 const alertsService = require('./alertsService');
+const dataConsistencyService = require('./dataConsistencyService');
+const reportService = require('./reportService');
+const dataHealthService = require('./dataHealthService');
 
 module.exports = {
   authService,
@@ -35,5 +38,8 @@ module.exports = {
   usageMeteringService,
   plPackService,
   runwayService,
-  alertsService
+  alertsService,
+  dataConsistencyService,
+  reportService,
+  dataHealthService
 };

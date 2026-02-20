@@ -25,7 +25,7 @@
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/finance/pl-months` | `{ months: string[], latest: string \| null }` — months with snapshot data (desc), for dropdown |
-| GET | `/api/finance/pl-pack?month=YYYY-MM` | P&L totals, MoM variances (+ variancePct), current FY YTD, last FY YTD, ytdVarianceAmount/Pct, drivers |
+| GET | `/api/finance/pl-pack?month=YYYY-MM` | P&L totals, MoM variances (+ variancePct), current FY YTD, last FY YTD, ytdVarianceAmount/Pct, drivers, **executiveSummary** (max 4 bullets) |
 | GET | `/api/finance/pl-remarks?month=YYYY-MM` | Manual text + cached aiDraftText, timestamps |
 | POST | `/api/finance/pl-remarks` | Body: `{ month, text }` — upsert manual remarks |
 | POST | `/api/finance/pl-ai-explanation` | Body: `{ month, forceRegenerate? }` — return cached or generate & cache (prompt includes MoM + YTD vs last FY) |
@@ -43,6 +43,7 @@ Tenant isolation: `companyId` from `req.companyId` (X-Company-Id / auth). Rate l
 - **ytdVarianceAmount**: revenue, expenses, grossProfit, netProfit (current YTD − last FY YTD).
 - **ytdVariancePct**: revenue, expenses, grossProfit, netProfit (safe % change vs last FY YTD; null when last FY = 0).
 - **drivers**: unchanged (deltaAmount, topPositive, topNegative per category).
+- **executiveSummary**: `Array<{ key, severity, text }>` — deterministic bullets (max 4), no AI. Keys: net_profit_drop, revenue_increase, runway_low, debtors_risk. Severity: critical | high | medium | low. Generated when: net profit variance ≤ −20% MoM; revenue variance ≥ +10% MoM; runway < 4 months; debtors increase > 25% MoM.
 
 FY: April–March. Prior FY same period computed with year/month arithmetic (no timezone dependency).
 
@@ -68,8 +69,21 @@ node --test test/plPack.test.js
 - [ ] **Remarks** — Load per month; save updates only that month’s remarks.
 - [ ] **AI** — Not generated on month change; on-demand only; cached per company+month; Regenerate forces new narrative.
 - [ ] **Variance %** — MoM and YTD vs last FY show "—" when denominator is zero (or null).
+- [ ] **Executive Summary** — Strip appears at top of P&L Pack (above KPI cards) when `executiveSummary` has items. Bullets show deterministic insights (net profit drop, revenue increase, runway, debtors risk). Severity-based left border: red (critical/high), amber (medium), blue (low). Max 4 bullets. No AI; data from existing pl-pack + runway + debtors.
 
-## 6) Deterministic drivers — limitations and improvements
+## 6) Executive Summary (deterministic, no AI)
+
+- **Location**: Top of P&L Pack page, above the KPI strip. Rendered only when `executiveSummary.length > 0`.
+- **Logic** (in `plPackService.buildExecutiveSummary`): Uses existing pack (variances, drivers), `runwayService.getRunway(companyId)`, and `debtorCreditorService.getDebtorsSummary(companyId)`. Rules:
+  - Net profit variance % ≤ −20% → bullet: "Net profit decreased ₹X (Y%) vs last month, mainly driven by {top expense/revenue driver}."
+  - Revenue variance % ≥ +10% → bullet: "Revenue increased ₹X (Y%) vs last month, led by {top revenue driver}."
+  - Runway < 4 months → bullet: "Cash runway is X months based on last 6 months average burn."
+  - Debtors MoM increase > 25% → bullet: "Debtors aging risk increased compared to last month."
+- **Max 4 bullets**. Severity: critical (runway), high (net profit drop), medium (debtors), low (revenue increase). Frontend maps to left border: red / amber / blue.
+
+---
+
+## 7) Deterministic drivers — limitations and improvements
 
 - **Source**: Drivers use `MonthlyTrialBalanceSummary` (totals) and `MonthlyRevenueBreakdown` / `MonthlyExpenseBreakdown` (line-level). Top drivers are computed from **MoM deltas** by `normalizedRevenueCategory` / `normalizedExpenseCategory` (or name fallback).
 - **Limitations**:

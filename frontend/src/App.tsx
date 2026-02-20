@@ -9,6 +9,7 @@ import Cashflow from './pages/Cashflow';
 import AIInsights from './pages/AIInsights';
 import AIChat from './pages/AIChat';
 import Integrations from './pages/Integrations';
+import DataHealth from './pages/DataHealth';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
@@ -52,6 +53,7 @@ function App() {
             <Route path="/ai-insights" element={<AIInsights />} />
             <Route path="/ai-chat" element={<AIChat />} />
             <Route path="/integrations" element={<Integrations />} />
+            <Route path="/data-health" element={<DataHealth />} />
             <Route path="/debtors" element={<Debtors />} />
             <Route path="/creditors" element={<Creditors />} />
             <Route path="/working-capital" element={<WorkingCapital />} />

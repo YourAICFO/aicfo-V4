@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Wallet, RotateCcw, Landmark, PercentCircle } from 'lucide-react';
+import { Wallet, RotateCcw, Landmark, PercentCircle, Package } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
 type WorkingCapitalPayload = {
   working_capital: number | null;
+  net_working_capital?: number | null;
+  liquidity_position?: number | null;
   cash_conversion_cycle: number | null;
+  cash_gap_ex_inventory?: number | null;
   receivable_days: number | null;
   payable_days: number | null;
   loans_total_outstanding: number | null;
   interest_expense_latest: number | null;
   interest_coverage: number | null;
+  inventory_total?: number | null;
+  inventory_delta?: number | null;
+  inventory_days?: number | null;
   sources: Record<string, { metric_key: string; value: number | null }>;
 };
 
@@ -24,7 +30,7 @@ const formatCurrency = (value: number | null) => {
 };
 
 const formatNumber = (value: number | null, suffix = '') => {
-  if (value === null || value === undefined) return 'Not available yet';
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   return `${value.toFixed(1)}${suffix}`;
 };
 
@@ -85,8 +91,35 @@ export default function WorkingCapital() {
               <Wallet className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Working Capital</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.working_capital ?? null)}</p>
+              <p className="text-sm text-gray-600">Net working capital</p>
+              <p className="text-xl font-bold">{formatCurrency(data?.net_working_capital ?? data?.working_capital ?? null)}</p>
+              <p className="text-xs text-gray-500">Receivables + Inventory − Payables</p>
+            </div>
+          </div>
+        </div>
+        <div className="card border-transparent bg-gradient-to-br from-white to-teal-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-teal-100">
+              <Wallet className="w-6 h-6 text-teal-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Liquidity (Cash + NWC)</p>
+              <p className="text-xl font-bold">{formatCurrency(data?.liquidity_position ?? data?.working_capital ?? null)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-transparent bg-gradient-to-br from-white to-violet-50">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-violet-100">
+              <Package className="w-6 h-6 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Inventory</p>
+              <p className="text-xl font-bold">{formatCurrency(data?.inventory_total ?? null)}</p>
+              <p className="text-xs text-gray-500">
+                MoM: {data?.inventory_delta != null ? (data.inventory_delta >= 0 ? '+' : '') + formatCurrency(data.inventory_delta) : '—'} · DIO: {formatNumber(data?.inventory_days ?? null, 'd')} · CCC: {formatNumber(data?.cash_conversion_cycle ?? null, 'd')}
+              </p>
             </div>
           </div>
         </div>
@@ -102,6 +135,9 @@ export default function WorkingCapital() {
               <p className="text-xs text-gray-500">
                 Recv: {formatNumber(data?.receivable_days ?? null, 'd')} | Pay: {formatNumber(data?.payable_days ?? null, 'd')}
               </p>
+              {data?.cash_conversion_cycle == null && data?.cash_gap_ex_inventory != null && Number.isFinite(data.cash_gap_ex_inventory) && (
+                <p className="text-xs text-gray-600 mt-1">Cash gap (ex. inventory): {formatNumber(data.cash_gap_ex_inventory, ' days')}</p>
+              )}
             </div>
           </div>
         </div>

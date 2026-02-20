@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Monthly Financial Intelligence Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 11px; line-height: 1.4; color: #1a1a1a; margin: 0; padding: 24px; }
+    .cover { text-align: center; padding: 80px 0; page-break-after: always; }
+    .cover h1 { font-size: 22px; font-weight: 600; margin: 0 0 8px; color: #1a1a1a; }
+    .cover .sub { font-size: 14px; color: #444; margin-bottom: 24px; }
+    .cover .company { font-size: 18px; font-weight: 600; color: #2563eb; }
+    .section { margin-bottom: 24px; page-break-inside: avoid; }
+    .section h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e5e7eb; }
+    th { font-weight: 600; color: #374151; }
+    .num { text-align: right; }
+    .bullet-list { margin: 0; padding-left: 18px; }
+    .bullet-list li { margin-bottom: 6px; }
+    .severity-critical, .severity-high { color: #b91c1c; }
+    .severity-medium { color: #b45309; }
+    .severity-low { color: #1d4ed8; }
+    .narrative { white-space: pre-wrap; padding: 12px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #2563eb; }
+    .meta { font-size: 10px; color: #6b7280; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+  <script type="application/json" id="report-data">__REPORT_JSON__</script>
+  <script>
+    (function() {
+      var el = document.getElementById('report-data');
+      var report = JSON.parse(el.textContent);
+      el.remove();
+
+      function fmtNum(v) {
+        if (v === '—' || v == null) return '—';
+        if (typeof v !== 'number' || !isFinite(v)) return String(v);
+        return v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+      }
+      function fmtPct(v) {
+        if (v == null || !isFinite(v)) return '—';
+        var sign = v >= 0 ? '+' : '';
+        return sign + v.toFixed(1) + '%';
+      }
+      function monthLabel(key) {
+        if (!key) return '';
+        var parts = key.split('-').map(Number);
+        var d = new Date(parts[0], parts[1] - 1, 1);
+        return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+      }
+
+      var html = '';
+
+      html += '<div class="cover"><div class="company">' + (report.company && report.company.name ? report.company.name : 'Company') + '</div>';
+      html += '<h1>Monthly Financial Intelligence Report</h1>';
+      html += '<p class="sub">' + monthLabel(report.month) + '</p>';
+      html += '<p class="meta">Generated ' + (report.generatedAt ? new Date(report.generatedAt).toLocaleString() : '') + '</p></div>';
+
+      if (report.executiveSummary && report.executiveSummary.length > 0) {
+        html += '<div class="section"><h2>Executive Summary</h2><ul class="bullet-list">';
+        report.executiveSummary.forEach(function(b) {
+          html += '<li class="severity-' + (b.severity || 'low') + '">' + (b.text || '').replace(/</g, '&lt;') + '</li>';
+        });
+        html += '</ul></div>';
+      }
+
+      if (report.performance && (report.performance.current || report.performance.previous)) {
+        var p = report.performance;
+        var cur = p.current || {};
+        var prev = p.previous || {};
+        var v = p.variances || {};
+        html += '<div class="section"><h2>Performance</h2><table><tr><th>Line</th><th class="num">Current</th><th class="num">Previous</th><th class="num">Variance %</th></tr>';
+        html += '<tr><td>Revenue</td><td class="num">' + fmtNum(cur.totalRevenue) + '</td><td class="num">' + fmtNum(prev.totalRevenue) + '</td><td class="num">' + fmtPct(v.revenuePct) + '</td></tr>';
+        html += '<tr><td>Expenses</td><td class="num">' + fmtNum(cur.totalExpenses) + '</td><td class="num">' + fmtNum(prev.totalExpenses) + '</td><td class="num">' + fmtPct(v.opexPct) + '</td></tr>';
+        html += '<tr><td>Gross Profit</td><td class="num">' + fmtNum(cur.grossProfit) + '</td><td class="num">' + fmtNum(prev.grossProfit) + '</td><td class="num">' + fmtPct(v.grossProfitPct) + '</td></tr>';
+        html += '<tr><td>Net Profit</td><td class="num">' + fmtNum(cur.netProfit) + '</td><td class="num">' + fmtNum(prev.netProfit) + '</td><td class="num">' + fmtPct(v.netProfitPct) + '</td></tr></table></div>';
+      }
+
+      if (report.drivers && (report.drivers.revenue || report.drivers.opex)) {
+        html += '<div class="section"><h2>Drivers</h2>';
+        ['revenue', 'opex'].forEach(function(k) {
+          var d = report.drivers[k];
+          if (!d) return;
+          html += '<p><strong>' + k.charAt(0).toUpperCase() + k.slice(1) + '</strong> (Δ ' + fmtNum(d.deltaAmount) + ')</p>';
+          if (d.topPositive && d.topPositive.length) {
+            html += '<p>Top positive: ' + d.topPositive.map(function(x) { return (x.label || x.key) + ' ' + fmtNum(x.amount); }).join(', ') + '</p>';
+          }
+          if (d.topNegative && d.topNegative.length) {
+            html += '<p>Top negative: ' + d.topNegative.map(function(x) { return (x.label || x.key) + ' ' + fmtNum(x.amount); }).join(', ') + '</p>';
+          }
+        });
+        html += '</div>';
+      }
+
+      if (report.workingCapital) {
+        var w = report.workingCapital;
+        html += '<div class="section"><h2>Working Capital</h2><table>';
+        html += '<tr><td>Inventory (total)</td><td class="num">' + fmtNum(w.inventoryTotal) + '</td></tr>';
+        html += '<tr><td>Inventory (Δ)</td><td class="num">' + fmtNum(w.inventoryDelta) + '</td></tr>';
+        html += '<tr><td>Inventory days</td><td class="num">' + (w.inventoryDays === '—' ? '—' : fmtNum(w.inventoryDays)) + '</td></tr>';
+        html += '<tr><td>Cash conversion cycle</td><td class="num">' + (w.cashConversionCycle === '—' ? '—' : fmtNum(w.cashConversionCycle)) + '</td></tr>';
+        html += '<tr><td>Cash gap (ex inventory)</td><td class="num">' + (w.cashGapExInventory === '—' ? '—' : fmtNum(w.cashGapExInventory)) + '</td></tr>';
+        html += '</table></div>';
+      }
+
+      if (report.liquidity) {
+        var liq = report.liquidity;
+        html += '<div class="section"><h2>Liquidity</h2><table>';
+        html += '<tr><td>Cash / Bank (closing)</td><td class="num">' + fmtNum(liq.currentCashBankClosing) + '</td></tr>';
+        html += '<tr><td>Runway (months)</td><td class="num">' + (liq.runwayMonths != null ? fmtNum(liq.runwayMonths) : '—') + '</td></tr>';
+        html += '<tr><td>Status</td><td>' + (liq.statusLabel || liq.status || '—') + '</td></tr></table></div>';
+      }
+
+      if (report.alerts && report.alerts.length > 0) {
+        html += '<div class="section"><h2>Alerts</h2><ul class="bullet-list">';
+        report.alerts.forEach(function(a) {
+          html += '<li><strong>' + (a.title || a.ruleKey || 'Alert').replace(/</g, '&lt;') + '</strong>';
+          if (a.message) html += ' — ' + String(a.message).replace(/</g, '&lt;');
+          html += '</li>';
+        });
+        html += '</ul></div>';
+      }
+
+      if (report.aiNarrative) {
+        html += '<div class="section"><h2>AI Narrative</h2><div class="narrative">' + String(report.aiNarrative).replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div></div>';
+      }
+
+      document.getElementById('content').innerHTML = html;
+    })();
+  </script>
+</body>
+</html>

@@ -61,7 +61,7 @@ class MetricsDataAccess {
     }
 
     if (this.monthKeys.length > 0) {
-      const [summaries, debtorsAgg, creditorsAgg, debtorDaysRows, creditorDaysRows, cccRows] = await Promise.all([
+      const [summaries, debtorsAgg, creditorsAgg, debtorDaysRows, creditorDaysRows, cccRows, inventoryDaysRows] = await Promise.all([
         MonthlyTrialBalanceSummary.findAll({
           where: { companyId: this.companyId, month: { [Sequelize.Op.in]: this.monthKeys } },
           raw: true,
@@ -110,6 +110,16 @@ class MetricsDataAccess {
           },
           raw: true,
           transaction: this.transaction
+        }),
+        CFOMetric.findAll({
+          where: {
+            companyId: this.companyId,
+            metricKey: 'inventory_days',
+            timeScope: '3m',
+            month: { [Sequelize.Op.in]: this.monthKeys }
+          },
+          raw: true,
+          transaction: this.transaction
         })
       ]);
 
@@ -118,6 +128,7 @@ class MetricsDataAccess {
       const debtorDaysByMonth = new Map(debtorDaysRows.map((row) => [row.month, toNumber(row.metric_value)]));
       const creditorDaysByMonth = new Map(creditorDaysRows.map((row) => [row.month, toNumber(row.metric_value)]));
       const cccByMonth = new Map(cccRows.map((row) => [row.month, toNumber(row.metric_value)]));
+      const inventoryDaysByMonth = new Map(inventoryDaysRows.map((row) => [row.month, toNumber(row.metric_value)]));
 
       for (const month of this.monthKeys) {
         const summary = summaries.find((row) => row.month === month) || {};
@@ -126,6 +137,7 @@ class MetricsDataAccess {
         const netProfit = toNumber(summary.net_profit);
         const netProfitValue = netProfit === null ? revenue - expenses : netProfit;
         const cashBank = toNumber(summary.cash_and_bank_balance) || 0;
+        const inventory = toNumber(summary.inventory_total) || toNumber(summary.inventoryTotal) || 0;
         const debtors = debtorsByMonth.get(month) || 0;
         const creditors = creditorsByMonth.get(month) || 0;
 
@@ -136,12 +148,15 @@ class MetricsDataAccess {
           net_profit: netProfitValue,
           net_margin: revenue > 0 ? netProfitValue / revenue : null,
           cash_bank: cashBank,
+          inventory,
           debtors,
           creditors,
-          working_capital: cashBank + debtors - creditors,
+          working_capital: cashBank + debtors + inventory - creditors,
+          net_working_capital: debtors + inventory - creditors,
           debtor_days: debtorDaysByMonth.get(month) ?? null,
           creditor_days: creditorDaysByMonth.get(month) ?? null,
-          cash_conversion_cycle: cccByMonth.get(month) ?? null
+          cash_conversion_cycle: cccByMonth.get(month) ?? null,
+          inventory_days: inventoryDaysByMonth.get(month) ?? null
         });
       }
     }
@@ -233,12 +248,14 @@ class MetricsDataAccess {
   }
 
   getCurrentTotals() {
+    const inventory = 0;
     return {
       cash: this.current.cashTotal,
       debtors: this.current.debtorsTotal,
       creditors: this.current.creditorsTotal,
       loans: this.current.loansTotal,
-      working_capital: this.current.cashTotal + this.current.debtorsTotal - this.current.creditorsTotal
+      working_capital: this.current.cashTotal + this.current.debtorsTotal + inventory - this.current.creditorsTotal,
+      net_working_capital: this.current.debtorsTotal + inventory - this.current.creditorsTotal
     };
   }
 

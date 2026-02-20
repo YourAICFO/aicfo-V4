@@ -10,6 +10,7 @@ import {
   Plug,
   Settings,
   Users,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -23,6 +24,7 @@ const menuItems = [
   { path: '/ai-insights', label: 'AI Insights', icon: Brain },
   { path: '/ai-chat', label: 'AI Chat', icon: MessageSquare },
   { path: '/integrations', label: 'Integrations', icon: Plug },
+  { path: '/data-health', label: 'Data Health', icon: Activity },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 

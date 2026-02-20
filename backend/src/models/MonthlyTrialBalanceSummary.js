@@ -67,6 +67,12 @@ const MonthlyTrialBalanceSummary = sequelize.define('MonthlyTrialBalanceSummary'
     allowNull: false,
     defaultValue: 0,
     field: 'net_cashflow'
+  },
+  inventoryTotal: {
+    type: DataTypes.DECIMAL(18, 2),
+    allowNull: false,
+    defaultValue: 0,
+    field: 'inventory_total'
   }
 }, {
   tableName: 'monthly_trial_balance_summary',

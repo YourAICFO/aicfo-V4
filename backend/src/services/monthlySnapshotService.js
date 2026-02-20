@@ -28,6 +28,42 @@ const { validateChartOfAccountsPayload } = require('./coaPayloadValidator');
 const { normalizeSourceLedger, upsertAccountingTermMapping } = require('./sourceNormalizationService');
 const { logUsageEvent } = require('./adminUsageService');
 
+/** COGS-like expense categories (normalizedExpenseCategory, case-insensitive). Used for DIO/DPO denominators. */
+const COGS_PROXY_CATEGORIES = [
+  'cost of goods sold',
+  'cogs',
+  'purchases',
+  'purchase accounts',
+  'direct expenses'
+];
+
+/**
+ * Sum of expense breakdown amounts for the month where category is COGS/purchases proxy. Returns null if none or zero.
+ * @param {string} companyId
+ * @param {string} monthKey - YYYY-MM
+ * @param {object} transaction
+ * @returns {Promise<number|null>}
+ */
+const getCogsProxyFromBreakdown = async (companyId, monthKey, transaction) => {
+  const rows = await MonthlyExpenseBreakdown.findAll({
+    where: { companyId, month: monthKey },
+    attributes: ['normalizedExpenseCategory', 'amount'],
+    raw: true,
+    transaction
+  });
+  const set = new Set(COGS_PROXY_CATEGORIES);
+  let sum = 0;
+  for (const r of rows) {
+    const cat = (r.normalizedExpenseCategory || r.normalized_expense_category || '')
+      .toString()
+      .trim()
+      .toLowerCase();
+    if (cat && set.has(cat)) sum += Number(r.amount || 0);
+  }
+  const value = Number.isFinite(sum) && sum > 0 ? sum : null;
+  return value;
+};
+
 const { normalizeMonth, listMonthKeysBetween, getMonthKeyOffset } = require('../utils/monthKeyUtils');
 const addMonths = getMonthKeyOffset;
 
@@ -589,11 +625,28 @@ const computeCfoMetrics = async (companyId, transaction) => {
   const cashPressure = creditorsBalance > cashBalance;
   await upsertMetric(companyId, 'creditors_cash_pressure', cashPressure ? 1 : 0, 'live', transaction, { month: latestClosedKey });
 
-  const workingCapital = cashBalance + debtorsBalance - creditorsBalance;
+  let inventoryBalance = 0;
+  if (latestClosedKey) {
+    const summaryForWc = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: latestClosedKey },
+      attributes: ['inventoryTotal'],
+      raw: true,
+      transaction
+    });
+    inventoryBalance = Number(summaryForWc?.inventoryTotal ?? summaryForWc?.inventory_total ?? 0);
+  }
+  const workingCapital = cashBalance + debtorsBalance + inventoryBalance - creditorsBalance;
   await upsertMetric(companyId, 'working_capital', workingCapital, 'live', transaction, { month: latestClosedKey });
+  const netWorkingCapital = debtorsBalance + inventoryBalance - creditorsBalance;
+  await upsertMetric(companyId, 'net_working_capital', netWorkingCapital, 'live', transaction, { month: latestClosedKey });
 
   const lastClosedKey = latestClosedKey;
   if (lastClosedKey) {
+    const latestSummaryForMetrics = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: lastClosedKey },
+      raw: true,
+      transaction
+    });
     const lastClosedDebtors = await MonthlyDebtor.findOne({
       where: { companyId, month: lastClosedKey },
       attributes: [[Sequelize.fn('SUM', Sequelize.col('closing_balance')), 'total']],
@@ -609,12 +662,42 @@ const computeCfoMetrics = async (companyId, transaction) => {
     const lastClosedDebtorTotal = Number(lastClosedDebtors?.total || 0);
     const lastClosedCreditorTotal = Number(lastClosedCreditors?.total || 0);
 
-    const debtorDays = recentRevenueAvg > 0 ? (lastClosedDebtorTotal / recentRevenueAvg) * 30 : null;
-    const creditorDays = recentExpenseAvg > 0 ? (lastClosedCreditorTotal / recentExpenseAvg) * 30 : null;
-    await upsertMetric(companyId, 'debtor_days', debtorDays, '3m', transaction, { month: latestClosedKey });
-    await upsertMetric(companyId, 'creditor_days', creditorDays, '3m', transaction, { month: latestClosedKey });
-    const cashConversion = debtorDays !== null && creditorDays !== null ? debtorDays - creditorDays : null;
-    await upsertMetric(companyId, 'cash_conversion_cycle', cashConversion, '3m', transaction, { month: latestClosedKey });
+    const revenueDenom = Number.isFinite(recentRevenueAvg) && recentRevenueAvg > 0 ? recentRevenueAvg : null;
+    const debtorDays = revenueDenom != null ? (lastClosedDebtorTotal / revenueDenom) * 30 : null;
+    const safeDebtorDays = debtorDays != null && Number.isFinite(debtorDays) ? debtorDays : null;
+
+    const monthlyCogs = await getCogsProxyFromBreakdown(companyId, lastClosedKey, transaction);
+    const cogsForDpoDio = monthlyCogs != null && monthlyCogs > 0 ? monthlyCogs : null;
+    const creditorDays = cogsForDpoDio != null ? (lastClosedCreditorTotal / cogsForDpoDio) * 30 : null;
+    const safeCreditorDays = creditorDays != null && Number.isFinite(creditorDays) ? creditorDays : null;
+
+    await upsertMetric(companyId, 'debtor_days', safeDebtorDays, '3m', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'creditor_days', safeCreditorDays, '3m', transaction, { month: latestClosedKey });
+
+    const lastClosedInventory = Number(latestSummaryForMetrics?.inventoryTotal ?? latestSummaryForMetrics?.inventory_total ?? 0);
+    const prevSummaryForInv = await MonthlyTrialBalanceSummary.findOne({
+      where: { companyId, month: prevClosedKey },
+      attributes: ['inventoryTotal'],
+      raw: true,
+      transaction
+    });
+    const prevClosedInventory = Number(prevSummaryForInv?.inventoryTotal ?? prevSummaryForInv?.inventory_total ?? 0);
+    await upsertMetric(companyId, 'inventory_total', lastClosedInventory, '3m', transaction, { month: latestClosedKey });
+    const inventoryDelta = prevSummaryForInv != null ? lastClosedInventory - prevClosedInventory : null;
+    await upsertMetric(companyId, 'inventory_delta', inventoryDelta, 'mom', transaction, { month: latestClosedKey });
+    const averageInventory = (lastClosedInventory + prevClosedInventory) / 2;
+    const inventoryDays = cogsForDpoDio != null ? (averageInventory / cogsForDpoDio) * 30 : null;
+    const safeInventoryDays = inventoryDays != null && Number.isFinite(inventoryDays) ? inventoryDays : null;
+    await upsertMetric(companyId, 'inventory_days', safeInventoryDays, '3m', transaction, { month: latestClosedKey });
+
+    const { ccc: cccFn, cashGapExInventory: cashGapFn } = require('../utils/daysMetrics');
+    const safeCcc = cccFn(safeDebtorDays, safeCreditorDays, safeInventoryDays);
+    const cashGapExInv =
+      safeCcc == null && safeInventoryDays == null
+        ? cashGapFn(safeDebtorDays, safeCreditorDays)
+        : null;
+    await upsertMetric(companyId, 'cash_conversion_cycle', safeCcc, '3m', transaction, { month: latestClosedKey });
+    await upsertMetric(companyId, 'cash_gap_ex_inventory', cashGapExInv, '3m', transaction, { month: latestClosedKey });
 
     const prevClosedKey = addMonths(latestClosedKey, -1);
     const prevDebtors = await MonthlyDebtor.findOne({
@@ -830,7 +913,8 @@ const buildSnapshotForMonth = async (companyId, monthKey, transaction) => {
     totalRevenue: revenue,
     totalExpenses: expenses,
     netProfit,
-    netCashflow: netProfit
+    netCashflow: netProfit,
+    inventoryTotal: 0
   }, { transaction });
 
   await MonthlyRevenueBreakdown.destroy({ where: { companyId, month: monthKey }, transaction });
@@ -1021,7 +1105,7 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
       metadata: { reason: validation.error, monthKey }
     });
     console.warn('COA payload invalid:', validation.error);
-    return { written: 0, counts: { debtors: 0, creditors: 0, cash_bank: 0 } };
+    return { written: 0, counts: { debtors: 0, creditors: 0, cash_bank: 0, inventory: 0 } };
   }
 
   const { chartOfAccounts, asOfDate } = validation;
@@ -1049,11 +1133,11 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
     }
   }
   let written = 0;
-  const writtenCounts = { debtors: 0, creditors: 0, cash_bank: 0 };
+  const writtenCounts = { debtors: 0, creditors: 0, cash_bank: 0, inventory: 0 };
 
   for (const row of classifications) {
     if (!row.ledgerGuid) continue;
-    if (!['debtors', 'creditors', 'cash_bank'].includes(row.category)) continue;
+    if (!['debtors', 'creditors', 'cash_bank', 'inventory'].includes(row.category)) continue;
 
     await LedgerMonthlyBalance.upsert({
       companyId,
@@ -1078,7 +1162,8 @@ const writeLedgerMonthlyBalances = async (companyId, monthKey, payload, transact
     expenseLedgers: counts.expenses,
     debtorLedgers: counts.debtors,
     creditorLedgers: counts.creditors,
-    cashBankLedgers: counts.cash_bank
+    cashBankLedgers: counts.cash_bank,
+    inventoryLedgers: counts.inventory
   }, 'CFO mapping completed');
 
   console.info({
@@ -1140,7 +1225,8 @@ const recomputeSnapshots = async (companyId, amendedMonthKey = null, sourceLastS
             totalExpenses: expenseTotal,
             netProfit: revenueTotal - expenseTotal,
             netCashflow: revenueTotal - expenseTotal,
-            cashAndBankBalance: Number(writeResult.totals.cash_bank || 0)
+            cashAndBankBalance: Number(writeResult.totals.cash_bank || 0),
+            inventoryTotal: Number(writeResult.totals.inventory || 0)
           }, {
             where: { companyId, month: monthKey },
             transaction

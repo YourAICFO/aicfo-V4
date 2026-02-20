@@ -1,3 +1,9 @@
+/**
+ * Tally implementation of the Accounting Source Adapter.
+ * Implements normalizeChartOfAccounts (via normalizeCoaPayload) and embeds
+ * normalizeMonthlyBalances in the same output (chartOfAccounts.balances).
+ * See docs/SOURCE_ADAPTER_ARCHITECTURE.md and backend/src/contracts/AccountingSourceAdapter.js.
+ */
 const crypto = require('crypto');
 const { normalizeMonth, getCurrentMonthKey } = require('../utils/monthKeyUtils');
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, AlertCircle, Wallet, RefreshCw, Info, FileText, Users, CreditCard } from 'lucide-react';
+import { AlertTriangle, CheckCircle, AlertCircle, Wallet, RefreshCw, Info, FileText, Users, CreditCard, MoreVertical } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -51,6 +51,8 @@ const ModernDashboard: React.FC = () => {
   const [connectorStatus, setConnectorStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [alerts, setAlerts] = useState<FinanceAlert[]>([]);
+  const [alertMenuOpen, setAlertMenuOpen] = useState<string | null>(null);
+  const [alertActionLoading, setAlertActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -150,6 +152,22 @@ const ModernDashboard: React.FC = () => {
         return <AlertTriangle className="w-5 h-5" />;
       default:
         return null;
+    }
+  };
+
+  const handleAlertAction = async (ruleKey: string, action: 'snooze7' | 'snooze30' | 'dismiss') => {
+    setAlertMenuOpen(null);
+    setAlertActionLoading(ruleKey);
+    try {
+      let res;
+      if (action === 'snooze7') res = await financeApi.snoozeAlert(ruleKey, 7);
+      else if (action === 'snooze30') res = await financeApi.snoozeAlert(ruleKey, 30);
+      else res = await financeApi.dismissAlert(ruleKey);
+      if (res?.data?.data) setAlerts(res.data.data);
+    } catch (e) {
+      console.error('Alert action failed:', e);
+    } finally {
+      setAlertActionLoading(null);
     }
   };
 
@@ -414,15 +432,36 @@ const ModernDashboard: React.FC = () => {
               ) : (
                 <ul className="space-y-2">
                   {alerts.map((alert) => (
-                    <li key={alert.id}>
+                    <li key={alert.id} className="relative flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => navigate(alert.link)}
-                        className={`w-full text-left border-l-4 rounded-r px-3 py-2 ${getAlertSeverityStyle(alert.severity)} hover:opacity-90 transition-opacity`}
+                        className={`flex-1 text-left border-l-4 rounded-r px-3 py-2 ${getAlertSeverityStyle(alert.severity)} hover:opacity-90 transition-opacity`}
                       >
                         <span className="font-medium text-gray-900 dark:text-gray-100">{alert.title}</span>
                         <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">{alert.message}</span>
                       </button>
+                      <div className="flex-shrink-0">
+                        <button
+                          type="button"
+                          aria-label="Alert actions"
+                          onClick={(e) => { e.stopPropagation(); setAlertMenuOpen(alertMenuOpen === alert.id ? null : alert.id); }}
+                          disabled={!!alertActionLoading}
+                          className="p-1.5 rounded text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                        {alertMenuOpen === alert.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" aria-hidden onClick={() => setAlertMenuOpen(null)} />
+                            <div className="absolute right-0 top-full mt-1 z-20 py-1 w-36 rounded-md bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700">
+                              <button type="button" className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700" onClick={(e) => { e.stopPropagation(); handleAlertAction(alert.ruleKey, 'snooze7'); }}>Snooze 7d</button>
+                              <button type="button" className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700" onClick={(e) => { e.stopPropagation(); handleAlertAction(alert.ruleKey, 'snooze30'); }}>Snooze 30d</button>
+                              <button type="button" className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700" onClick={(e) => { e.stopPropagation(); handleAlertAction(alert.ruleKey, 'dismiss'); }}>Dismiss</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

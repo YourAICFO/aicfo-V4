@@ -11,6 +11,7 @@ const groups = [
   { name: 'Indirect Expenses', parentName: 'Expenses' },
   { name: 'Sundry Debtors', parentName: 'Current Assets' },
   { name: 'Bank Accounts', parentName: 'Current Assets' },
+  { name: 'Stock-in-Hand', parentName: 'Current Assets' },
   { name: 'Deposits', parentName: 'Current Assets' }
 ];
 
@@ -41,6 +42,11 @@ test('Ledger under Sundry Debtors maps to debtors', () => {
 test('Ledger under Bank Accounts maps to cash_bank', () => {
   const cat = classifyLedger(ledger('HDFC Current', 'Bank Accounts'), groupIndex);
   assert.equal(cat, 'cash_bank');
+});
+
+test('Ledger under Stock-in-Hand maps to inventory', () => {
+  const cat = classifyLedger(ledger('Raw materials', 'Stock-in-Hand'), groupIndex);
+  assert.equal(cat, 'inventory');
 });
 
 test('Group node is ignored', () => {

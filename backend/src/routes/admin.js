@@ -8,6 +8,7 @@ const { enqueueJob } = require('../worker/queue');
 const { logger, logError } = require('../utils/logger');
 const { backfillCompany, getBackfillStatus } = require('../services/adminBackfillService');
 const { getCoverage, createRule } = require('../services/sourceNormalizationService');
+const { runChecks } = require('../services/dataConsistencyService');
 
 const requireAdminApiKey = (req, res, next) => {
   const expected = process.env.ADMIN_API_KEY;
@@ -133,6 +134,30 @@ router.post('/mapping/rule', requireAdminApiKey, async (req, res) => {
     logger.error({ event: 'admin_mapping_rule_create_failed', error: error.message }, 'Admin mapping rule create failed');
     await logError({ event: 'admin_mapping_rule_create_failed', service: 'ai-cfo-api', run_id: req.run_id || null }, 'Admin mapping rule create failed', error);
     return res.status(500).json({ success: false, error: 'Mapping rule creation failed' });
+  }
+});
+
+// GET /api/admin/data-consistency?companyId=...&month=YYYY-MM&amountTol=1&pctTol=0.01
+router.get('/data-consistency', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const companyId = req.query?.companyId;
+    const month = req.query?.month;
+    const amountTol = req.query?.amountTol != null ? Number(req.query.amountTol) : undefined;
+    const pctTol = req.query?.pctTol != null ? Number(req.query.pctTol) : undefined;
+    if (!companyId || !month) {
+      return res.status(400).json({ success: false, error: 'companyId and month (YYYY-MM) are required' });
+    }
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ success: false, error: 'month must be YYYY-MM' });
+    }
+    const tolerance = {};
+    if (amountTol !== undefined && Number.isFinite(amountTol)) tolerance.amount = amountTol;
+    if (pctTol !== undefined && Number.isFinite(pctTol)) tolerance.pct = pctTol;
+    const result = await runChecks(companyId, month, tolerance);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error({ event: 'data_consistency_failed', error: error.message }, 'Data consistency check failed');
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

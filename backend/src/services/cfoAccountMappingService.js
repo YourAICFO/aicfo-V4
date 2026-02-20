@@ -25,6 +25,10 @@ const GROUP_MAP = {
   cash_bank: [
     'Cash-in-Hand',
     'Bank Accounts'
+  ],
+  inventory: [
+    'Stock-in-Hand',
+    'Inventory'
   ]
 };
 
@@ -99,6 +103,9 @@ const classifyLedger = (ledger, groupIndex) => {
       if (category === 'cash_bank') {
         return 'cash_bank';
       }
+      if (category === 'inventory') {
+        return 'inventory';
+      }
       return category;
     }
   }
@@ -113,7 +120,8 @@ const mapLedgersToCFOTotals = (ledgers = [], groups = []) => {
     expenses: 0,
     debtors: 0,
     creditors: 0,
-    cash_bank: 0
+    cash_bank: 0,
+    inventory: 0
   };
   const counts = {
     revenue: 0,
@@ -121,6 +129,7 @@ const mapLedgersToCFOTotals = (ledgers = [], groups = []) => {
     debtors: 0,
     creditors: 0,
     cash_bank: 0,
+    inventory: 0,
     ignored: 0
   };
   const classifications = [];

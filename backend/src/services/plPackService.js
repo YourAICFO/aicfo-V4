@@ -3,14 +3,86 @@ const {
   MonthlyTrialBalanceSummary,
   MonthlyRevenueBreakdown,
   MonthlyExpenseBreakdown,
-  PLRemarks
+  PLRemarks,
+  CFOMetric
 } = require('../models');
 const { getMonthKeyOffset } = require('../utils/monthKeyUtils');
 const aiService = require('./aiService');
+const runwayService = require('./runwayService');
+const debtorCreditorService = require('./debtorCreditorService');
 
 const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+};
+
+/** Format amount as INR for executive summary text (no symbol if you want ₹ in front). */
+const formatInr = (amount) => {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return '—';
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+};
+
+const MAX_EXEC_SUMMARY_BULLETS = 4;
+
+/**
+ * Deterministic executive summary bullets (max 4). No AI.
+ * @param {object} pack - getPlPackWithDrivers result (variances, drivers, current, previous)
+ * @param {object} runwayResult - runwayService.getRunway result
+ * @param {object} debtorsSummary - debtorCreditorService.getDebtorsSummary result or null
+ * @returns {Array<{ key: string, severity: 'critical'|'high'|'medium'|'low', text: string }>}
+ */
+const buildExecutiveSummary = (pack, runwayResult, debtorsSummary) => {
+  const bullets = [];
+  const add = (key, severity, text) => {
+    if (bullets.length >= MAX_EXEC_SUMMARY_BULLETS || !text) return;
+    bullets.push({ key, severity, text });
+  };
+
+  const netProfitPct = pack.variances?.netProfitPct ?? null;
+  const revenuePct = pack.variances?.revenuePct ?? null;
+  const netProfitDelta = pack.variances?.netProfit ?? 0;
+  const revenueDelta = pack.variances?.revenue ?? 0;
+
+  if (netProfitPct != null && netProfitPct <= -20) {
+    const topDriver = pack.drivers?.opex?.topPositive?.[0]?.label
+      || pack.drivers?.revenue?.topNegative?.[0]?.label
+      || 'expenses';
+    add(
+      'net_profit_drop',
+      'high',
+      `Net profit decreased ${formatInr(Math.abs(netProfitDelta))} (${Math.round(Math.abs(netProfitPct))}%) vs last month, mainly driven by ${topDriver}.`
+    );
+  }
+
+  if (revenuePct != null && revenuePct >= 10) {
+    const topDriver = pack.drivers?.revenue?.topPositive?.[0]?.label || 'revenue';
+    add(
+      'revenue_increase',
+      'low',
+      `Revenue increased ${formatInr(revenueDelta)} (${Math.round(revenuePct)}%) vs last month, led by ${topDriver}.`
+    );
+  }
+
+  const runwayMonths = runwayResult?.runwayMonths;
+  if (typeof runwayMonths === 'number' && runwayMonths < 4 && runwayMonths >= 0) {
+    add(
+      'runway_low',
+      'critical',
+      `Cash runway is ${runwayMonths} months based on last 6 months average burn.`
+    );
+  }
+
+  const debtorsPct = debtorsSummary?.changeVsPrevClosed?.pct;
+  if (debtorsPct != null && debtorsPct > 25) {
+    add(
+      'debtors_risk',
+      'medium',
+      'Debtors aging risk increased compared to last month.'
+    );
+  }
+
+  return bullets;
 };
 
 /** Previous month key from YYYY-MM */
@@ -193,20 +265,54 @@ const getPlPackWithDrivers = async (companyId, monthKey) => {
   const ytdVarianceGrossProfit = ytdGrossProfit - ytdLastFyGrossProfit;
   const ytdVarianceNetProfit = ytdNetProfit - ytdLastFyNetProfit;
 
-  return {
+  const currInv = toNum(currSummary?.inventoryTotal ?? currSummary?.inventory_total);
+  const prevInv = toNum(prevSummary?.inventoryTotal ?? prevSummary?.inventory_total);
+  const inventoryDelta = prev != null ? currInv - prevInv : null;
+
+  const [invDaysRow, cccRow, cashGapRow] = await Promise.all([
+    CFOMetric.findOne({
+      where: { companyId, metricKey: 'inventory_days', timeScope: '3m', month: monthKey },
+      attributes: ['metric_value'],
+      raw: true
+    }),
+    CFOMetric.findOne({
+      where: { companyId, metricKey: 'cash_conversion_cycle', timeScope: '3m', month: monthKey },
+      attributes: ['metric_value'],
+      raw: true
+    }),
+    CFOMetric.findOne({
+      where: { companyId, metricKey: 'cash_gap_ex_inventory', timeScope: '3m', month: monthKey },
+      attributes: ['metric_value'],
+      raw: true
+    })
+  ]);
+  const inventoryDays = invDaysRow != null ? toNum(invDaysRow.metric_value) : null;
+  const cashConversionCycle = cccRow != null ? toNum(cccRow.metric_value) : null;
+  const cashGapExInventory = cashGapRow != null ? toNum(cashGapRow.metric_value) : null;
+
+  const result = {
     month: monthKey,
     previousMonth: prev || null,
     current: {
       totalRevenue: currRev,
       totalExpenses: currExp,
       grossProfit: grossProfitCurr,
-      netProfit: currNet
+      netProfit: currNet,
+      inventoryTotal: currInv
     },
     previous: {
       totalRevenue: prevRev,
       totalExpenses: prevExp,
       grossProfit: grossProfitPrev,
-      netProfit: prevNet
+      netProfit: prevNet,
+      inventoryTotal: prevInv
+    },
+    workingCapital: {
+      inventoryTotal: currInv,
+      inventoryDelta,
+      inventoryDays,
+      cashConversionCycle,
+      cashGapExInventory
     },
     variances: {
       revenue: revenueDelta,
@@ -244,6 +350,13 @@ const getPlPackWithDrivers = async (companyId, monthKey) => {
     },
     drivers
   };
+
+  const [runwayResult, debtorsSummary] = await Promise.all([
+    runwayService.getRunway(companyId).catch(() => null),
+    debtorCreditorService.getDebtorsSummary(companyId).catch(() => null)
+  ]);
+  result.executiveSummary = buildExecutiveSummary(result, runwayResult, debtorsSummary);
+  return result;
 };
 
 /** GET available months for P&L (company has snapshot data). Returns { months: [YYYY-MM desc], latest }. */
@@ -341,6 +454,7 @@ module.exports = {
   getOrCreateAiExplanation,
   prevMonthKey,
   buildDriverLists,
+  buildExecutiveSummary,
   getFyStartMonthKey,
   getLastFySamePeriod,
   safePctChange

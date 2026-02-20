@@ -25,7 +25,22 @@ Removed from Dashboard: full KPI strip, Revenue/EBITDA/Net Profit cards, Revenue
   - Net profit drop &gt; 30% MoM → **high**, link pl-pack.
   - Revenue drop &gt; 20% MoM → **high**, link pl-pack.
   - Debtors outstanding increased &gt; 25% MoM → **medium**, link working-capital (collections risk proxy; when >90 days ageing exists, rule can be refined).
-- **Response:** Up to 5 alerts, sorted by severity (critical → high → medium). Each: `id`, `ruleKey`, `severity`, `title`, `message`, `link`.
+- **Response:** Up to 5 alerts, sorted by severity (critical → high → medium). Each: `id`, `ruleKey`, `severity`, `title`, `message`, `link`, `isSnoozed`, `snoozedUntil`, `isDismissed`.
+
+## Alert fatigue controls
+
+To avoid repeated alerts annoying users while keeping critical warnings:
+
+- **Persistence:** Table `alert_states` (per company, per `rule_key`): `snoozed_until`, `dismissed_at`, `last_condition_hash`, `updated_at`.
+- **Condition hash:** Each alert has a stable `conditionHash` (e.g. `ruleKey|month|bucket`). When the condition changes materially (e.g. new month or different severity bucket), the same rule can produce a new hash and the alert can re-appear after being dismissed.
+- **Filtering:** `getAlerts` loads states and:
+  - Filters out alerts that are **snoozed** (`snoozed_until` &gt; now).
+  - Filters out alerts that are **dismissed** and whose `conditionHash` equals the stored `last_condition_hash` (same occurrence). If the hash changes, the alert is shown again.
+- **Endpoints (tenant-isolated via `req.companyId`):**
+  - `POST /api/finance/alerts/snooze` — body: `{ ruleKey, days: 7|30 }`. Snooze until now + days; clears dismissal.
+  - `POST /api/finance/alerts/dismiss` — body: `{ ruleKey }`. Sets `dismissed_at` and `last_condition_hash` to current condition so this occurrence stays hidden until condition changes.
+  - `POST /api/finance/alerts/clear` — body: `{ ruleKey }`. Clears snooze and dismissal for that rule.
+- **Frontend:** Each alert row has a kebab menu (⋮) with **Snooze 7d**, **Snooze 30d**, **Dismiss**. After action, alerts are refetched and the list updates. Existing `/api/finance/alerts` consumers still receive the same shape (max 5 items; state fields added).
 
 ## Data sources
 
@@ -40,6 +55,9 @@ Removed from Dashboard: full KPI strip, Revenue/EBITDA/Net Profit cards, Revenue
 - [ ] **Five cards:** Cash & Bank, Runway, Collections Risk, Payables Pressure, Profit Signal visible when data is ready.
 - [ ] **No P&L KPI duplication:** No Revenue/EBITDA/Net Profit cards or Revenue vs Expense chart on Dashboard.
 - [ ] **Alerts:** Alerts section shows “No alerts” or a compact list; each alert has severity color (critical=red, high=amber, medium=blue); click navigates to `link` (pl-pack or working-capital or dashboard).
-- [ ] **GET /api/finance/alerts:** Returns `{ success: true, data: Array }` with up to 5 items; each has `severity`, `title`, `message`, `link`.
+- [ ] **GET /api/finance/alerts:** Returns `{ success: true, data: Array }` with up to 5 items; each has `severity`, `title`, `message`, `link`, `isSnoozed`, `snoozedUntil`, `isDismissed`.
 - [ ] **Quick Actions:** P&L Pack, Cashflow, Working Capital buttons present and navigate correctly.
 - [ ] **Collections Risk / Payables / Profit Signal:** “Working capital →” and “P&L Pack →” links work.
+- [ ] **Alert fatigue — snooze:** Snoozed alerts disappear from the list until snooze period ends (7d or 30d). Each alert row has a kebab menu with Snooze 7d, Snooze 30d, Dismiss; after Snooze, list refetches and that alert is no longer shown.
+- [ ] **Alert fatigue — dismiss:** Dismissed alerts disappear; the same alert (same condition hash) stays hidden. If the condition changes materially (e.g. new month or different value bucket), the alert can re-appear.
+- [ ] **Alert fatigue — critical still shown:** Critical alerts (e.g. runway &lt; 4 months) still appear when not snoozed or dismissed; after snooze/dismiss they are filtered like others.
