@@ -222,7 +222,6 @@ internal sealed class ConnectorControlPanel : Form
     private const int MaxRecentActions = 20;
 
     private ConnectorConfig _config = new();
-    private string? _onboardingJwt;
     private string? _deviceAuthToken;
     private readonly List<ConnectorDeviceLink> _deviceLinks = [];
     private readonly System.Windows.Forms.Timer _statusPollTimer = new() { Interval = 15000 };
@@ -647,7 +646,6 @@ internal sealed class ConnectorControlPanel : Form
                 return;
             }
 
-            _onboardingJwt = null;
             _deviceAuthToken = login.DeviceToken;
             if (_rememberMe.Checked)
             {
@@ -665,7 +663,6 @@ internal sealed class ConnectorControlPanel : Form
         }
         catch (ApiRequestException ex)
         {
-            _onboardingJwt = null;
             _deviceAuthToken = null;
             _webCompanyCombo.Enabled = false;
             _webCompanyCombo.Items.Clear();
@@ -686,7 +683,6 @@ internal sealed class ConnectorControlPanel : Form
         }
         catch (Exception ex)
         {
-            _onboardingJwt = null;
             _deviceAuthToken = null;
             _webCompanyCombo.Enabled = false;
             _webCompanyCombo.Items.Clear();
@@ -915,7 +911,8 @@ internal sealed class ConnectorControlPanel : Form
             _tallyCompanyCombo.Items.Clear();
             foreach (var name in tallyChoices)
             {
-                _tallyCompanyCombo.Items.Add(name);
+                if (!string.IsNullOrEmpty(name))
+                    _tallyCompanyCombo.Items.Add(name);
             }
             if (_tallyCompanyCombo.Items.Count > 0)
             {
@@ -1138,7 +1135,6 @@ internal sealed class ConnectorControlPanel : Form
     private async Task ReRegisterSelectedMappingAsync()
     {
         _deviceAuthToken = null;
-        _onboardingJwt = null;
         _credentialStore.DeleteDeviceAuthToken();
         _webCompanyCombo.Items.Clear();
         _webCompanyCombo.Enabled = false;
@@ -1323,7 +1319,6 @@ internal sealed class ConnectorControlPanel : Form
 
             if (sessionExpired)
             {
-                _onboardingJwt = null;
                 _webCompanyCombo.Enabled = false;
                 _webCompanyCombo.Items.Clear();
                 _statusHint.Text = "Session expired - login again.";
@@ -1652,20 +1647,23 @@ internal sealed class MappingComboItem(ConnectorMapping mapping)
     public ConnectorMapping Mapping { get; } = mapping;
     public override string ToString()
     {
-        var auth = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
+        var m = Mapping;
+        var auth = string.Equals(m.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
             ? "device token"
             : "legacy";
-        var web = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "Web Company" : mapping.WebCompanyName;
-        return $"{web} ↔ {mapping.TallyCompanyName} ({auth})";
+        var web = string.IsNullOrWhiteSpace(m.WebCompanyName) ? "Web Company" : m.WebCompanyName;
+        return $"{web} ↔ {m.TallyCompanyName} ({auth})";
     }
 }
 
 internal sealed class WebCompanyComboItem(WebCompany company)
 {
     public WebCompany Company { get; } = company;
-    public override string ToString() => string.IsNullOrWhiteSpace(company.Currency)
-        ? company.Name
-        : $"{company.Name} ({company.Currency})";
+    public override string ToString()
+    {
+        var c = Company;
+        return string.IsNullOrWhiteSpace(c.Currency) ? c.Name : $"{c.Name} ({c.Currency})";
+    }
 }
 
 internal sealed class MappingStatusSnapshot
