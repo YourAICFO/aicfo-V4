@@ -130,10 +130,10 @@ jobs:
           "msi_path=$($f.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "msi_sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Upload MSI artifact (single file: AICFOConnectorSetup.msi)
+      - name: Upload MSI artifact (single file AICFOConnectorSetup.msi)
         uses: actions/upload-artifact@v4
         with:
-          name: AICFOConnectorSetup.msi
+          name: "AICFOConnectorSetup.msi"
           path: "connector-dotnet/out/AICFOConnectorSetup.msi"
           if-no-files-found: error
 
@@ -148,7 +148,7 @@ jobs:
       - name: Upload ZIP artifact (AICFOConnectorSetup.zip)
         uses: actions/upload-artifact@v4
         with:
-          name: AICFOConnectorSetup.zip
+          name: "AICFOConnectorSetup.zip"
           path: "connector-dotnet/out/AICFOConnectorSetup.zip"
           if-no-files-found: error
 
@@ -160,7 +160,7 @@ jobs:
       - name: Download MSI artifact
         uses: actions/download-artifact@v4
         with:
-          name: AICFOConnectorSetup.msi
+          name: "AICFOConnectorSetup.msi"
           path: release-asset
 
       - name: Ensure release asset has exact filename AICFOConnectorSetup.msi
