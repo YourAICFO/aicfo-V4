@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Wallet, RotateCcw, Landmark, PercentCircle, Package } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -35,6 +36,7 @@ const formatNumber = (value: number | null, suffix = '') => {
 };
 
 export default function WorkingCapital() {
+  const navigate = useNavigate();
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const [data, setData] = useState<WorkingCapitalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,9 +81,19 @@ export default function WorkingCapital() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Working Capital & Loans</h1>
-        <p className="text-gray-600">Latest snapshot from stored financial metrics</p>
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Working Capital & Loans</h1>
+          <p className="text-gray-600">NWC, CCC, DSO/DPO/DIO, liquidity, loans. Latest snapshot from stored metrics.</p>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-gray-500">
+          <button type="button" onClick={() => navigate('/pl-pack')} className="text-primary-600 hover:text-primary-700 font-medium">
+            P&L Pack →
+          </button>
+          <button type="button" onClick={() => navigate('/cashflow')} className="text-primary-600 hover:text-primary-700 font-medium">
+            Cashflow →
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

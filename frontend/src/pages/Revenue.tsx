@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, BadgeDollarSign, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target } from 'lucide-react';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -17,6 +18,7 @@ interface RevenueData {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function Revenue() {
+  const navigate = useNavigate();
   const [data, setData] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
@@ -67,25 +69,20 @@ export default function Revenue() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Revenue Dashboard</h1>
-          <p className="text-gray-600">Track your revenue trends and sources</p>
+          <h1 className="text-2xl font-bold text-gray-900">Revenue</h1>
+          <p className="text-gray-600">Revenue breakdown and category trend. For monthly totals and P&L see Review.</p>
         </div>
-        <div className="text-sm text-gray-500">Latest closed month</div>
+        <button
+          type="button"
+          onClick={() => navigate('/pl-pack')}
+          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+        >
+          See full monthly performance →
+        </button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-blue-100">
-              <BadgeDollarSign className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Latest Closed Month Revenue</p>
-              <p className="text-2xl font-bold">{formatCurrency(data?.summary.totalRevenue || 0)}</p>
-            </div>
-          </div>
-        </div>
+      {/* Summary: growth + top category only (no month total hero — owned by P&L Pack) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className={`card border-transparent bg-gradient-to-br ${growthRate >= 0 ? 'from-white to-emerald-50' : 'from-white to-rose-50'}`}>
           <div className="flex items-center gap-3">
             <div className={`p-3 rounded-lg ${growthRate >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
@@ -124,7 +121,7 @@ export default function Revenue() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Trailing 3 Closed Months</h2>
+          <h2 className="text-lg font-semibold mb-4">Revenue breakdown — Trailing 3 Closed Months</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyTrend || []}>

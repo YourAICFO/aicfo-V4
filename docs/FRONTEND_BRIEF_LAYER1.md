@@ -189,3 +189,16 @@
 10. **Revenue/Expenses screens** show trends, breakdowns, and categories only; they do not re-display the monthly P&L totals as the main KPI.
 11. **Variance presentation** is consistent: amount (₹) then percentage; null/undefined percentage is shown as “—”.
 12. **One primary home per metric:** Before adding a KPI to a new screen, confirm its primary home in the Metric Ownership Map and add only as “secondary mention” with link if allowed.
+
+
+---
+
+## Block 2 changes (Metric Ownership Final Audit)
+
+- **Revenue page:** No "Latest Closed Month Revenue" hero; page is drilldown only (revenue breakdown, category trend, growth). Link: "See full monthly performance →" to `/pl-pack`.
+- **Expenses page:** No "Latest Closed Month Expenses" hero; drilldown only (expense breakdown, category trend, avg spend). Link to P&L Pack.
+- **Dashboard:** Command Center only — Cash & Bank, Runway, Collections Risk, Payables Pressure, Profit Signal (one-line + link to P&L Pack), Alerts, Quick Actions, Data Ready badge. No P&L KPI strip.
+- **Cashflow:** No runway; inflow/outflow visualizations only. Runway stays on Dashboard only.
+- **Working Capital:** Owns NWC, CCC, DSO/DPO/DIO, liquidity, loans. Contextual links added: P&L Pack (performance), Cashflow (flows).
+- **Month semantics:** Non–P&L screens use backend "latest closed" / "trailing 3 closed months"; P&L Pack remains the only month-switchable screen. Backend endpoints use getLatestClosedMonthKey consistently.
+- **Audit doc:** docs/LAYER1_METRIC_OWNERSHIP_AUDIT.md. Smoke checklist: docs/LAYER1_CLOSURE_BLOCK2.md.
