@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <!-- UpgradeCode must remain stable across versions for MajorUpgrade to work. Do not change. -->
-  <!-- InstallScope="perMachine": requires admin elevation and installs to Program Files + installs Windows Service. -->
+  <!-- Scope="perMachine": requires admin elevation and installs to Program Files + installs Windows Service. (WiX 4 uses Scope, not InstallScope.) -->
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
            Version="1.0.0"
            UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf"
            Language="1033"
-           InstallScope="perMachine">
+           Scope="perMachine">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
