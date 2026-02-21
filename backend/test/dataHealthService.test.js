@@ -6,16 +6,43 @@ const {
   getDataHealth
 } = require('../src/services/dataHealthService');
 
-test('getImpactMessages returns CCC message when COGS not mapped', () => {
+test('getImpactMessages returns array of objects with key, message, severity, owner', () => {
   const health = {
     cogsMappingStatus: { isAvailable: false },
     inventoryMappingStatus: {},
     debtorsMappingStatus: {},
-    creditorsMappingStatus: {}
+    creditorsMappingStatus: {},
+    lastSync: { last_sync_status: 'success' },
+    classifiedPct: 90
   };
   const messages = getImpactMessages(health);
   assert.ok(Array.isArray(messages));
-  assert.ok(messages.some((m) => m.includes('CCC') && m.includes('COGS')));
+  assert.ok(messages.length > 0);
+  for (const m of messages) {
+    assert.ok(typeof m === 'object');
+    assert.ok('key' in m && typeof m.key === 'string');
+    assert.ok('message' in m && typeof m.message === 'string');
+    assert.ok('severity' in m && ['critical', 'high', 'medium', 'low'].includes(m.severity));
+    assert.ok('owner' in m && ['user', 'system'].includes(m.owner));
+  }
+});
+
+test('getImpactMessages returns CCC message when COGS not mapped (severity medium)', () => {
+  const health = {
+    cogsMappingStatus: { isAvailable: false },
+    inventoryMappingStatus: {},
+    debtorsMappingStatus: {},
+    creditorsMappingStatus: {},
+    lastSync: { last_sync_status: 'success' },
+    classifiedPct: 90
+  };
+  const messages = getImpactMessages(health);
+  assert.ok(Array.isArray(messages));
+  const cogsMsg = messages.find((m) => m.key === 'cogs_unavailable' || (m.message && m.message.includes('CCC') && m.message.includes('COGS')));
+  assert.ok(cogsMsg, 'expected COGS/CCC impact message');
+  assert.strictEqual(cogsMsg.severity, 'medium');
+  assert.strictEqual(cogsMsg.owner, 'user');
+  assert.ok(cogsMsg.link === '/working-capital');
 });
 
 test('getImpactMessages returns no CCC message when COGS mapped', () => {
@@ -23,21 +50,62 @@ test('getImpactMessages returns no CCC message when COGS mapped', () => {
     cogsMappingStatus: { isAvailable: true },
     inventoryMappingStatus: {},
     debtorsMappingStatus: {},
-    creditorsMappingStatus: {}
+    creditorsMappingStatus: {},
+    lastSync: {},
+    classifiedPct: 90
   };
   const messages = getImpactMessages(health);
-  assert.ok(!messages.some((m) => m.includes('CCC') && m.includes('COGS')));
+  assert.ok(!messages.some((m) => m.message && m.message.includes('CCC') && m.message.includes('COGS')));
 });
 
-test('getImpactMessages returns inventory warning when present', () => {
+test('getImpactMessages classifiedPct < 80 has severity high', () => {
+  const health = {
+    cogsMappingStatus: { isAvailable: true },
+    inventoryMappingStatus: {},
+    debtorsMappingStatus: {},
+    creditorsMappingStatus: {},
+    lastSync: { last_sync_status: 'success' },
+    classifiedPct: 75
+  };
+  const messages = getImpactMessages(health);
+  const coverageMsg = messages.find((m) => m.key === 'low_coverage');
+  assert.ok(coverageMsg, 'expected low_coverage message when classifiedPct < 80');
+  assert.strictEqual(coverageMsg.severity, 'high');
+  assert.strictEqual(coverageMsg.owner, 'user');
+  assert.strictEqual(coverageMsg.link, '/data-health');
+});
+
+test('getImpactMessages returns inventory warning when present (severity medium)', () => {
   const health = {
     cogsMappingStatus: { isAvailable: true },
     inventoryMappingStatus: { warning: 'Inventory total is zero but P&L has activity.' },
     debtorsMappingStatus: {},
-    creditorsMappingStatus: {}
+    creditorsMappingStatus: {},
+    lastSync: {},
+    classifiedPct: 90
   };
   const messages = getImpactMessages(health);
-  assert.ok(messages.some((m) => m.includes('Inventory') || m.includes('inventory')));
+  const invMsg = messages.find((m) => m.key === 'inventory_warning' || (m.message && m.message.includes('Inventory')));
+  assert.ok(invMsg);
+  assert.strictEqual(invMsg.severity, 'medium');
+  assert.strictEqual(invMsg.link, '/working-capital');
+});
+
+test('getImpactMessages sync failed has severity critical and link /integrations', () => {
+  const health = {
+    cogsMappingStatus: { isAvailable: true },
+    inventoryMappingStatus: {},
+    debtorsMappingStatus: {},
+    creditorsMappingStatus: {},
+    lastSync: { last_sync_status: 'failed' },
+    classifiedPct: 90
+  };
+  const messages = getImpactMessages(health);
+  const syncMsg = messages.find((m) => m.key === 'sync_failed');
+  assert.ok(syncMsg);
+  assert.strictEqual(syncMsg.severity, 'critical');
+  assert.strictEqual(syncMsg.owner, 'system');
+  assert.strictEqual(syncMsg.link, '/integrations');
 });
 
 test('getImpactMessages returns empty for null health', () => {
@@ -109,6 +177,7 @@ test('getDataHealth returns expected shape (DB)', async (t) => {
     assert.ok(health.lastSync && typeof health.lastSync === 'object');
     assert.ok('availableMonthsCount' in health);
     assert.ok('latestMonth' in health);
+    assert.ok(typeof health.dataReadyForInsights === 'boolean');
   } catch (err) {
     if (isDbUnavailable(err)) {
       t.skip('Database not available');

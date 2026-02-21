@@ -190,6 +190,13 @@ async function getDataHealth(companyId) {
       }
     : { last_sync_at: null, last_sync_status: null, last_sync_error: null };
 
+  const syncFailed = lastSync.last_sync_status === 'failed';
+  const dataReadyForInsights =
+    classifiedPct >= 90 &&
+    latestMonth != null &&
+    !syncFailed &&
+    totalLedgers > 0;
+
   return {
     classifiedPct,
     totalLedgers,
@@ -202,7 +209,8 @@ async function getDataHealth(companyId) {
     creditorsMappingStatus,
     lastSync,
     availableMonthsCount,
-    latestMonth
+    latestMonth,
+    dataReadyForInsights
   };
 }
 
@@ -231,36 +239,76 @@ async function getDataSyncStatus(companyId) {
 }
 
 /**
- * Derive impact messages (e.g. CCC unavailable when COGS not mapped).
- * Pure function for testing.
+ * Impact message shape: { key, message, severity, owner, link? }
+ * Severity: critical | high | medium | low. Owner: user | system.
  * @param {object} health - getDataHealth result
- * @returns {string[]}
+ * @returns {{ key: string, message: string, severity: string, owner: string, link?: string }[]}
  */
 function getImpactMessages(health) {
   const messages = [];
   if (!health) return messages;
-  if (health.cogsMappingStatus && !health.cogsMappingStatus.isAvailable) {
-    messages.push('CCC and DIO/DPO metrics are unavailable because COGS (or equivalent) is not mapped.');
+
+  if (health.lastSync?.last_sync_status === 'failed') {
+    messages.push({
+      key: 'sync_failed',
+      message: 'Last sync failed. Fix the error and re-sync to refresh data.',
+      severity: 'critical',
+      owner: 'system',
+      link: '/integrations'
+    });
   }
-  if (
-    health.inventoryMappingStatus &&
-    health.inventoryMappingStatus.warning
-  ) {
-    messages.push(health.inventoryMappingStatus.warning);
+  if (health.classifiedPct < 80) {
+    messages.push({
+      key: 'low_coverage',
+      message: `Only ${health.classifiedPct}% of ledgers are classified. Map more ledgers to improve coverage and insights.`,
+      severity: 'high',
+      owner: 'user',
+      link: '/data-health'
+    });
+  }
+  if (health.cogsMappingStatus && !health.cogsMappingStatus.isAvailable) {
+    messages.push({
+      key: 'cogs_unavailable',
+      message: 'CCC and DIO/DPO metrics are unavailable because COGS (or equivalent) is not mapped.',
+      severity: 'medium',
+      owner: 'user',
+      link: '/working-capital'
+    });
+  }
+  if (health.inventoryMappingStatus?.warning) {
+    messages.push({
+      key: 'inventory_warning',
+      message: health.inventoryMappingStatus.warning,
+      severity: 'medium',
+      owner: 'user',
+      link: '/working-capital'
+    });
   }
   if (
     health.debtorsMappingStatus &&
     health.debtorsMappingStatus.total !== 0 &&
     !health.debtorsMappingStatus.agingAvailable
   ) {
-    messages.push('Debtors aging (DSO) is not available; ensure debtors ledgers are mapped and data is synced.');
+    messages.push({
+      key: 'aging_debtors_unavailable',
+      message: 'Debtors aging (DSO) is not available; ensure debtors ledgers are mapped and data is synced.',
+      severity: 'low',
+      owner: 'user',
+      link: '/working-capital'
+    });
   }
   if (
     health.creditorsMappingStatus &&
     health.creditorsMappingStatus.total !== 0 &&
     !health.creditorsMappingStatus.agingAvailable
   ) {
-    messages.push('Creditors aging (DPO) is not available; ensure creditors ledgers are mapped and data is synced.');
+    messages.push({
+      key: 'aging_creditors_unavailable',
+      message: 'Creditors aging (DPO) is not available; ensure creditors ledgers are mapped and data is synced.',
+      severity: 'low',
+      owner: 'user',
+      link: '/working-capital'
+    });
   }
   return messages;
 }

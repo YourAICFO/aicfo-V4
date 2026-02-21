@@ -14,6 +14,7 @@ const {
   FinancialTransaction
 } = require('../models');
 const runwayService = require('./runwayService');
+const dataHealthService = require('./dataHealthService');
 
 const normalizeMonth = (value) => {
   if (!value) return null;
@@ -110,6 +111,7 @@ const getCFOOverview = async (companyId) => {
 
     return {
       dataReady: false,
+      dataReadyForInsights: false,
       reason: 'snapshots_missing',
       cashPosition: {
         currentBalance: cashBalance,
@@ -260,8 +262,12 @@ const getCFOOverview = async (companyId) => {
     }
   };
 
+  const dataHealth = await dataHealthService.getDataHealth(companyId);
+  const dataReadyForInsights = dataHealth?.dataReadyForInsights === true;
+
   return {
     dataReady: true,
+    dataReadyForInsights,
     cashPosition: {
       currentBalance: cashForDisplay,
       bankBalance,

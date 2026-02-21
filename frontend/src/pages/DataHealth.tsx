@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { financeApi, DataHealthResponse } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { financeApi, DataHealthResponse, type DataHealthImpactMessage } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Activity, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
+import DataReadyBadge from '../components/common/DataReadyBadge';
 
 function formatMonth(value: string | null): string {
   if (!value) return '—';
@@ -20,6 +22,7 @@ function formatSyncStatus(status: string | null): string {
 }
 
 export default function DataHealth() {
+  const navigate = useNavigate();
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const [data, setData] = useState<DataHealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,10 +73,23 @@ export default function DataHealth() {
   }
 
   const health = data!;
-  const impactMessages = health.impactMessages ?? [];
+  const impactMessages: DataHealthImpactMessage[] = Array.isArray(health.impactMessages)
+    ? health.impactMessages.filter((m): m is DataHealthImpactMessage => m != null && typeof m === 'object' && 'message' in m)
+    : [];
   const suggestedNextSteps = health.suggestedNextSteps ?? [];
   const lastSyncStatus = formatSyncStatus(health.lastSync?.last_sync_status ?? null);
   const syncFailed = lastSyncStatus === 'Failed';
+  const dataReady = health.dataReadyForInsights === true;
+
+  const getImpactBorderClass = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'border-l-red-500 bg-red-50/50 dark:bg-red-900/10';
+      case 'high': return 'border-l-orange-500 bg-orange-50/50 dark:bg-orange-900/10';
+      case 'medium': return 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10';
+      case 'low': return 'border-l-blue-500 bg-blue-50/50 dark:bg-blue-900/10';
+      default: return 'border-l-gray-400 bg-gray-50 dark:bg-gray-800';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -84,16 +100,24 @@ export default function DataHealth() {
         </p>
       </div>
 
-      {/* Top row: Coverage %, Latest month, Last sync */}
+      {/* Top row: Coverage % (+ Data Ready badge), Latest month, Last sync */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Coverage</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Coverage</p>
+            <DataReadyBadge dataReady={dataReady} />
+          </div>
           <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
             {health.classifiedPct}%
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {health.classifiedLedgers} of {health.totalLedgers} ledgers classified
           </p>
+          {!dataReady && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              Resolve highlighted issues to unlock full insights.
+            </p>
+          )}
         </div>
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">Latest month</p>
@@ -166,9 +190,23 @@ export default function DataHealth() {
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-700">
             {impactMessages.map((msg, i) => (
-              <li key={i} className="px-4 py-3 flex items-start gap-2 text-sm">
+              <li
+                key={msg.key || i}
+                className={`px-4 py-3 flex items-start gap-2 text-sm border-l-4 ${getImpactBorderClass(msg.severity)}`}
+              >
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                <span className="text-gray-700 dark:text-gray-300">{msg}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-gray-700 dark:text-gray-300">{msg.message}</span>
+                  {msg.link && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(msg.link!)}
+                      className="ml-2 text-primary-600 dark:text-primary-400 hover:underline text-xs font-medium inline-flex items-center gap-0.5"
+                    >
+                      View →
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

@@ -63,3 +63,14 @@ No raw Tally (or other source) schema is used; all data comes from these normali
 - [ ] When inventory total is zero but P&L has activity, an inventory warning appears in Impact or Suggested next steps.
 - [ ] Suggested next steps show deterministic bullets (e.g. map unclassified ledgers, map COGS, fix sync).
 - [ ] No dependency on raw source schema; all data from normalized tables only.
+
+---
+
+## Layer 1 Closure — Block 1
+
+- [ ] `dataReadyForInsights` appears in API response (`/finance/data-health` and dashboard overview).
+- [ ] Dashboard shows green or amber badge (Data Ready / Data Incomplete) next to “Command Center”.
+- [ ] Data Health shows Data Ready badge in top row (near Coverage %).
+- [ ] Impact messages show severity-based border colors (critical=red, high=orange, medium=amber, low=blue).
+- [ ] Clicking “View →” on an impact message navigates to the correct screen (e.g. /integrations, /data-health, /working-capital).
+- [ ] No raw source schema used; all data from normalized tables only.

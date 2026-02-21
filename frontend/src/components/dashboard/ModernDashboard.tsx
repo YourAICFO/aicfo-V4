@@ -8,6 +8,7 @@ import { formatCurrency } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { useSubscriptionStore } from '../../store/subscriptionStore';
 import DashboardSkeleton from './DashboardSkeleton';
+import DataReadyBadge from '../common/DataReadyBadge';
 
 interface CommandCenterItem {
   amount?: number;
@@ -36,6 +37,7 @@ interface OverviewData {
     unreadCount: number;
     recent: Array<{ id: string; type: string; riskLevel: string; title: string; content: string }>;
   };
+  dataReadyForInsights?: boolean;
 }
 
 const ModernDashboard: React.FC = () => {
@@ -201,8 +203,17 @@ const ModernDashboard: React.FC = () => {
         {/* Header with refresh */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Command Center</h1>
-            <p className="text-gray-600 dark:text-gray-400">Safety and attention at a glance</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Command Center</h1>
+              {data != null && (
+                <DataReadyBadge dataReady={data.dataReadyForInsights === true} />
+              )}
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {data?.dataReadyForInsights === false
+                ? 'Insights may be incomplete due to data gaps.'
+                : 'Safety and attention at a glance'}
+            </p>
           </div>
 
           <div className="flex items-center space-x-3">

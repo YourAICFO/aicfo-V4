@@ -184,6 +184,14 @@ export interface FinanceAlert {
   isDismissed?: boolean;
 }
 
+export interface DataHealthImpactMessage {
+  key: string;
+  message: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  owner: 'user' | 'system';
+  link?: string;
+}
+
 export interface DataHealthResponse {
   classifiedPct: number;
   totalLedgers: number;
@@ -205,7 +213,8 @@ export interface DataHealthResponse {
   };
   availableMonthsCount: number;
   latestMonth: string | null;
-  impactMessages?: string[];
+  dataReadyForInsights: boolean;
+  impactMessages?: DataHealthImpactMessage[];
   suggestedNextSteps?: string[];
 }
 
