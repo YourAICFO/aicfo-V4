@@ -11,6 +11,8 @@ on:
     paths:
       - "connector-dotnet/**"
       - ".github/workflows/build-windows-connector-msi.yml"
+  release:
+    types: [ published ]
   workflow_dispatch:
 
 env:
@@ -41,9 +43,12 @@ jobs:
         shell: pwsh
         run: ./connector-dotnet/build.ps1 -Configuration Release
 
-      - name: Verify MSI exists
+      - name: Locate MSI (evidence)
         shell: pwsh
         run: |
+          Get-ChildItem -Path connector-dotnet -Recurse -Filter "*.msi" -File | ForEach-Object {
+            Write-Host "Found MSI: $($_.FullName)"
+          }
           $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
           if (-not $msi) {
             throw "AICFOConnectorSetup.msi not found after build."
@@ -100,18 +105,73 @@ jobs:
           Write-Host "Signing completed. Signed MSI: $msiPath"
           "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Upload MSI artifact (unsigned)
-        if: steps.sign.outputs.signed != 'true'
+      - name: Copy signed MSI to out (when signed)
+        if: steps.sign.outputs.signed == 'true'
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
+          if (-not $msi) { throw "Signed MSI not found." }
+          $outDir = "connector-dotnet/out"
+          if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
+          Copy-Item -Path $msi.FullName -Destination "$outDir/AICFOConnectorSetup.msi" -Force
+          Write-Host "Copied signed MSI to $outDir/AICFOConnectorSetup.msi"
+
+      - name: Log MSI evidence (path, size, sha256, extension)
+        shell: pwsh
+        run: |
+          $msiPath = "connector-dotnet/out/AICFOConnectorSetup.msi"
+          if (-not (Test-Path $msiPath)) { throw "MSI not at expected path: $msiPath" }
+          $f = Get-Item $msiPath
+          $sha = (Get-FileHash -Path $msiPath -Algorithm SHA256).Hash
+          Write-Host "MSI path: $($f.FullName)"
+          Write-Host "MSI size (bytes): $($f.Length)"
+          Write-Host "MSI SHA256: $sha"
+          Write-Host "Extension: $($f.Extension)"
+          "msi_path=$($f.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "msi_sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload MSI artifact (single file: AICFOConnectorSetup.msi)
         uses: actions/upload-artifact@v4
         with:
-          name: AICFO-Connector-MSI
-          path: "connector-dotnet/installer/bin/**/AICFOConnectorSetup.msi"
+          name: AICFOConnectorSetup.msi
+          path: "connector-dotnet/out/AICFOConnectorSetup.msi"
           if-no-files-found: error
 
-      - name: Upload MSI artifact (signed)
-        if: steps.sign.outputs.signed == 'true'
+      - name: Create ZIP containing only the MSI
+        shell: pwsh
+        run: |
+          $msi = "connector-dotnet/out/AICFOConnectorSetup.msi"
+          $zip = "connector-dotnet/out/AICFOConnectorSetup.zip"
+          Compress-Archive -Path $msi -DestinationPath $zip -Force
+          Write-Host "Created $zip with single file AICFOConnectorSetup.msi"
+
+      - name: Upload ZIP artifact (AICFOConnectorSetup.zip)
         uses: actions/upload-artifact@v4
         with:
-          name: AICFO-Connector-MSI
-          path: "connector-dotnet/installer/bin/**/AICFOConnectorSetup.msi"
+          name: AICFOConnectorSetup.zip
+          path: "connector-dotnet/out/AICFOConnectorSetup.zip"
           if-no-files-found: error
+
+  release-attach:
+    needs: build-msi
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: windows-latest
+    steps:
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AICFOConnectorSetup.msi
+          path: release-asset
+
+      - name: Ensure release asset has exact filename AICFOConnectorSetup.msi
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem -Path release-asset -Recurse -Filter "AICFOConnectorSetup.msi" -File | Select-Object -First 1
+          if (-not $src) { throw "AICFOConnectorSetup.msi not found under release-asset" }
+          Copy-Item -Path $src.FullName -Destination "release-asset/AICFOConnectorSetup.msi" -Force
+
+      - name: Attach MSI to GitHub Release (filename AICFOConnectorSetup.msi)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" "release-asset/AICFOConnectorSetup.msi" --clobber

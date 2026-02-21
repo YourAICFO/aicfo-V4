@@ -50,5 +50,10 @@ if (-not $msi) {
   throw "MSI build failed. Expected '$deterministicMsiName' was not found under '$installerBin'."
 }
 
+# Deterministic path for CI: always one file at connector-dotnet/out/AICFOConnectorSetup.msi (no bin/obj)
+$outDir = Join-Path $root "out"
+if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
+$outMsi = Join-Path $outDir $deterministicMsiName
+Copy-Item -Path $msi.FullName -Destination $outMsi -Force
 Write-Host "Done. MSI path: $($msi.FullName)"
-Write-Host "Artifact for CI: $($msi.FullName)"
+Write-Host "CI artifact path: $outMsi"
