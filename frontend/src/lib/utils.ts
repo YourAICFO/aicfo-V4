@@ -10,23 +10,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format currency for Indian Rupees
+ * Format currency for Indian Rupees. Re-exported from format.ts (null/undefined → "—").
  */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-/**
- * Format number with Indian number system
- */
-export function formatNumber(num: number): string {
-  return new Intl.NumberFormat('en-IN').format(num);
-}
+export { formatCurrency, formatNumber } from './format';
 
 /**
  * Format date to Indian locale

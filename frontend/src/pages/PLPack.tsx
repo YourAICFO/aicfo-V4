@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { formatCurrency } from '../lib/format';
+import VarianceDisplay from '../components/common/VarianceDisplay';
 import { TrendingUp, TrendingDown, FileText, Sparkles, Loader2, Download } from 'lucide-react';
 
 type DriverItem = { key: string; label: string; amount: number };
@@ -48,15 +50,6 @@ function formatMonthLabel(value: string): string {
   const [y, m] = value.split('-').map(Number);
   const d = new Date(y, m - 1, 1);
   return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-}
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
-
-function formatPct(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
 }
 
 export default function PLPack() {
@@ -291,22 +284,22 @@ export default function PLPack() {
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <p className="text-sm text-gray-500">Revenue (month)</p>
               <p className="text-xl font-semibold">{formatCurrency(pack.current.totalRevenue)}</p>
-              <p className={`text-sm ${pack.variances.revenue >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {pack.variances.revenue >= 0 ? '+' : ''}{formatCurrency(pack.variances.revenue)} {formatPct(pack.variances.revenuePct)} vs prev
+              <p className="text-sm">
+                <VarianceDisplay amount={pack.variances.revenue} pct={pack.variances.revenuePct} suffix=" vs prev" />
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <p className="text-sm text-gray-500">Opex (month)</p>
               <p className="text-xl font-semibold">{formatCurrency(pack.current.totalExpenses)}</p>
-              <p className={`text-sm ${pack.variances.opex <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {pack.variances.opex >= 0 ? '+' : ''}{formatCurrency(pack.variances.opex)} {formatPct(pack.variances.opexPct)} vs prev
+              <p className="text-sm">
+                <VarianceDisplay amount={pack.variances.opex} pct={pack.variances.opexPct} suffix=" vs prev" inverse />
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <p className="text-sm text-gray-500">Net Profit (month)</p>
               <p className="text-xl font-semibold">{formatCurrency(pack.current.netProfit)}</p>
-              <p className={`text-sm ${pack.variances.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {pack.variances.netProfit >= 0 ? '+' : ''}{formatCurrency(pack.variances.netProfit)} {formatPct(pack.variances.netProfitPct)} vs prev
+              <p className="text-sm">
+                <VarianceDisplay amount={pack.variances.netProfit} pct={pack.variances.netProfitPct} suffix=" vs prev" />
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -318,8 +311,8 @@ export default function PLPack() {
                 </p>
               )}
               {pack.ytdVarianceAmount != null && (
-                <p className={`text-sm ${pack.ytdVarianceAmount.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {pack.ytdVarianceAmount.netProfit >= 0 ? '+' : ''}{formatCurrency(pack.ytdVarianceAmount.netProfit)} {formatPct(pack.ytdVariancePct?.netProfit)} vs last FY
+                <p className="text-sm">
+                  <VarianceDisplay amount={pack.ytdVarianceAmount.netProfit} pct={pack.ytdVariancePct?.netProfit} suffix=" vs last FY" />
                 </p>
               )}
             </div>

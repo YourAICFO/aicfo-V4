@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Filter, Wallet, TrendingUp, TrendingDown, Plug } from 'lucide-react';
+import { formatCurrency } from '../lib/format';
 import { integrationApi, transactionApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
@@ -48,14 +49,6 @@ export default function Transactions() {
     } catch (error) {
       console.error('Failed to load integrations:', error);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   const getAmountColor = (type: string) => {

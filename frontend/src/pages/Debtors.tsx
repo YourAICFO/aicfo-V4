@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, Users, AlertTriangle } from 'lucide-react';
+import { formatCurrency } from '../lib/format';
 import { debtorsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -23,14 +24,6 @@ export default function Debtors() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount || 0);
   };
 
   if (loading) {

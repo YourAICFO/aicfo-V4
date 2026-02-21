@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, RotateCcw, Landmark, PercentCircle, Package } from 'lucide-react';
+import { formatCurrency, formatNumber } from '../lib/format';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -19,20 +20,6 @@ type WorkingCapitalPayload = {
   inventory_delta?: number | null;
   inventory_days?: number | null;
   sources: Record<string, { metric_key: string; value: number | null }>;
-};
-
-const formatCurrency = (value: number | null) => {
-  if (value === null || value === undefined) return 'Not available yet';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
-const formatNumber = (value: number | null, suffix = '') => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return `${value.toFixed(1)}${suffix}`;
 };
 
 export default function WorkingCapital() {
@@ -186,7 +173,7 @@ export default function WorkingCapital() {
             <div key={key} className="rounded-md border border-gray-200 px-3 py-2">
               <p className="font-medium text-gray-900">{key}</p>
               <p className="text-gray-500">metric: {source.metric_key}</p>
-              <p className="text-gray-700">value: {source.value ?? 'Not available yet'}</p>
+              <p className="text-gray-700">value: {formatNumber(source.value)}</p>
             </div>
           ))}
         </div>

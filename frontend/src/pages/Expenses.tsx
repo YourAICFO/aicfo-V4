@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingDown, AlertTriangle } from 'lucide-react';
+import { formatCurrency } from '../lib/format';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -43,14 +44,6 @@ export default function Expenses() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   const formatMonth = (monthStr: string) => {
