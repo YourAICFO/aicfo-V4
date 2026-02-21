@@ -36,6 +36,12 @@ dotnet publish "$root\AICFO.Connector.Tray\AICFO.Connector.Tray.csproj" `
   /p:IncludeNativeLibrariesForSelfExtract=true `
   /p:PublishTrimmed=false
 
+# Ensure harvest sources exist (installer copies from publish/, not bin/)
+$serviceExe = Join-Path $serviceOut "AICFO.Connector.Service.exe"
+$trayExe = Join-Path $trayOut "AICFO.Connector.Tray.exe"
+if (-not (Test-Path $serviceExe)) { throw "Publish failed: missing $serviceExe" }
+if (-not (Test-Path $trayExe)) { throw "Publish failed: missing $trayExe" }
+
 Write-Host "Building MSI..."
 dotnet build $installerProject -c $Configuration
 
@@ -45,3 +51,4 @@ if (-not $msi) {
 }
 
 Write-Host "Done. MSI path: $($msi.FullName)"
+Write-Host "Artifact for CI: $($msi.FullName)"

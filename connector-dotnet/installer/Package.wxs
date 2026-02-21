@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <!-- UpgradeCode must remain stable across versions for MajorUpgrade to work. Do not change. -->
+  <!-- InstallScope="perMachine": requires admin elevation and installs to Program Files + installs Windows Service. -->
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
            Version="1.0.0"
            UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf"
-           Language="1033">
+           Language="1033"
+           InstallScope="perMachine">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of AI CFO Connector is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -28,6 +30,7 @@
       </Directory>
     </StandardDirectory>
 
+    <!-- Service: exe in Program Files (per-machine). ServiceInstall/ServiceControl use the same component so the service is registered for this exe. -->
     <Component Id="ConnectorServiceExeComponent" Directory="SERVICEFOLDER">
       <File Id="ServiceExe" Source="$(var.ServicePublishDir)\AICFO.Connector.Service.exe" />
       <ServiceInstall Id="ConnectorServiceInstall"
@@ -50,6 +53,7 @@
       <File Id="TrayExe" Source="$(var.TrayPublishDir)\AICFO.Connector.Tray.exe" />
     </Component>
 
+    <!-- Start Menu shortcut: HKCU KeyPath keeps component per-user (ICE: do not mix with per-machine keypaths). -->
     <Component Id="ConnectorTrayStartMenuShortcut" Directory="AICFOProgramMenuFolder" Guid="{7FE2E546-D662-4BCA-9E07-E5FD240B8BCF}">
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayStartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       <Shortcut Id="AicfoTrayStartMenu"
@@ -60,6 +64,7 @@
       <RemoveFolder Id="RemoveAICFOProgramMenuFolder" Directory="AICFOProgramMenuFolder" On="uninstall" />
     </Component>
 
+    <!-- Desktop shortcut: HKCU KeyPath keeps component per-user (ICE). -->
     <Component Id="ConnectorTrayDesktopShortcut" Directory="DesktopFolder" Guid="{FAED13D9-532D-4A74-876B-38A22C274DDC}">
       <RegistryValue Root="HKCU" Key="Software\AICFO\Connector" Name="TrayDesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
       <Shortcut Id="AicfoTrayDesktop"

@@ -74,6 +74,15 @@ Typical output path:
 After build, rename/copy artifact to backend download location:
 - `backend/downloads/AICFOConnectorSetup.msi`
 
+### Install troubleshooting (install log)
+If the MSI fails to install or the UI does not open, capture a verbose log:
+
+```cmd
+msiexec /i AICFOConnectorSetup.msi /l*v %TEMP%\aicfo-connector-install.log
+```
+
+Then open `%TEMP%\aicfo-connector-install.log` to see the reason for failure (e.g. permissions, service start, missing dependencies). Run the command from an elevated Command Prompt if you see access-denied errors.
+
 ## Service behavior
 - Heartbeat every 30 seconds per mapping (configurable)
 - Scheduled sync every 15 minutes per mapping (configurable)
