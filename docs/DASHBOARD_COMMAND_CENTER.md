@@ -12,7 +12,7 @@ The Dashboard is a **Command Center** for safety and attention only. It does **n
 4. **Payables Pressure** — Creditors outstanding. Links to Working Capital.
 5. **Profit Signal** — One-line net profit (latest closed month). Links to P&L Pack.
 6. **Alerts** — Deterministic Red Flag list (max 5). Click navigates to relevant screen (pl-pack or working capital).
-7. **Quick Actions** — P&L Pack, Cashflow, Working Capital.
+7. **Quick Actions** — P&L Pack, Cashflow, Working Capital. The **Cashflow** screen shows KPIs and charts based on **Cash & Bank movement** (same source as runway), not revenue/expense proxies; see RUNWAY_LOGIC.md “Cashflow screen”.
 
 Removed from Dashboard: full KPI strip, Revenue/EBITDA/Net Profit cards, Revenue vs Expense chart, AI Insights block (replaced by deterministic alerts).
 

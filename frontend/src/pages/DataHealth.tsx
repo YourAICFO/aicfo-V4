@@ -27,6 +27,7 @@ export default function DataHealth() {
   const [data, setData] = useState<DataHealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -42,7 +43,9 @@ export default function DataHealth() {
         setData(null);
       })
       .finally(() => setLoading(false));
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, retryCount]);
+
+  const loadData = () => setRetryCount((c) => c + 1);
 
   if (!selectedCompanyId) {
     return (
@@ -65,8 +68,9 @@ export default function DataHealth() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Data Health</h1>
-        <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-red-700 dark:text-red-300">
-          {error}
+        <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-red-700 dark:text-red-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <span>{error}</span>
+          <button type="button" onClick={() => { setError(''); setLoading(true); loadData(); }} className="rounded-md border border-red-300 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-gray-700 shrink-0">Retry</button>
         </div>
       </div>
     );

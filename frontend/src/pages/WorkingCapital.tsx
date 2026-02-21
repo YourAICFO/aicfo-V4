@@ -28,6 +28,7 @@ export default function WorkingCapital() {
   const [data, setData] = useState<WorkingCapitalPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -44,7 +45,7 @@ export default function WorkingCapital() {
       }
     };
     load();
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, retryCount]);
 
   if (loading) {
     return (
@@ -61,7 +62,10 @@ export default function WorkingCapital() {
           <h1 className="text-2xl font-bold text-gray-900">Working Capital & Loans</h1>
           <p className="text-gray-600">Liquidity and debt summary</p>
         </div>
-        <div className="card text-red-700 bg-red-50 border border-red-200">{error}</div>
+        <div className="card text-red-700 bg-red-50 border border-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <span>{error}</span>
+          <button type="button" onClick={() => { setError(''); setLoading(true); setData(null); setRetryCount((c) => c + 1); }} className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Retry</button>
+        </div>
       </div>
     );
   }

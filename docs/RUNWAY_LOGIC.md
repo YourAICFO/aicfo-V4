@@ -74,3 +74,4 @@ Dashboard also exposes **revenueProxy3m** and **expenseProxy3m** (3‑month aver
 - [ ] **Progress bar:** Runway progress bar appears only when `runwayMonths` is numeric (not for “Growing”, “Insufficient data”, “Critical” text).
 - [ ] **Labels:** No “inflow” or “outflow” in Dashboard UI; KPI cards show “Revenue proxy (3m)” and “Expense proxy (3m)” with clarifying subtitles; chart is “Revenue vs Expense (3m avg)”.
 - [ ] **API:** `/api/finance/overview` (or equivalent) returns `runway.runwaySeries`, `runway.cashBase`, `runway.avgNetCashChange6M`; legacy `avgMonthlyInflow` / `avgMonthlyOutflow` still present for compatibility.
+- [ ] **Cashflow screen:** KPIs use Cash & Bank movement (see docs/CASHFLOW_SCREEN.md); no avg revenue/avg expenses on Cashflow page.

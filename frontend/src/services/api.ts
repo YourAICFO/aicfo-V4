@@ -60,6 +60,7 @@ export const companyApi = {
   getById: (id: string) => api.get(`/companies/${id}`),
   create: (data: { name: string; industry?: string; currency?: string }) =>
     api.post('/companies', data),
+  createDemo: () => api.post<{ success: boolean; data: { id: string; name: string } }>('/companies/demo'),
   update: (id: string, data: Partial<{ name: string; industry: string }>) =>
     api.put(`/companies/${id}`, data),
   delete: (id: string) => api.delete(`/companies/${id}`),

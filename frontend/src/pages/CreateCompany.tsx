@@ -12,6 +12,7 @@ export default function CreateCompany() {
   const [industry, setIndustry] = useState('');
   const [currency, setCurrency] = useState('INR');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,6 +37,23 @@ export default function CreateCompany() {
       setError(err.response?.data?.error || 'Failed to create company');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      const response = await companyApi.createDemo();
+      const companyId = response.data?.data?.id;
+      if (companyId) {
+        setSelectedCompany(companyId);
+      }
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create demo company');
+    } finally {
+      setDemoLoading(false);
     }
   };
 
@@ -90,10 +108,23 @@ export default function CreateCompany() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || demoLoading}
             className="btn-primary w-full py-3"
           >
             {loading ? 'Creating...' : 'Create Company'}
+          </button>
+
+          <div className="relative my-4">
+            <span className="block text-center text-sm text-gray-500">or</span>
+          </div>
+
+          <button
+            type="button"
+            disabled={loading || demoLoading}
+            onClick={handleCreateDemo}
+            className="w-full py-3 rounded-lg border border-primary-500 text-primary-600 hover:bg-primary-50 font-medium"
+          >
+            {demoLoading ? 'Creating...' : 'Create Demo Company'}
           </button>
         </form>
       </div>

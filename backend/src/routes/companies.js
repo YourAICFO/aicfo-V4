@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { companyValidation } = require('../middleware/validation');
-const { companyService } = require('../services');
+const { companyService, demoSeedService } = require('../services');
+const { Company } = require('../models');
 
 // GET /api/companies
 router.get('/', authenticate, async (req, res) => {
@@ -22,6 +23,31 @@ router.get('/', authenticate, async (req, res) => {
     res.status(400).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+// POST /api/companies/demo — create demo company (max 1 per user)
+router.post('/demo', authenticate, async (req, res) => {
+  try {
+    const existing = await Company.count({ where: { ownerId: req.userId, isDemo: true, isDeleted: false } });
+    if (existing >= 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'You already have a demo company. Use it or delete it to create another.'
+      });
+    }
+    const { company } = await demoSeedService.createDemoCompany(req.userId);
+    return res.status(201).json({
+      success: true,
+      message: 'Demo company created',
+      data: company
+    });
+  } catch (error) {
+    console.error('Create demo company error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create demo company'
     });
   }
 });

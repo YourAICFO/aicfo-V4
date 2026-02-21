@@ -486,46 +486,60 @@ const getExpenseDashboard = async (companyId, period = '3m') => {
   };
 };
 
-const getCashflowDashboard = async (companyId, period = '3m') => {
-  const now = new Date();
-  const { rangeStart, rangeEndExclusive } = getClosedRange(3, now);
+const MIN_MONTHS_FOR_CASHFLOW_AVG = 3;
 
-  // Get monthly cashflow data
-  const latestClosedKey = getLatestClosedMonthKey(now);
-  const summaryRows = await MonthlyTrialBalanceSummary.findAll({
-    where: {
-      companyId,
-      month: { [Sequelize.Op.gte]: normalizeMonth(rangeStart), [Sequelize.Op.lte]: latestClosedKey }
-    },
-    order: [['month', 'ASC']],
-    raw: true
-  });
-
-  // Format monthly data from snapshots only
-  const monthlyMap = {};
-  summaryRows.forEach((row) => {
-    const monthKey = row.month;
-    if (!monthKey) return;
-    monthlyMap[monthKey] = {
-      inflow: parseFloat(row.total_revenue || 0),
-      outflow: parseFloat(row.total_expenses || 0)
+/**
+ * Pure: compute inflow/outflow from cash & bank series. Used by getCashflowDashboard and unit tests.
+ * inflow = max(netChange, 0), outflow = max(-netChange, 0).
+ * If series.length < MIN_MONTHS_FOR_CASHFLOW_AVG, avgCashInflow, avgCashOutflow, netCashFlow are null.
+ * @param {Array<{ month: string, opening: number, closing: number, netChange: number }>} series
+ * @returns {{ months: Array<{ month: string, opening: number, closing: number, netChange: number, inflow: number, outflow: number }>, avgCashInflow: number | null, avgCashOutflow: number | null, netCashFlow: number | null }}
+ */
+function computeCashflowFromSeries(series) {
+  const months = (series || []).map((s) => {
+    const netChange = Number(s.netChange);
+    const inflow = Math.max(netChange, 0);
+    const outflow = Math.max(-netChange, 0);
+    return {
+      month: s.month,
+      opening: Number(s.opening) || 0,
+      closing: Number(s.closing) || 0,
+      netChange,
+      inflow,
+      outflow
     };
   });
+  const n = months.length;
+  if (n < MIN_MONTHS_FOR_CASHFLOW_AVG) {
+    return {
+      months,
+      avgCashInflow: null,
+      avgCashOutflow: null,
+      netCashFlow: null
+    };
+  }
+  const sumInflow = months.reduce((a, m) => a + m.inflow, 0);
+  const sumOutflow = months.reduce((a, m) => a + m.outflow, 0);
+  const avgCashInflow = sumInflow / n;
+  const avgCashOutflow = sumOutflow / n;
+  const netCashFlow = avgCashInflow - avgCashOutflow;
+  return { months, avgCashInflow, avgCashOutflow, netCashFlow };
+}
 
-  const monthlyCashflow = Object.keys(monthlyMap)
-    .sort()
-    .map((monthKey) => {
-      const inflowTotal = monthlyMap[monthKey].inflow;
-      const outflowTotal = monthlyMap[monthKey].outflow;
-      return {
-        month: `${monthKey}-01`,
-        inflow: inflowTotal,
-        outflow: outflowTotal,
-        net: inflowTotal - outflowTotal
-      };
-    });
+const getCashflowDashboard = async (companyId, period = '6m') => {
+  const lastN = period === '3m' ? 3 : 6;
+  const { series } = await runwayService.getCashBankSeries(companyId, lastN);
+  const { months, avgCashInflow, avgCashOutflow, netCashFlow } = computeCashflowFromSeries(series);
 
-  // Get cash balance history
+  const monthlyCashflow = months.map((m) => ({
+    month: `${m.month}-01`,
+    inflow: m.inflow,
+    outflow: m.outflow,
+    net: m.netChange
+  }));
+
+  const now = new Date();
+  const { rangeStart, rangeEndExclusive } = getClosedRange(Math.max(lastN, 3), now);
   const cashHistory = await CashBalance.findAll({
     where: {
       companyId,
@@ -542,16 +556,19 @@ const getCashflowDashboard = async (companyId, period = '3m') => {
       raw: true
     });
     if (latestOpening) {
-      cashHistoryRows = [{
-        date: latestOpening.date,
-        amount: latestOpening.amount
-      }];
+      cashHistoryRows = [{ date: latestOpening.date, amount: latestOpening.amount }];
     }
   }
 
   return {
+    cashflow: {
+      months,
+      avgCashInflow,
+      avgCashOutflow,
+      netCashFlow
+    },
     monthlyCashflow,
-    cashHistory: cashHistoryRows.map(c => ({
+    cashHistory: cashHistoryRows.map((c) => ({
       date: c.date,
       amount: parseFloat(c.amount)
     }))
@@ -562,5 +579,7 @@ module.exports = {
   getCFOOverview,
   getRevenueDashboard,
   getExpenseDashboard,
-  getCashflowDashboard
+  getCashflowDashboard,
+  computeCashflowFromSeries,
+  MIN_MONTHS_FOR_CASHFLOW_AVG
 };

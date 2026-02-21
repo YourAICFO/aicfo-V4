@@ -251,7 +251,10 @@ export default function PLPack() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-red-700 dark:text-red-300 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span>{error}</span>
+          <button type="button" onClick={() => { setError(''); loadPackAndRemarks(); }} className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Retry</button>
+        </div>
       )}
 
       {pack && (

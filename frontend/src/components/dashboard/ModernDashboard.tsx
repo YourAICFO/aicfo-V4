@@ -55,6 +55,7 @@ const ModernDashboard: React.FC = () => {
   const [alerts, setAlerts] = useState<FinanceAlert[]>([]);
   const [alertMenuOpen, setAlertMenuOpen] = useState<string | null>(null);
   const [alertActionLoading, setAlertActionLoading] = useState<string | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -96,20 +97,25 @@ const ModernDashboard: React.FC = () => {
 
   const loadData = async () => {
     try {
+      setOverviewError(null);
       const [overviewRes, alertsRes] = await Promise.all([
         dashboardApi.getOverview(),
         financeApi.getAlerts().catch(() => ({ data: { data: [] } }))
       ]);
       if (overviewRes?.data?.data) {
         setData(overviewRes.data.data);
+      } else {
+        setData(null);
       }
       if (alertsRes?.data?.data && Array.isArray(alertsRes.data.data)) {
         setAlerts(alertsRes.data.data);
       } else {
         setAlerts([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load overview:', error);
+      setOverviewError(error?.response?.data?.error || 'Failed to load overview.');
+      setData(null);
     }
   };
 
@@ -211,8 +217,13 @@ const ModernDashboard: React.FC = () => {
             </div>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               {data?.dataReadyForInsights === false
-                ? 'Insights may be incomplete due to data gaps.'
+                ? 'Insights may be incomplete due to data gaps. '
                 : 'Safety and attention at a glance'}
+              {data?.dataReadyForInsights === false && (
+                <button type="button" onClick={() => navigate('/data-health')} className="text-primary-600 dark:text-primary-400 hover:underline font-medium">
+                  Review data health →
+                </button>
+              )}
             </p>
           </div>
 
@@ -295,11 +306,20 @@ const ModernDashboard: React.FC = () => {
 
         {!data && syncStatus === 'ready' && (
           <Card variant="warning">
-            <CardContent className="p-6">
-              <p className="font-medium text-gray-900 dark:text-gray-100">No dashboard data available yet.</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Connect your accounting software and run a sync to populate metrics.
-              </p>
+            <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {overviewError ? 'Could not load dashboard.' : 'No dashboard data available yet.'}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {overviewError ? overviewError : 'Connect your accounting software and run a sync to populate metrics.'}
+                </p>
+              </div>
+              {overviewError && (
+                <button type="button" onClick={loadData} className="rounded-md border border-amber-300 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-gray-700 shrink-0">
+                  Retry
+                </button>
+              )}
             </CardContent>
           </Card>
         )}

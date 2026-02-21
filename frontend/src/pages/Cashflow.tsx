@@ -6,6 +6,19 @@ import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
 interface CashflowData {
+  cashflow: {
+    months: Array<{
+      month: string;
+      opening: number;
+      closing: number;
+      netChange: number;
+      inflow: number;
+      outflow: number;
+    }>;
+    avgCashInflow: number | null;
+    avgCashOutflow: number | null;
+    netCashFlow: number | null;
+  };
   monthlyCashflow: Array<{
     month: string;
     inflow: number;
@@ -31,7 +44,7 @@ export default function Cashflow() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await dashboardApi.getCashflow('3m');
+      const response = await dashboardApi.getCashflow('6m');
       setData(response.data.data);
     } catch (error) {
       console.error('Failed to load cashflow data:', error);
@@ -54,119 +67,66 @@ export default function Cashflow() {
   }
 
   const months = data?.monthlyCashflow || [];
-  const lastMonth = months.length ? months[months.length - 1] : null;
-  const prevMonth = months.length > 1 ? months[months.length - 2] : null;
-
-  const latestInflow = Number(lastMonth?.inflow || 0);
-  const latestOutflow = Number(lastMonth?.outflow || 0);
-  const prevInflow = Number(prevMonth?.inflow || 0);
-  const prevOutflow = Number(prevMonth?.outflow || 0);
-
-  const totalInflow = months.reduce((sum, m) => sum + Number(m.inflow || 0), 0);
-  const totalOutflow = months.reduce((sum, m) => sum + Number(m.outflow || 0), 0);
-  const avgInflow = months.length ? totalInflow / months.length : 0;
-  const avgOutflow = months.length ? totalOutflow / months.length : 0;
-  const avgNetCashflow = avgInflow - avgOutflow;
-  const prevAvgNetCashflow = prevInflow - prevOutflow;
-  const netDelta = avgNetCashflow - prevAvgNetCashflow;
-  const netTrend = prevMonth
-    ? netDelta >= 0
-      ? `Up ${((netDelta / Math.abs(prevAvgNetCashflow || 1)) * 100).toFixed(1)}%`
-      : `Down ${Math.abs((netDelta / Math.abs(prevAvgNetCashflow || 1)) * 100).toFixed(1)}%`
-    : 'No trend';
-  const netPositive = avgNetCashflow >= 0;
-
-  const inflowDelta = latestInflow - prevInflow;
-  const inflowTrend = prevMonth
-    ? inflowDelta >= 0
-      ? `Up ${((inflowDelta / Math.abs(prevInflow || 1)) * 100).toFixed(1)}%`
-      : `Down ${Math.abs((inflowDelta / Math.abs(prevInflow || 1)) * 100).toFixed(1)}%`
-    : 'No trend';
-  const inflowUp = inflowDelta >= 0;
-
-  const outflowDelta = latestOutflow - prevOutflow;
-  const outflowTrend = prevMonth
-    ? outflowDelta >= 0
-      ? `Up ${((outflowDelta / Math.abs(prevOutflow || 1)) * 100).toFixed(1)}%`
-      : `Down ${Math.abs((outflowDelta / Math.abs(prevOutflow || 1)) * 100).toFixed(1)}%`
-    : 'No trend';
-  const outflowDown = outflowDelta <= 0;
+  const cashflow = data?.cashflow;
+  const avgCashInflow = cashflow?.avgCashInflow ?? null;
+  const avgCashOutflow = cashflow?.avgCashOutflow ?? null;
+  const netCashFlow = cashflow?.netCashFlow ?? null;
+  const netPositive = netCashFlow != null && netCashFlow >= 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cashflow Dashboard</h1>
-          <p className="text-gray-600">Track your cash inflows and outflows</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Cashflow Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400">Based on Cash & Bank movement (last 6 months)</p>
         </div>
-        <div className="text-sm text-gray-500">Trailing 3 closed months</div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className={`card border-transparent bg-gradient-to-br ${netPositive ? 'from-white to-emerald-50' : 'from-white to-rose-50'}`}>
+        <div className={`card border-transparent bg-gradient-to-br ${netPositive ? 'from-white to-emerald-50 dark:from-gray-800 dark:to-emerald-900/20' : 'from-white to-rose-50 dark:from-gray-800 dark:to-rose-900/20'}`}>
           <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${netPositive ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-              <Wallet className={`w-6 h-6 ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`} />
+            <div className={`p-3 rounded-lg ${netPositive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-rose-100 dark:bg-rose-900/30'}`}>
+              <Wallet className={`w-6 h-6 ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Avg Net Cashflow (3 months)</p>
-              <p className={`text-2xl font-bold ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {formatCurrency(avgNetCashflow)}
+              <p className="text-sm text-gray-600 dark:text-gray-400">Net cash flow</p>
+              <p className={`text-2xl font-bold ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {formatCurrency(netCashFlow)}
               </p>
             </div>
-          </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${netDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-            {netDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {netTrend}
           </div>
         </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
+        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50 dark:from-gray-800 dark:to-emerald-900/20">
           <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${inflowUp ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-              {inflowUp ? (
-                <TrendingUp className="w-6 h-6 text-emerald-600" />
-              ) : (
-                <TrendingDown className="w-6 h-6 text-rose-600" />
-              )}
+            <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+              <TrendingUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Avg Revenue (3 months)</p>
-              <p className="text-2xl font-bold text-emerald-700">
-                {formatCurrency(avgInflow)}
+              <p className="text-sm text-gray-600 dark:text-gray-400">Avg cash inflow</p>
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                {formatCurrency(avgCashInflow)}
               </p>
             </div>
-          </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${inflowUp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-            {inflowUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {inflowTrend}
           </div>
         </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
+        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50 dark:from-gray-800 dark:to-rose-900/20">
           <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${outflowDown ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-              {outflowDown ? (
-                <TrendingDown className="w-6 h-6 text-emerald-600" />
-              ) : (
-                <TrendingUp className="w-6 h-6 text-rose-600" />
-              )}
+            <div className="p-3 rounded-lg bg-rose-100 dark:bg-rose-900/30">
+              <TrendingDown className="w-6 h-6 text-rose-600 dark:text-rose-400" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Avg Expenses (3 months)</p>
-              <p className="text-2xl font-bold text-rose-700">
-                {formatCurrency(avgOutflow)}
+              <p className="text-sm text-gray-600 dark:text-gray-400">Avg cash outflow</p>
+              <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+                {formatCurrency(avgCashOutflow)}
               </p>
             </div>
-          </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${outflowDown ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-            {outflowDown ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-            {outflowTrend}
           </div>
         </div>
       </div>
 
       {/* Monthly Cashflow */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Monthly Cashflow (3 Closed Months)</h2>
+        <h2 className="text-lg font-semibold mb-4">Monthly Cashflow (Cash & Bank movement)</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyCashflow || []}>
@@ -201,7 +161,7 @@ export default function Cashflow() {
 
       {/* Net Cashflow */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Net Cashflow (3 Closed Months)</h2>
+        <h2 className="text-lg font-semibold mb-4">Net Cashflow (Cash & Bank movement)</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data?.monthlyCashflow || []}>
@@ -240,7 +200,7 @@ export default function Cashflow() {
 
       {/* Cash Balance History */}
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Cash Balance History (3 Closed Months)</h2>
+        <h2 className="text-lg font-semibold mb-4">Cash Balance History</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data?.cashHistory || []}>

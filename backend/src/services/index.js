@@ -19,6 +19,7 @@ const alertsService = require('./alertsService');
 const dataConsistencyService = require('./dataConsistencyService');
 const reportService = require('./reportService');
 const dataHealthService = require('./dataHealthService');
+const demoSeedService = require('./demoSeedService');
 
 module.exports = {
   authService,
@@ -41,5 +42,6 @@ module.exports = {
   alertsService,
   dataConsistencyService,
   reportService,
-  dataHealthService
+  dataHealthService,
+  demoSeedService
 };

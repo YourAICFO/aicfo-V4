@@ -97,6 +97,12 @@ const Company = sequelize.define('Company', {
     allowNull: false,
     defaultValue: false,
     field: 'is_deleted'
+  },
+  isDemo: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_demo'
   }
 }, {
   tableName: 'companies',
