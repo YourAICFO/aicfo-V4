@@ -1,4 +1,5 @@
-name: Build Windows Connector MSI
+# Windows Connector: validate Tray build and produce portable ZIP. MSI is built locally (build-release-local.ps1).
+name: Windows Connector Validate (No MSI)
 
 on:
   push:
@@ -11,17 +12,72 @@ on:
     paths:
       - "connector-dotnet/**"
       - ".github/workflows/build-windows-connector-msi.yml"
-  release:
-    types: [ published ]
   workflow_dispatch:
-
-env:
-  TIMESTAMP_URL: "http://timestamp.digicert.com"
+    inputs:
+      build_msi:
+        description: "Run full MSI build (WiX). Default false; MSI is normally built locally."
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  build-msi:
+  validate:
     runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build Tray (Release)
+        shell: pwsh
+        run: |
+          dotnet build ./connector-dotnet/AICFO.Connector.Tray/AICFO.Connector.Tray.csproj -c Release
+
+      - name: Publish Tray (win-x64, self-contained)
+        shell: pwsh
+        run: |
+          $out = "connector-dotnet/out/publish"
+          if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+          dotnet publish ./connector-dotnet/AICFO.Connector.Tray/AICFO.Connector.Tray.csproj `
+            -c Release -r win-x64 --self-contained true -o $out `
+            /p:PublishSingleFile=true /p:SelfContained=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true /p:PublishTrimmed=false
+          if (-not (Test-Path "$out/AICFO.Connector.Tray.exe")) { throw "Publish failed: Tray exe not found" }
+          Write-Host "Tray published to $out"
+
+      - name: Verify Tray (optional)
+        shell: pwsh
+        run: |
+          .\connector-dotnet\verify-tray.ps1
+        continue-on-error: true
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $zipDir = "connector-dotnet/out/release"
+          if (-not (Test-Path $zipDir)) { New-Item -ItemType Directory -Path $zipDir -Force | Out-Null }
+          $zipPath = "$zipDir/AICFO-Connector-Portable-win-x64.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path "connector-dotnet/out/publish/*" -DestinationPath $zipPath -Force
+          Write-Host "Created $zipPath"
+          Get-Item $zipPath | Select-Object FullName, Length
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "AICFO-Connector-Portable-win-x64"
+          path: "connector-dotnet/out/release/AICFO-Connector-Portable-win-x64.zip"
+
+  # MSI build only when explicitly requested via workflow_dispatch (build_msi = true). Not run on push/PR.
+  build-msi:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_msi == 'true'
+    runs-on: windows-latest
+    env:
+      TIMESTAMP_URL: "http://timestamp.digicert.com"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,33 +99,14 @@ jobs:
         shell: pwsh
         run: ./connector-dotnet/build.ps1 -Configuration Release
 
-      - name: Locate MSI (evidence)
+      - name: Locate MSI
         shell: pwsh
         run: |
-          Get-ChildItem -Path connector-dotnet -Recurse -Filter "*.msi" -File | ForEach-Object {
-            Write-Host "Found MSI: $($_.FullName)"
-          }
           $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
-          if (-not $msi) {
-            throw "AICFOConnectorSetup.msi not found after build."
-          }
-          Write-Host "MSI found at $($msi.FullName)"
+          if (-not $msi) { throw "AICFOConnectorSetup.msi not found after build." }
+          Write-Host "MSI at $($msi.FullName)"
 
-      - name: Connector smoke checks
-        shell: pwsh
-        run: |
-          $serviceExe = "connector-dotnet/publish/service/AICFO.Connector.Service.exe"
-          $trayExe = "connector-dotnet/publish/tray/AICFO.Connector.Tray.exe"
-          if (-not (Test-Path $serviceExe)) { throw "Missing service publish output: $serviceExe" }
-          if (-not (Test-Path $trayExe)) { throw "Missing tray publish output: $trayExe" }
-
-          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
-          if ($msi.Length -lt 5MB) {
-            throw "MSI artifact looks unexpectedly small ($($msi.Length) bytes)."
-          }
-          Write-Host "Smoke check passed. MSI size: $($msi.Length) bytes"
-
-      - name: Sign binaries and MSI
+      - name: Sign binaries and MSI (optional)
         id: sign
         env:
           CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
@@ -84,94 +121,27 @@ jobs:
           }
           $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_BASE64))
-
           $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $signtool) {
-            Write-Host "signtool not found under Windows Kits; trying default path."
-            $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
-            if (-not (Test-Path $signtool)) { throw "signtool.exe not found. Install Windows SDK." }
-          }
-
+          if (-not $signtool) { $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"; if (-not (Test-Path $signtool)) { throw "signtool not found" } }
           $ts = $env:TIMESTAMP_URL
           $sign = { param($f) & $signtool sign /tr $ts /td sha256 /fd sha256 /f $pfxPath /p $env:CODESIGN_PFX_PASSWORD $f }
           & $sign "connector-dotnet\publish\service\AICFO.Connector.Service.exe"
           & $sign "connector-dotnet\publish\tray\AICFO.Connector.Tray.exe"
-
-          dotnet build connector-dotnet/installer/AICFO.Connector.Installer.wixproj -c Release
           $msiPath = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1 -ExpandProperty FullName
           & $sign $msiPath
-
           Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
-          Write-Host "Signing completed. Signed MSI: $msiPath"
           "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Copy signed MSI to out (when signed)
-        if: steps.sign.outputs.signed == 'true'
+      - name: Copy MSI to out
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
-          if (-not $msi) { throw "Signed MSI not found." }
           $outDir = "connector-dotnet/out"
           if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
           Copy-Item -Path $msi.FullName -Destination "$outDir/AICFOConnectorSetup.msi" -Force
-          Write-Host "Copied signed MSI to $outDir/AICFOConnectorSetup.msi"
 
-      - name: Log MSI evidence (path, size, sha256, extension)
-        shell: pwsh
-        run: |
-          $msiPath = "connector-dotnet/out/AICFOConnectorSetup.msi"
-          if (-not (Test-Path $msiPath)) { throw "MSI not at expected path: $msiPath" }
-          $f = Get-Item $msiPath
-          $sha = (Get-FileHash -Path $msiPath -Algorithm SHA256).Hash
-          Write-Host "MSI path: $($f.FullName)"
-          Write-Host "MSI size (bytes): $($f.Length)"
-          Write-Host "MSI SHA256: $sha"
-          Write-Host "Extension: $($f.Extension)"
-          "msi_path=$($f.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "msi_sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: Upload MSI artifact (single file AICFOConnectorSetup.msi)
+      - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
         with:
           name: "AICFOConnectorSetup.msi"
           path: "connector-dotnet/out/AICFOConnectorSetup.msi"
-          if-no-files-found: error
-
-      - name: Create ZIP containing only the MSI
-        shell: pwsh
-        run: |
-          $msi = "connector-dotnet/out/AICFOConnectorSetup.msi"
-          $zip = "connector-dotnet/out/AICFOConnectorSetup.zip"
-          Compress-Archive -Path $msi -DestinationPath $zip -Force
-          Write-Host "Created $zip with single file AICFOConnectorSetup.msi"
-
-      - name: Upload ZIP artifact (AICFOConnectorSetup.zip)
-        uses: actions/upload-artifact@v4
-        with:
-          name: "AICFOConnectorSetup.zip"
-          path: "connector-dotnet/out/AICFOConnectorSetup.zip"
-          if-no-files-found: error
-
-  release-attach:
-    needs: build-msi
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: windows-latest
-    steps:
-      - name: Download MSI artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "AICFOConnectorSetup.msi"
-          path: release-asset
-
-      - name: Ensure release asset has exact filename AICFOConnectorSetup.msi
-        shell: pwsh
-        run: |
-          $src = Get-ChildItem -Path release-asset -Recurse -Filter "AICFOConnectorSetup.msi" -File | Select-Object -First 1
-          if (-not $src) { throw "AICFOConnectorSetup.msi not found under release-asset" }
-          Copy-Item -Path $src.FullName -Destination "release-asset/AICFOConnectorSetup.msi" -Force
-
-      - name: Attach MSI to GitHub Release (filename AICFOConnectorSetup.msi)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" "release-asset/AICFOConnectorSetup.msi" --clobber

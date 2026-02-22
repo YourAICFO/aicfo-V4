@@ -129,6 +129,46 @@ msiexec /i AICFOConnectorSetup.msi /l*v %TEMP%\aicfo-connector-install.log
 
 ---
 
+## GitHub Release Upload (Local Build)
+
+Release artifacts for GitHub Releases are **built locally** (not in CI). CI only validates the Tray build and does not run WiX/MSI.
+
+**Prerequisites:**
+- **.NET SDK 8.0+** (required)
+- **WiX v4** (optional): only needed if you want to produce the MSI. Install with: `dotnet tool install --global wix --version 4.*`  
+  If WiX is not installed, the script still succeeds and produces the portable ZIP and manifest.
+
+**Commands (run from repo root or connector-dotnet):**
+```powershell
+cd C:\Projects\aicfo-V4\connector-dotnet
+.\build-release-local.ps1 -Version 1.0.0
+```
+If `Version` is defined in `Directory.Build.props` or in `AICFO.Connector.Tray.csproj`, you can omit the parameter. Otherwise pass `-Version` (e.g. `-Version 1.0.0`).
+
+**Output directory (deterministic):**
+- `connector-dotnet/out/release/`
+
+**Files produced:**
+| File | When |
+|------|------|
+| `AICFO-Connector-Portable-win-x64.zip` | Always (Tray publish zipped) |
+| `AICFO-Connector-Portable-win-x64.zip.sha256` | Always |
+| `AICFOConnectorSetup.msi` | Only if WiX is installed and MSI build succeeds |
+| `AICFOConnectorSetup.msi.sha256` | Only if MSI was built |
+| `release-manifest.json` | Always (version, git_sha, built_at, artifacts) |
+
+**Upload to GitHub Release:**
+Upload these from `connector-dotnet/out/release/` to your GitHub Release:
+- `AICFOConnectorSetup.msi` (if present)
+- `AICFOConnectorSetup.msi.sha256` (if present)
+- `AICFO-Connector-Portable-win-x64.zip`
+- `AICFO-Connector-Portable-win-x64.zip.sha256`
+- `release-manifest.json`
+
+The script prints an “UPLOAD THESE TO GITHUB RELEASE” list with full paths at the end.
+
+---
+
 ## Fixes applied (code)
 
 1. **Default `api_url`** — `ConnectorConfig.ApiUrl` default set to `http://localhost:5000` so new configs point to local backend.
