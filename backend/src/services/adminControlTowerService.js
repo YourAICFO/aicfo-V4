@@ -3,6 +3,7 @@ const path = require('path');
 const IORedis = require('ioredis');
 const { Sequelize } = require('sequelize');
 const { sequelize } = require('../models');
+const { REDIS_URL, connection: redisConnection, isQueueResilientMode } = require('../config/redis');
 
 const CACHE_TTL_MS = 60 * 1000;
 const cacheStore = new Map();
@@ -69,10 +70,10 @@ const getPendingMigrationCount = async () => {
 };
 
 const getRedisAndQueueHealth = async () => {
-  if (!process.env.REDIS_URL) {
+  if (isQueueResilientMode()) {
     return {
-      redis_status: 'missing_config',
-      worker_status: 'unknown',
+      redis_status: 'resilient',
+      worker_status: 'up',
       queue_depth: 0,
       failed_jobs_24h: 0
     };
@@ -80,10 +81,8 @@ const getRedisAndQueueHealth = async () => {
 
   try {
     const { queue } = require('../worker/queue');
-    const redis = new IORedis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-      connectTimeout: 10000,
+    const redis = new IORedis(REDIS_URL, {
+      ...redisConnection,
       lazyConnect: true
     });
 

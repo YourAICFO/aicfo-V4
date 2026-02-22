@@ -1,9 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 const path = require('path');
-require('dotenv').config();
 
 const { sequelize } = require('./models');
 const { logger, logError } = require('./utils/logger');
@@ -283,6 +283,16 @@ const startServer = async () => {
   try {
     await sequelize.authenticate();
     logger.info('Database connection established successfully.');
+
+    const { testConnection, isQueueResilientMode } = require('./config/redis');
+    if (!isQueueResilientMode()) {
+      try {
+        await testConnection();
+      } catch (err) {
+        logger.error({ err }, 'Redis is required but unavailable (development). Set QUEUE_RESILIENT_MODE=true to run without Redis.');
+        process.exit(1);
+      }
+    }
 
     if (sequelize.getDialect() === 'postgres') {
       try {

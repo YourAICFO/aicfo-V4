@@ -81,10 +81,11 @@ const run = async () => {
   }
 
   section('[D] Worker / Queue Health');
-  if (!process.env.REDIS_URL) {
-    line('redis_ping: SKIPPED (REDIS_URL missing)');
+  const { REDIS_URL, connection: redisConnection, isQueueResilientMode } = require('./config/redis');
+  if (isQueueResilientMode()) {
+    line('redis_ping: SKIPPED (QUEUE_RESILIENT_MODE=true)');
   } else {
-    const redis = new IORedis(process.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
+    const redis = new IORedis(REDIS_URL, { ...redisConnection, lazyConnect: true, maxRetriesPerRequest: 1 });
     try {
       await redis.connect();
       const pong = await redis.ping();

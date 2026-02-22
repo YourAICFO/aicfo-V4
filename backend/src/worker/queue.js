@@ -1,47 +1,16 @@
 const { Queue, QueueEvents } = require('bullmq');
 const { logger } = require('./logger');
 const { logError } = require('../utils/logger');
+const { connection: redisConnection, isQueueResilientMode } = require('../config/redis');
 
-const REDIS_URL = process.env.REDIS_URL;
 const QUEUE_NAME = process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs';
-
-const connection = {
-  url: REDIS_URL,
-  maxRetriesPerRequest: null,
-  enableReadyCheck: true,
-  connectTimeout: 10000,
-  retryStrategy: (times) => Math.min(times * 200, 2000)
-};
-
-const getRedisTarget = () => {
-  if (!REDIS_URL) {
-    return { host: null, port: null, tls: false };
-  }
-  try {
-    const parsed = new URL(REDIS_URL);
-    return {
-      host: parsed.hostname || null,
-      port: parsed.port ? Number(parsed.port) : null,
-      tls: parsed.protocol === 'rediss:'
-    };
-  } catch (_) {
-    return { host: null, port: null, tls: false };
-  }
-};
-
-// Check if we're in resilient mode (no Redis)
-const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
+const RESILIENT_MODE = isQueueResilientMode();
 
 let queue, events;
 
 if (!RESILIENT_MODE) {
-  if (!REDIS_URL) {
-    logger.error({ event: 'redis_url_missing' }, 'REDIS_URL is required for BullMQ connection');
-    throw new Error('REDIS_URL is required for BullMQ connection');
-  }
-
   queue = new Queue(QUEUE_NAME, {
-    connection,
+    connection: redisConnection,
     defaultJobOptions: {
       removeOnComplete: 1000,
       removeOnFail: 1000,
@@ -53,7 +22,7 @@ if (!RESILIENT_MODE) {
     }
   });
 
-  events = new QueueEvents(QUEUE_NAME, { connection });
+  events = new QueueEvents(QUEUE_NAME, { connection: redisConnection });
 
   events.on('completed', ({ jobId }) => {
     logger.info({ jobId }, 'Job completed');
@@ -68,28 +37,26 @@ if (!RESILIENT_MODE) {
     }, 'Queue event job failed', new Error(String(failedReason || 'unknown failure')));
   });
 } else {
-  // In resilient mode, create mock queue objects
-  logger.warn({ event: 'queue_resilient_mode' }, 'Queue operating in resilient mode - no Redis connection');
+  logger.warn({ event: 'queue_resilient_mode' }, 'Queue operating in resilient mode (QUEUE_RESILIENT_MODE=true) - no Redis connection');
   queue = {
     add: async () => {
       throw new Error('Queue.add should not be called in resilient mode - use enqueueJob instead');
-    }
+    },
+    getJobCounts: async () => ({ waiting: 0, active: 0, delayed: 0, failed: 0 }),
+    getWorkers: async () => [],
+    getJob: async () => null
   };
   events = {
-    on: () => {} // No-op for event handlers
+    on: () => {}
   };
 }
 
 const enqueueJob = async (name, data, options = {}) => {
-  // Check if we're in resilient mode (no Redis)
-  const RESILIENT_MODE = process.env.RESILIENT_WORKER_MODE === 'true' || !process.env.REDIS_URL;
-  
   if (RESILIENT_MODE && global.processJobDirectly) {
-    // Process job synchronously in resilient mode
     logger.info({ jobName: name, companyId: data?.companyId }, 'Processing job synchronously in resilient mode');
     try {
       const result = await global.processJobDirectly(name, data, options);
-      return { 
+      return {
         id: `sync-${Date.now()}`,
         name,
         data,
@@ -104,8 +71,7 @@ const enqueueJob = async (name, data, options = {}) => {
       throw error;
     }
   }
-  
-  // Normal Redis queue processing
+
   const job = await queue.add(name, data, options);
   return job;
 };
@@ -114,7 +80,7 @@ module.exports = {
   queue,
   events,
   enqueueJob,
-  connection,
+  connection: redisConnection,
   QUEUE_NAME,
-  getRedisTarget
+  getRedisTarget: require('../config/redis').getRedisTarget
 };
