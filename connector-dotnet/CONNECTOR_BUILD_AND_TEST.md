@@ -102,14 +102,14 @@ If the app is a GUI and produces no console output, check:
 **Backend connector routes:** `backend/src/routes/connector.js`  
 - Device login, companies, links, register-device, status, heartbeat, sync/start, sync, sync/complete.
 
-**Test backend (with backend running on port 5000):**
+**Test backend (with backend running on port 5000):** On Windows use `127.0.0.1` to avoid IPv6 connection refused.
 ```powershell
-curl http://localhost:5000/health
+curl http://127.0.0.1:5000/health
 # If connector health exists:
-curl http://localhost:5000/api/connector/health
+curl http://127.0.0.1:5000/api/connector/health
 ```
 
-**End-to-end:** In Connector Control Panel set API URL to `http://localhost:5000`, then use “Test Backend” or device login. Check backend logs and DB tables: `connector_clients`, `connector_devices`, `connector_company_links`, `integration_sync_runs`, `integration_sync_events`.
+**End-to-end:** In Connector Control Panel set API URL to `http://127.0.0.1:5000`, then use “Test Backend” or device login. Check backend logs and DB tables: `connector_clients`, `connector_devices`, `connector_company_links`, `integration_sync_runs`, `integration_sync_events`.
 
 ---
 
@@ -274,10 +274,10 @@ Verification passed. To stop the Tray process: Stop-Process -Name 'AICFO.Connect
 
 ## Local E2E Test (Backend + Tray)
 
-End-to-end proof: backend reachable, tray built and running, config points to localhost, connector dev routes and authenticated calls exercised.
+End-to-end proof: backend reachable, tray built and running, config points to the API URL, connector dev routes and authenticated calls exercised.
 
 **Prerequisites:**
-- Backend running at `http://localhost:5000` (e.g. `cd backend; npm run dev`).
+- Backend running at `http://127.0.0.1:5000` (e.g. `cd backend; npm run dev`). Use `127.0.0.1` (not `localhost`) on Windows to avoid IPv6 connection refused when Express binds to IPv4.
 - `NODE_ENV=development` so dev-only routes (`/api/connector/dev/create-device`, `/api/connector/dev/devices`) are enabled.
 - At least one company in the database (for create-device).
 
@@ -302,5 +302,5 @@ cd C:\Projects\aicfo-V4\connector-dotnet
 - [ ] Path to EXE: `_________________________`
 - [ ] Running `.\out\publish\AICFO.Connector.Tray.exe`: window / tray icon appeared? Y/N
 - [ ] Content of `%LOCALAPPDATA%\AICFO\Logs\connector.log` (if any) after one run
-- [ ] Backend `curl http://localhost:5000/health` response
+- [ ] Backend `curl http://127.0.0.1:5000/health` response
 - [ ] If MSI built: path to `AICFOConnectorSetup.msi` and install log path if install failed

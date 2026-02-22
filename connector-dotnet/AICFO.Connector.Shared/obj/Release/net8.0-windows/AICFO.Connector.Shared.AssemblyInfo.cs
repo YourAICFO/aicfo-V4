@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AICFO.Connector.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8408557f52c9dbbcf08608fc0522ec497594ffba")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+06d70b6f6a999d3a482793479220345b9fec94bc")]
 [assembly: System.Reflection.AssemblyProductAttribute("AICFO.Connector.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AICFO.Connector.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,6 +1,7 @@
 # E2E Local: backend health -> config -> build/publish tray -> start tray -> connector API + dev device -> evidence.
-# Requires: backend at http://localhost:5000, NODE_ENV=development for dev endpoints.
+# Requires: backend at http://127.0.0.1:5000, NODE_ENV=development for dev endpoints.
 # Run from: cd connector-dotnet; .\e2e-local.ps1
+# Uses 127.0.0.1 (not localhost) to avoid IPv6 connection refused on Windows when Express binds to IPv4.
 $ErrorActionPreference = "Stop"
 
 $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -8,7 +9,7 @@ $script:OutPublish = Join-Path $script:Root "out\publish"
 $script:TrayExeName = "AICFO.Connector.Tray.exe"
 $script:TrayExe = Join-Path $script:OutPublish $script:TrayExeName
 $script:BootstrapLog = Join-Path $env:LOCALAPPDATA "AICFO\Logs\connector.log"
-$script:BaseUrl = "http://localhost:5000"
+$script:BaseUrl = "http://127.0.0.1:5000"
 $script:ConfigPath = "C:\ProgramData\AICFO\config\config.json"
 $script:BackendRoot = Split-Path -Parent $script:Root
 $script:BackendTmpDevice = Join-Path $script:BackendRoot "backend\tmp\connector-dev-device.json"

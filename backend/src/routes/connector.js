@@ -24,6 +24,15 @@ const { validateChartOfAccountsPayload } = require('../services/coaPayloadValida
 const connectorLoginAttempts = new Map();
 let hasWarnedDataSyncStatusSchemaMissing = false;
 
+const isDev = process.env.NODE_ENV === 'development';
+
+function devOnly(res, handler) {
+  if (!isDev) {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+  return handler();
+}
+
 const authorizeCompanyAccess = async (userId, companyId) => {
   if (!companyId) return null;
   return Company.findOne({
@@ -226,6 +235,24 @@ router.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Connector routes are mounted correctly',
+  });
+});
+
+/* ===============================
+   DEV-ONLY: GET /api/connector/dev/routes
+   Lists dev endpoints for diagnostics. Returns 404 when not in development.
+================================ */
+router.get('/dev/routes', (req, res) => {
+  if (!isDev) {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+  return res.json({
+    success: true,
+    routes: [
+      'GET /api/connector/dev/routes',
+      'GET /api/connector/dev/devices',
+      'POST /api/connector/dev/create-device'
+    ]
   });
 });
 
@@ -1182,73 +1209,100 @@ router.get('/status/v1', authenticate, async (req, res) => {
 /* ===============================
    DEV-ONLY: POST /api/connector/dev/create-device
    Creates a ConnectorDevice with a raw token for E2E testing.
-   Refuses when NODE_ENV !== 'development'.
+   Returns 404 when NODE_ENV !== 'development'.
 ================================ */
 router.post('/dev/create-device', async (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(403).json({ success: false, error: 'Dev endpoint only available when NODE_ENV=development' });
+  if (!isDev) {
+    return res.status(404).json({ success: false, error: 'Not found' });
   }
   try {
-      const [company] = await Company.findAll({
-        where: { isDeleted: false, deletedAt: null },
-        attributes: ['id', 'ownerId'],
-        limit: 1,
-        raw: true
-      });
-      if (!company) {
-        return res.status(404).json({ success: false, error: 'No company found' });
-      }
-      const companyId = company.id;
-      const userId = company.ownerId;
-      const deviceId = `e2e-dev-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-      const rawToken = `aicfo_dev_${crypto.randomBytes(48).toString('hex')}`;
-      const deviceTokenHash = hashToken(rawToken);
-      await ConnectorDevice.create({
-        companyId,
-        userId,
-        deviceId,
-        deviceName: 'E2E Local Script',
-        deviceTokenHash,
-        status: 'active',
-        lastSeenAt: new Date()
-      });
-      const fs = require('fs');
-      const path = require('path');
-      const tmpDir = path.join(__dirname, '..', '..', 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      const outPath = path.join(tmpDir, 'connector-dev-device.json');
-      fs.writeFileSync(outPath, JSON.stringify({ device_id: deviceId, device_token: rawToken, company_id: companyId }, null, 2));
-      return res.json({
-        success: true,
-        data: { device_id: deviceId, device_token: rawToken, company_id: companyId },
-        message: `Saved to ${outPath}`
-      });
+    const [company] = await Company.findAll({
+      where: { isDeleted: false, deletedAt: null },
+      attributes: ['id', 'ownerId'],
+      limit: 1,
+      raw: true
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'No company found' });
+    }
+    const companyId = company.id;
+    const userId = company.ownerId;
+    const deviceId = `e2e-dev-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const rawToken = `aicfo_dev_${crypto.randomBytes(48).toString('hex')}`;
+    const deviceTokenHash = hashToken(rawToken);
+    await ConnectorDevice.create({
+      companyId,
+      userId,
+      deviceId,
+      deviceName: 'E2E Local Script',
+      deviceTokenHash,
+      status: 'active',
+      lastSeenAt: new Date()
+    });
+    const fs = require('fs');
+    const path = require('path');
+    const tmpDir = path.join(__dirname, '..', '..', 'tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const outPath = path.join(tmpDir, 'connector-dev-device.json');
+    fs.writeFileSync(outPath, JSON.stringify({ device_id: deviceId, device_token: rawToken, company_id: companyId }, null, 2));
+    return res.json({
+      success: true,
+      data: { device_id: deviceId, device_token: rawToken, company_id: companyId },
+      message: `Saved to ${outPath}`
+    });
   } catch (err) {
     console.error('Dev create-device error:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    const payload = { success: false, error: err.message };
+    if (isDev && err.stack) payload.stack = err.stack;
+    return res.status(500).json(payload);
   }
 });
 
 /* ===============================
    DEV-ONLY: GET /api/connector/dev/devices
    Returns last 5 connector_devices for E2E evidence.
-   Refuses when NODE_ENV !== 'development'.
+   Safe ordering: last_seen_at DESC, else created_at, else no order.
+   Returns 404 when NODE_ENV !== 'development'.
 ================================ */
 router.get('/dev/devices', async (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(403).json({ success: false, error: 'Dev endpoint only available when NODE_ENV=development' });
+  if (!isDev) {
+    return res.status(404).json({ success: false, error: 'Not found' });
   }
   try {
-    const devices = await ConnectorDevice.findAll({
-      order: [['updatedAt', 'DESC']],
-      limit: 5,
-      attributes: ['id', 'companyId', 'userId', 'deviceId', 'deviceName', 'status', 'lastSeenAt', 'createdAt', 'updatedAt'],
-      raw: true
-    });
-    return res.json({ success: true, data: devices });
+    const attrs = ['id', 'companyId', 'userId', 'deviceId', 'deviceName', 'status', 'lastSeenAt'];
+    let order = [[sequelize.literal('last_seen_at DESC NULLS LAST')]];
+    try {
+      const devices = await ConnectorDevice.findAll({
+        attributes: attrs,
+        order,
+        limit: 5,
+        raw: true
+      });
+      return res.json({ success: true, devices });
+    } catch (orderErr) {
+      order = [[sequelize.literal('created_at DESC')]];
+      try {
+        const devices = await ConnectorDevice.findAll({
+          attributes: attrs,
+          order,
+          limit: 5,
+          raw: true
+        });
+        return res.json({ success: true, devices });
+      } catch (_) {
+        const devices = await ConnectorDevice.findAll({
+          attributes: attrs,
+          limit: 5,
+          raw: true
+        });
+        return res.json({ success: true, devices });
+      }
+    }
   } catch (err) {
     console.error('Dev devices error:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    const payload = { success: false, error: err.message };
+    if (isDev && err.stack) payload.stack = err.stack;
+    return res.status(500).json(payload);
   }
 });
 
