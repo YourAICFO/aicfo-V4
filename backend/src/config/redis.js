@@ -2,7 +2,8 @@ require('dotenv').config();
 
 const IORedis = require('ioredis');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// Default 127.0.0.1 to avoid IPv6 (::1) connection refused on Windows when Redis binds to IPv4
+const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const isProduction = process.env.NODE_ENV === 'production';
 const QUEUE_RESILIENT_MODE = process.env.QUEUE_RESILIENT_MODE === 'true';
 

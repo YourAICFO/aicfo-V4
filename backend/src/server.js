@@ -325,6 +325,15 @@ const startServer = async () => {
     });
   } catch (error) {
     logger.error({ err: error }, 'Failed to start server');
+    if (process.env.NODE_ENV !== 'production') {
+      const msg = error && error.message ? String(error.message) : '';
+      if (msg.includes('ECONNREFUSED') && (msg.includes('5432') || (error.parent && String(error.parent.message || '').includes('5432')))) {
+        console.error('Hint: Ensure PostgreSQL is running and DATABASE_URL is correct (e.g. postgresql://user:pass@127.0.0.1:5432/aicfo).');
+      }
+      if (msg.includes('6379') || (error.parent && String(error.parent.message || '').includes('6379'))) {
+        console.error('Hint: Start Redis or set QUEUE_RESILIENT_MODE=true in .env to run without Redis.');
+      }
+    }
     process.exit(1);
   }
 };
