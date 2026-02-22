@@ -15,19 +15,55 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        Directory.CreateDirectory(ConnectorPaths.LogsDirectory);
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.File(Path.Combine(ConnectorPaths.LogsDirectory, "tray.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, shared: true)
-            .CreateLogger();
+        WriteBootstrapLog("Tray starting at " + DateTime.UtcNow.ToString("O"));
 
-        ApplicationConfiguration.Initialize();
-        Application.Run(new TrayApplicationContext(
-            new ConfigStore(),
-            new CredentialStore(),
-            new SyncNowTriggerClient(),
-            new AicfoApiClient(new HttpClient(), NullLogger<AicfoApiClient>.Instance),
-            new TallyXmlClient(new HttpClient(), NullLogger<TallyXmlClient>.Instance)));
+        try
+        {
+            var logDir = ConnectorPaths.LogsDirectory;
+            try
+            {
+                Directory.CreateDirectory(logDir);
+            }
+            catch (Exception ex)
+            {
+                WriteBootstrapLog("ProgramData logs dir failed: " + ex.Message + "; using user log dir.");
+                logDir = ConnectorPaths.UserLogsDirectory;
+                Directory.CreateDirectory(logDir);
+            }
+
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.File(Path.Combine(logDir, "tray.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, shared: true)
+                .CreateLogger();
+
+            ApplicationConfiguration.Initialize();
+            Application.Run(new TrayApplicationContext(
+                new ConfigStore(),
+                new CredentialStore(),
+                new SyncNowTriggerClient(),
+                new AicfoApiClient(new HttpClient(), NullLogger<AicfoApiClient>.Instance),
+                new TallyXmlClient(new HttpClient(), NullLogger<TallyXmlClient>.Instance)));
+        }
+        catch (Exception ex)
+        {
+            WriteBootstrapLog("Fatal: " + ex.ToString());
+            throw;
+        }
+    }
+
+    private static void WriteBootstrapLog(string message)
+    {
+        try
+        {
+            var dir = ConnectorPaths.UserLogsDirectory;
+            Directory.CreateDirectory(dir);
+            var path = ConnectorPaths.BootstrapLogFile;
+            File.AppendAllText(path, DateTime.UtcNow.ToString("O") + " " + message + Environment.NewLine);
+        }
+        catch
+        {
+            // Ignore; avoid throwing from bootstrap
+        }
     }
 }
 

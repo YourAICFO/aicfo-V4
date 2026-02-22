@@ -5,7 +5,7 @@ namespace AICFO.Connector.Shared.Models;
 public sealed class ConnectorConfig
 {
     [JsonPropertyName("api_url")]
-    public string ApiUrl { get; set; } = string.Empty;
+    public string ApiUrl { get; set; } = "http://localhost:5000";
 
     [JsonPropertyName("tally_host")]
     public string TallyHost { get; set; } = "127.0.0.1";
