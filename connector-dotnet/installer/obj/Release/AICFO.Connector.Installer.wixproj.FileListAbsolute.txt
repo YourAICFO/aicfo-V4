@@ -1,0 +1,2 @@
+C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\AICFO.Connector.Installer.wixproj.CoreCompileInputs.cache
+C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\_ServicePublishFiles_dir.wxs

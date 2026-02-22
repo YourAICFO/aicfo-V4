@@ -154,6 +154,147 @@ msiexec /i AICFOConnectorSetup.msi /l*v %TEMP%\aicfo-connector-install.log
 
 ---
 
+## Local Tray Verification (Automated)
+
+One-command local check that the Tray build runs and the process stays alive after launch.
+
+**Command (run from connector-dotnet):**
+```powershell
+cd C:\Projects\aicfo-V4\connector-dotnet
+.\verify-tray.ps1
+```
+
+**What it does:**
+- Resolves `dotnet` (PATH, where.exe, ProgramFiles, ProgramFiles(x86)); prints DOTNET EXE and PATH contains dotnet
+- Builds the **Tray project** only (Release; avoids installer/WiX), publishes Tray to `out\publish`
+- Starts `AICFO.Connector.Tray.exe` in the background, waits 3 seconds
+- Verifies the process is still running
+- Prints the last 50 lines of the bootstrap log (`%LOCALAPPDATA%\AICFO\Logs\connector.log`) if it exists
+- Exits 0 if the tray process is alive; non-zero otherwise with diagnostics
+
+**Logs:**
+- Bootstrap: `$env:LOCALAPPDATA\AICFO\Logs\connector.log` (startup and fatal errors)
+- Tray log: `C:\ProgramData\AICFO\logs\tray.log` or `%LOCALAPPDATA%\AICFO\Logs\tray.log` if ProgramData is not writable
+
+**Stop the Tray process after verification:**
+```powershell
+Stop-Process -Name "AICFO.Connector.Tray" -Force
+```
+
+**Sample expected output (success):**
+```
+dotnet --version
+8.0.x
+Building solution (Release)...
+...
+Publishing Tray (win-x64, self-contained) to ...\out\publish...
+...
+Starting Tray in background...
+Waiting 3 seconds...
+SUCCESS: Tray process is running (PID(s): 12345)
+Bootstrap log location: C:\Users\...\AppData\Local\AICFO\Logs\connector.log
+Bootstrap log (last 50 lines):
+... Tray starting at ...
+Verification passed. To stop the Tray process: Stop-Process -Name 'AICFO.Connector.Tray' -Force
+```
+
+---
+
+### Evidence
+
+**Commands run:**
+```powershell
+cd C:\Projects\aicfo-V4\connector-dotnet
+Get-Command dotnet | Format-List
+where.exe dotnet
+.\verify-tray.ps1
+```
+
+**Step 2 — Get-Command dotnet | Format-List** (run in same session where dotnet was not in PATH):
+```text
+Get-Command : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable program.
+Check the spelling of the name, or if a path was included, verify that it was correct.
+At line 1 char:55
++ Get-Command dotnet | Format-List
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : CommandNotFoundException
+    + FullyQualifiedId       : CommandNotFoundException
+```
+
+**Step 3 — where.exe dotnet:**
+```text
+INFO: Could not find files for the given pattern(s).
+```
+
+**Step 4 — .\verify-tray.ps1 (full console output):**
+```text
+DOTNET EXE: C:\Program Files\dotnet\dotnet.exe
+PATH contains dotnet: False
+dotnet --version
+10.0.103
+Stopping existing Tray process(es)...
+Building Tray project (Release)...
+  Determining projects to restore...
+C:\Projects\aicfo-V4\connector-dotnet\AICFO.Connector.Tray\AICFO.Connector.Tray.csproj : warning NU1701: Package 'CredentialManagement 1.0.2' was restored using ...
+  All projects are up-to-date for restore.
+  AICFO.Connector.Shared -> ...\AICFO.Connector.Shared.dll
+  AICFO.Connector.Tray -> ...\AICFO.Connector.Tray\bin\Release\net8.0-windows\win-x64\AICFO.Connector.Tray.dll
+
+Build succeeded.
+    4 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.14
+Publishing Tray (win-x64, self-contained) to C:\Projects\aicfo-V4\connector-dotnet\out\publish...
+  AICFO.Connector.Shared -> ...\AICFO.Connector.Shared.dll
+  AICFO.Connector.Tray -> ...\AICFO.Connector.Tray\bin\Release\net8.0-windows\win-x64\AICFO.Connector.Tray.dll
+  AICFO.Connector.Tray -> C:\Projects\aicfo-V4\connector-dotnet\out\publish\
+
+Starting Tray in background...
+Waiting 3 seconds...
+SUCCESS: Tray process is running (PID(s): 18060)
+Bootstrap log location: C:\Users\AB COM\AppData\Local\AICFO\Logs\connector.log
+Bootstrap log (last 50 lines):
+2026-02-22T11:51:16.5931241Z Tray starting at 2026-02-22T11:51:16.5823150Z
+2026-02-22T11:51:16.8246362Z Fatal: System.NullReferenceException: Object reference not set to an instance of an object.
+   at System.Drawing.Font..ctor(Font prototype, FontStyle newStyle)
+   at AICFO.Connector.Tray.ConnectorControlPanel..ctor(IConfigStore configStore, ICredentialStore credentialStore, ISyncNowTriggerClient syncNowTriggerClient, IAicfoApiClient apiClient, ITallyXmlClient tallyClient) in C:\Projects\aicfo-V4\connector-dotnet\AICFO.Connector.Tray\Program.cs:line 246
+   at AICFO.Connector.Tray.TrayApplicationContext..ctor(IConfigStore configStore, ICredentialStore credentialStore, ISyncNowTriggerClient syncNowTriggerClient, IAicfoApiClient apiClient, ITallyXmlClient tallyClient) in C:\Projects\aicfo-V4\connector-dotnet\AICFO.Connector.Tray\Program.cs:line 82
+   at AICFO.Connector.Tray.Program.Main() in C:\Projects\aicfo-V4\connector-dotnet\AICFO.Connector.Tray\Program.cs:line 40
+2026-02-22T12:08:52.7069600Z Tray starting at 2026-02-22T12:08:52.6951470Z
+2026-02-22T12:12:32.6803509Z Tray starting at 2026-02-22T12:12:32.6714098Z
+
+Verification passed. To stop the Tray process: Stop-Process -Name 'AICFO.Connector.Tray' -Force
+```
+
+**Final: PASS.**  
+- **Why PASS:** `.\verify-tray.ps1` exited with code 0. Dotnet was resolved from `C:\Program Files\dotnet\dotnet.exe` (PATH did not contain dotnet). Tray project built and published successfully. The Tray process was running (PID 18060) after 3 seconds. The bootstrap log shows the latest run at `2026-02-22T12:12:32` with "Tray starting at" and **no** "Fatal:" line after it; the Fatal at 11:51 is from an earlier run before the SafeFontForStyle fix. The script builds the Tray project only (not the full solution) to avoid installer/WiX HEAT errors.
+
+---
+
+## Local E2E Test (Backend + Tray)
+
+End-to-end proof: backend reachable, tray built and running, config points to localhost, connector dev routes and authenticated calls exercised.
+
+**Prerequisites:**
+- Backend running at `http://localhost:5000` (e.g. `cd backend; npm run dev`).
+- `NODE_ENV=development` so dev-only routes (`/api/connector/dev/create-device`, `/api/connector/dev/devices`) are enabled.
+- At least one company in the database (for create-device).
+
+**Command:**
+```powershell
+cd C:\Projects\aicfo-V4\connector-dotnet
+.\e2e-local.ps1
+```
+
+**PASTE OUTPUT HERE**
+
+```text
+
+```
+
+---
+
 ## Evidence checklist (you fill after running)
 
 - [ ] `dotnet --info` output (paste or attach)

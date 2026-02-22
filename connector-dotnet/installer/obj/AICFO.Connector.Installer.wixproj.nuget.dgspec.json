@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj": {}
+  },
+  "projects": {
+    "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj",
+        "projectName": "AICFOConnectorSetup",
+        "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj",
+        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\obj\\",
+        "projectStyle": "PackageReference",
+        "UsingMicrosoftNETSdk": false,
+        "configFilePaths": [
+          "C:\\Users\\AB COM\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "native"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "native": {
+            "targetAlias": "native",
+            "projectReferences": {}
+          }
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "native": {
+          "targetAlias": "native",
+          "dependencies": {
+            "WixToolset.Heat": {
+              "target": "Package",
+              "version": "[4.0.4, )"
+            }
+          }
+        }
+      }
+    }
+  }
+}

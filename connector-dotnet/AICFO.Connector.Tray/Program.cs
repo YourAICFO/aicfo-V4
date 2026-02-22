@@ -51,7 +51,7 @@ internal static class Program
         }
     }
 
-    private static void WriteBootstrapLog(string message)
+    internal static void WriteBootstrapLog(string message)
     {
         try
         {
@@ -70,7 +70,7 @@ internal static class Program
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _notifyIcon;
-    private readonly ConnectorControlPanel _controlPanel;
+    private readonly ConnectorControlPanel? _controlPanel;
 
     public TrayApplicationContext(
         IConfigStore configStore,
@@ -79,7 +79,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
         IAicfoApiClient apiClient,
         ITallyXmlClient tallyClient)
     {
-        _controlPanel = new ConnectorControlPanel(configStore, credentialStore, syncNowTriggerClient, apiClient, tallyClient);
+        ConnectorControlPanel? panel = null;
+        try
+        {
+            panel = new ConnectorControlPanel(configStore, credentialStore, syncNowTriggerClient, apiClient, tallyClient);
+        }
+        catch (Exception ex)
+        {
+            try { Program.WriteBootstrapLog("UI construction failed: " + ex.ToString()); }
+            catch { /* ignore */ }
+            try { Log.Error(ex, "ConnectorControlPanel construction failed"); }
+            catch { /* ignore */ }
+        }
+        _controlPanel = panel;
 
         _notifyIcon = new NotifyIcon
         {
@@ -91,10 +103,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _notifyIcon.DoubleClick += (_, _) => OpenControlPanel();
 
-        var config = configStore.Load();
-        if (config is null || config.Mappings.Count == 0)
+        if (_controlPanel is null)
         {
-            OpenControlPanel();
+            _notifyIcon.ShowBalloonTip(5000, "AI CFO Connector", "Started with limited UI. Check logs: %LOCALAPPDATA%\\AICFO\\Logs\\connector.log", ToolTipIcon.Warning);
+        }
+        else
+        {
+            var config = configStore.Load();
+            if (config is null || config.Mappings.Count == 0)
+            {
+                OpenControlPanel();
+            }
         }
     }
 
@@ -111,6 +130,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenControlPanel()
     {
+        if (_controlPanel is null)
+        {
+            _notifyIcon.ShowBalloonTip(5000, "AI CFO Connector", "Control panel unavailable. Check logs: %LOCALAPPDATA%\\AICFO\\Logs\\connector.log", ToolTipIcon.Warning);
+            return;
+        }
         _controlPanel.Show();
         _controlPanel.WindowState = FormWindowState.Normal;
         _controlPanel.BringToFront();
@@ -119,6 +143,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private async Task SyncAllAsync()
     {
+        if (_controlPanel is null)
+        {
+            _notifyIcon.ShowBalloonTip(3000, "AI CFO Connector", "Control panel unavailable. Check logs.", ToolTipIcon.Warning);
+            return;
+        }
         try
         {
             await _controlPanel.TriggerSyncAllAsync();
@@ -161,7 +190,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
-        _controlPanel.Close();
+        _controlPanel?.Close();
         base.ExitThreadCore();
     }
 }
@@ -243,7 +272,13 @@ internal sealed class ConnectorControlPanel : Form
         Text = string.Empty
     };
     private readonly ListView _mappingsList = new() { Width = 820, Height = 220, View = View.Details, FullRowSelect = true, GridLines = true, ShowItemToolTips = true };
-    private readonly Label _linkedSummaryTitle = new() { AutoSize = true, Text = "Select a mapping above", Font = new Font(default!, FontStyle.Bold) };
+    private readonly Label _linkedSummaryTitle = new() { AutoSize = true, Text = "Select a mapping above", Font = SafeFontForStyle(null, FontStyle.Bold) };
+
+    private static Font SafeFontForStyle(Font? prototype, FontStyle style)
+    {
+        var baseFont = prototype ?? SystemFonts.MessageBoxFont ?? Control.DefaultFont;
+        return new Font(baseFont, style);
+    }
     private readonly Label _linkedWebCompany = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedShortId = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };
     private readonly Label _linkedTallyName = new() { AutoSize = true, Text = "-" };
@@ -411,7 +446,7 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(buttonBar, 0, 8);
         panel.SetColumnSpan(buttonBar, 4);
 
-        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 9);
+        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 9);
         panel.SetColumnSpan(_statusGrid, 4);
         panel.Controls.Add(_statusGrid, 0, 10);
         panel.Controls.Add(_statusHint, 0, 11);
@@ -433,7 +468,7 @@ internal sealed class ConnectorControlPanel : Form
             AutoScroll = true
         };
 
-        panel.Controls.Add(new Label { Text = "Login", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
+        panel.Controls.Add(new Label { Text = "Login", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 0);
         panel.Controls.Add(new Label { Text = "Email", AutoSize = true }, 0, 1);
         panel.Controls.Add(_loginEmail, 1, 1);
         panel.Controls.Add(new Label { Text = "Password", AutoSize = true }, 0, 2);

@@ -41,7 +41,18 @@ if (-not (Test-Path $trayExe)) {
     exit 1
 }
 
+# Ensure publish\service and publish\tray exist so any later WiX/heat step does not fail with HEAT5052
+$publishService = Join-Path $root "publish\service"
+$publishTray = Join-Path $root "publish\tray"
+foreach ($dir in $publishService, $publishTray) {
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Write-Host "Created placeholder: $dir"
+    }
+}
+
 Write-Host ""
+Write-Host "Installer build skipped in local script."
 Write-Host "Done. Tray EXE: $trayExe"
 Write-Host "Run from PowerShell: & '$trayExe'"
 Write-Host "Bootstrap log (if app fails to open): $env:LOCALAPPDATA\AICFO\Logs\connector.log"
