@@ -4,7 +4,7 @@
  * Requires backend at http://127.0.0.1:5000 and NODE_ENV=development.
  * Override base URL via env BASE_URL (default 127.0.0.1 to avoid IPv6 on Windows).
  */
-const base = process.env.BASE_URL || 'http://127.0.0.1:5000';
+const base = process.env.BASE_URL || 'http://127.0.0.1:5000'.replace(/\/$/, '');
 
 async function request(method, path, body) {
   const url = path.startsWith('http') ? path : `${base}${path}`;
