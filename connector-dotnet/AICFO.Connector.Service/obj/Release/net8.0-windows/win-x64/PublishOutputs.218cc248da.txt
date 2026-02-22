@@ -1,0 +1,3 @@
+C:\Projects\aicfo-V4\connector-dotnet\publish\service\AICFO.Connector.Service.pdb
+C:\Projects\aicfo-V4\connector-dotnet\publish\service\AICFO.Connector.Shared.pdb
+C:\Projects\aicfo-V4\connector-dotnet\publish\service\AICFO.Connector.Service.exe

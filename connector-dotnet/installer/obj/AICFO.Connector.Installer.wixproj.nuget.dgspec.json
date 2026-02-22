@@ -10,7 +10,7 @@
         "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj",
         "projectName": "AICFOConnectorSetup",
         "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj",
-        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
         "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\obj\\",
         "projectStyle": "PackageReference",
         "UsingMicrosoftNETSdk": false,

@@ -10,7 +10,7 @@
         "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\AICFO.Connector.Service.csproj",
         "projectName": "AICFO.Connector.Service",
         "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\AICFO.Connector.Service.csproj",
-        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
         "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
@@ -52,6 +52,12 @@
               "target": "Package",
               "version": "[8.0.0, )"
             },
+            "Microsoft.NET.ILLink.Tasks": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.24, )",
+              "autoReferenced": true
+            },
             "Polly": {
               "target": "Package",
               "version": "[8.4.1, )"
@@ -90,6 +96,10 @@
               "version": "[8.0.24, 8.0.24]"
             },
             {
+              "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
               "name": "Microsoft.NETCore.App.Host.win-x64",
               "version": "[8.0.24, 8.0.24]"
             },
@@ -98,7 +108,15 @@
               "version": "[8.0.24, 8.0.24]"
             },
             {
+              "name": "Microsoft.NETCore.App.Runtime.win-x64",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
               "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
               "version": "[8.0.24, 8.0.24]"
             }
           ],
@@ -122,7 +140,7 @@
         "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\AICFO.Connector.Shared.csproj",
         "projectName": "AICFO.Connector.Shared",
         "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\AICFO.Connector.Shared.csproj",
-        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
         "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
@@ -168,6 +186,12 @@
               "target": "Package",
               "version": "[8.0.2, )"
             },
+            "Microsoft.NET.ILLink.Tasks": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.24, )",
+              "autoReferenced": true
+            },
             "System.ServiceProcess.ServiceController": {
               "target": "Package",
               "version": "[8.0.0, )"
@@ -190,11 +214,23 @@
               "version": "[8.0.24, 8.0.24]"
             },
             {
+              "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
               "name": "Microsoft.NETCore.App.Ref",
               "version": "[8.0.24, 8.0.24]"
             },
             {
+              "name": "Microsoft.NETCore.App.Runtime.win-x64",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
               "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[8.0.24, 8.0.24]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
               "version": "[8.0.24, 8.0.24]"
             }
           ],
@@ -204,6 +240,11 @@
             }
           },
           "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win-x64": {
+          "#import": []
         }
       }
     }

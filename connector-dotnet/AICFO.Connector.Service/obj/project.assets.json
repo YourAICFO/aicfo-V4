@@ -656,6 +656,12 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
+      "Microsoft.NET.ILLink.Tasks/8.0.24": {
+        "type": "package",
+        "build": {
+          "build/Microsoft.NET.ILLink.Tasks.props": {}
+        }
+      },
       "Polly/8.4.1": {
         "type": "package",
         "dependencies": {
@@ -1547,6 +1553,12 @@
         },
         "build": {
           "buildTransitive/net6.0/_._": {}
+        }
+      },
+      "Microsoft.NET.ILLink.Tasks/8.0.24": {
+        "type": "package",
+        "build": {
+          "build/Microsoft.NET.ILLink.Tasks.props": {}
         }
       },
       "Polly/8.4.1": {
@@ -2762,6 +2774,57 @@
         "useSharedDesignerContext.txt"
       ]
     },
+    "Microsoft.NET.ILLink.Tasks/8.0.24": {
+      "sha512": "1gnadp//+DoGJvV4AFdzPqYPxkypaWYjYMCr7KAacV0iadsHz1nU+rrkoxBCna4FCmeKH49CisEwa7g94/MbEg==",
+      "type": "package",
+      "path": "microsoft.net.illink.tasks/8.0.24",
+      "hasTools": true,
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "Sdk/Sdk.props",
+        "THIRD-PARTY-NOTICES.TXT",
+        "analyzers/dotnet/cs/ILLink.CodeFixProvider.dll",
+        "analyzers/dotnet/cs/ILLink.RoslynAnalyzer.dll",
+        "build/Microsoft.NET.ILLink.Analyzers.props",
+        "build/Microsoft.NET.ILLink.Tasks.props",
+        "build/Microsoft.NET.ILLink.targets",
+        "microsoft.net.illink.tasks.8.0.24.nupkg.sha512",
+        "microsoft.net.illink.tasks.nuspec",
+        "tools/net472/ILLink.Tasks.dll",
+        "tools/net472/ILLink.Tasks.dll.config",
+        "tools/net472/Mono.Cecil.Mdb.dll",
+        "tools/net472/Mono.Cecil.Pdb.dll",
+        "tools/net472/Mono.Cecil.Rocks.dll",
+        "tools/net472/Mono.Cecil.dll",
+        "tools/net472/Sdk/Sdk.props",
+        "tools/net472/System.Buffers.dll",
+        "tools/net472/System.Collections.Immutable.dll",
+        "tools/net472/System.Memory.dll",
+        "tools/net472/System.Numerics.Vectors.dll",
+        "tools/net472/System.Reflection.Metadata.dll",
+        "tools/net472/System.Runtime.CompilerServices.Unsafe.dll",
+        "tools/net472/build/Microsoft.NET.ILLink.Analyzers.props",
+        "tools/net472/build/Microsoft.NET.ILLink.Tasks.props",
+        "tools/net472/build/Microsoft.NET.ILLink.targets",
+        "tools/net8.0/ILLink.Tasks.deps.json",
+        "tools/net8.0/ILLink.Tasks.dll",
+        "tools/net8.0/Mono.Cecil.Mdb.dll",
+        "tools/net8.0/Mono.Cecil.Pdb.dll",
+        "tools/net8.0/Mono.Cecil.Rocks.dll",
+        "tools/net8.0/Mono.Cecil.dll",
+        "tools/net8.0/Sdk/Sdk.props",
+        "tools/net8.0/build/Microsoft.NET.ILLink.Analyzers.props",
+        "tools/net8.0/build/Microsoft.NET.ILLink.Tasks.props",
+        "tools/net8.0/build/Microsoft.NET.ILLink.targets",
+        "tools/net8.0/illink.deps.json",
+        "tools/net8.0/illink.dll",
+        "tools/net8.0/illink.runtimeconfig.json",
+        "useSharedDesignerContext.txt"
+      ]
+    },
     "Polly/8.4.1": {
       "sha512": "kBxql53peR0bjxeEuuY114GD2rmC0tkUwE1xuKUlnd74ULEsGu3OwcLH56KkwxBPUbOysPa7stT9SJ6pKGTzlg==",
       "type": "package",
@@ -3162,6 +3225,7 @@
     "net8.0-windows7.0": [
       "AICFO.Connector.Shared >= 1.0.0",
       "Microsoft.Extensions.Hosting.WindowsServices >= 8.0.0",
+      "Microsoft.NET.ILLink.Tasks >= 8.0.24",
       "Polly >= 8.4.1",
       "Serilog >= 3.1.1",
       "Serilog.Extensions.Hosting >= 8.0.0",
@@ -3170,7 +3234,7 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget": {}
+    "C:\\Users\\AB COM\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
@@ -3178,7 +3242,7 @@
       "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\AICFO.Connector.Service.csproj",
       "projectName": "AICFO.Connector.Service",
       "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\AICFO.Connector.Service.csproj",
-      "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+      "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
       "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Service\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
@@ -3220,6 +3284,12 @@
             "target": "Package",
             "version": "[8.0.0, )"
           },
+          "Microsoft.NET.ILLink.Tasks": {
+            "suppressParent": "All",
+            "target": "Package",
+            "version": "[8.0.24, )",
+            "autoReferenced": true
+          },
           "Polly": {
             "target": "Package",
             "version": "[8.4.1, )"
@@ -3258,6 +3328,10 @@
             "version": "[8.0.24, 8.0.24]"
           },
           {
+            "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+            "version": "[8.0.24, 8.0.24]"
+          },
+          {
             "name": "Microsoft.NETCore.App.Host.win-x64",
             "version": "[8.0.24, 8.0.24]"
           },
@@ -3266,7 +3340,15 @@
             "version": "[8.0.24, 8.0.24]"
           },
           {
+            "name": "Microsoft.NETCore.App.Runtime.win-x64",
+            "version": "[8.0.24, 8.0.24]"
+          },
+          {
             "name": "Microsoft.WindowsDesktop.App.Ref",
+            "version": "[8.0.24, 8.0.24]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
             "version": "[8.0.24, 8.0.24]"
           }
         ],

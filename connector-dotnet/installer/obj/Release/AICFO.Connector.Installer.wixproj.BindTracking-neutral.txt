@@ -1,0 +1,10 @@
+BuiltPdbOutput	C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\AICFOConnectorSetup.wixpdb
+BuiltTargetOutput	C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\AICFOConnectorSetup.msi
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\service\AICFO.Connector.Service.exe
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\service\AICFO.Connector.Service.pdb
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\service\AICFO.Connector.Shared.pdb
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\tray\AICFO.Connector.Shared.pdb
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\tray\AICFO.Connector.Tray.exe
+Input	C:\Projects\aicfo-V4\connector-dotnet\installer\..\publish\tray\AICFO.Connector.Tray.pdb
+Intermediate	C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\#cab1.cab
+Intermediate	C:\Projects\aicfo-V4\connector-dotnet\installer\obj\Release\#cab2.cab

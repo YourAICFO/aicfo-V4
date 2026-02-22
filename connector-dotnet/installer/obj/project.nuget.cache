@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "q1Phbdd9dIU=",
+  "dgSpecHash": "N0RtuMQIqgM=",
   "success": true,
   "projectFilePath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\installer\\AICFO.Connector.Installer.wixproj",
   "expectedPackageFiles": [
-    "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget\\wixtoolset.heat\\4.0.4\\wixtoolset.heat.4.0.4.nupkg.sha512"
+    "C:\\Users\\AB COM\\.nuget\\packages\\wixtoolset.heat\\4.0.4\\wixtoolset.heat.4.0.4.nupkg.sha512"
   ],
   "logs": []
 }

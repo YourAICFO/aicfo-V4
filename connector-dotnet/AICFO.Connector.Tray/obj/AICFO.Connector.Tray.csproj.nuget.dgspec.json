@@ -10,7 +10,7 @@
         "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\AICFO.Connector.Shared.csproj",
         "projectName": "AICFO.Connector.Shared",
         "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\AICFO.Connector.Shared.csproj",
-        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
         "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Shared\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
@@ -124,7 +124,7 @@
         "projectUniqueName": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Tray\\AICFO.Connector.Tray.csproj",
         "projectName": "AICFO.Connector.Tray",
         "projectPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Tray\\AICFO.Connector.Tray.csproj",
-        "packagesPath": "C:\\Users\\AB COM\\AppData\\Local\\Temp\\cursor-sandbox-cache\\45f8fa4bde9036739818d2b7b1674c85\\nuget",
+        "packagesPath": "C:\\Users\\AB COM\\.nuget\\packages\\",
         "outputPath": "C:\\Projects\\aicfo-V4\\connector-dotnet\\AICFO.Connector.Tray\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [

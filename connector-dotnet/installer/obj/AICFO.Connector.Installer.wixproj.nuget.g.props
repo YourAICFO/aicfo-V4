@@ -4,15 +4,15 @@
     <RestoreSuccess Condition=" '$(RestoreSuccess)' == '' ">True</RestoreSuccess>
     <RestoreTool Condition=" '$(RestoreTool)' == '' ">NuGet</RestoreTool>
     <ProjectAssetsFile Condition=" '$(ProjectAssetsFile)' == '' ">$(MSBuildThisFileDirectory)project.assets.json</ProjectAssetsFile>
-    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\AppData\Local\Temp\cursor-sandbox-cache\45f8fa4bde9036739818d2b7b1674c85\nuget</NuGetPackageRoot>
-    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">C:\Users\AB COM\AppData\Local\Temp\cursor-sandbox-cache\45f8fa4bde9036739818d2b7b1674c85\nuget</NuGetPackageFolders>
+    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
+    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">C:\Users\AB COM\.nuget\packages\</NuGetPackageFolders>
     <NuGetProjectStyle Condition=" '$(NuGetProjectStyle)' == '' ">PackageReference</NuGetProjectStyle>
     <NuGetToolVersion Condition=" '$(NuGetToolVersion)' == '' ">7.0.0</NuGetToolVersion>
   </PropertyGroup>
   <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
-    <SourceRoot Include="C:\Users\AB COM\AppData\Local\Temp\cursor-sandbox-cache\45f8fa4bde9036739818d2b7b1674c85\nuget\" />
+    <SourceRoot Include="C:\Users\AB COM\.nuget\packages\" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
-    <PkgWixToolset_Heat Condition=" '$(PkgWixToolset_Heat)' == '' ">C:\Users\AB COM\AppData\Local\Temp\cursor-sandbox-cache\45f8fa4bde9036739818d2b7b1674c85\nuget\wixtoolset.heat\4.0.4</PkgWixToolset_Heat>
+    <PkgWixToolset_Heat Condition=" '$(PkgWixToolset_Heat)' == '' ">C:\Users\AB COM\.nuget\packages\wixtoolset.heat\4.0.4</PkgWixToolset_Heat>
   </PropertyGroup>
 </Project>

@@ -1,0 +1,20 @@
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Fragment>
+        <DirectoryRef Id="TRAYFOLDER">
+            <Component Id="cmpFEt_Dyv7FCVICgwSSJVApZ8y7Mk" Guid="*">
+                <File Id="fil9P4MWPJondTBrp29P.J4HFNfV0U" KeyPath="yes" Source="$(TrayPublishDir)\AICFO.Connector.Shared.pdb" />
+            </Component>
+            
+            <Component Id="cmpAQYTiTTLtUIzKCxmcMa4ut2L0wE" Guid="*">
+                <File Id="filSi0.LoPFl1gImWtAmaIWtwQhMEg" KeyPath="yes" Source="$(TrayPublishDir)\AICFO.Connector.Tray.pdb" />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <ComponentGroup Id="TrayPublishFiles">
+            <ComponentRef Id="cmpFEt_Dyv7FCVICgwSSJVApZ8y7Mk" />
+            
+            <ComponentRef Id="cmpAQYTiTTLtUIzKCxmcMa4ut2L0wE" />
+        </ComponentGroup>
+    </Fragment>
+</Wix>
