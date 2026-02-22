@@ -289,9 +289,11 @@ const startServer = async () => {
       try {
         await testConnection();
       } catch (err) {
-        logger.error({ err }, 'Redis is required but unavailable (development). Set QUEUE_RESILIENT_MODE=true to run without Redis.');
+        logger.error({ err }, 'Redis is required but unavailable. Set QUEUE_RESILIENT_MODE=true to run without Redis.');
         process.exit(1);
       }
+    } else if (process.env.NODE_ENV === 'development') {
+      logger.info('Development: Redis optional (queue resilient mode).');
     }
 
     if (sequelize.getDialect() === 'postgres') {
@@ -326,13 +328,19 @@ const startServer = async () => {
   } catch (error) {
     logger.error({ err: error }, 'Failed to start server');
     if (process.env.NODE_ENV !== 'production') {
-      const msg = error && error.message ? String(error.message) : '';
-      if (msg.includes('ECONNREFUSED') && (msg.includes('5432') || (error.parent && String(error.parent.message || '').includes('5432')))) {
-        console.error('Hint: Ensure PostgreSQL is running and DATABASE_URL is correct (e.g. postgresql://user:pass@127.0.0.1:5432/aicfo).');
+      const errStr = JSON.stringify(error && error.original ? error.original : error);
+      const has5432 = errStr.includes('5432') || (error.parent && String(error.parent.message || '').includes('5432'));
+      const has6379 = errStr.includes('6379');
+      if (has5432 || errStr.includes('ECONNREFUSED')) {
+        console.error('');
+        console.error('Hint: Ensure PostgreSQL is running and DATABASE_URL is correct.');
+        console.error('  Example: DATABASE_URL=postgresql://user:pass@127.0.0.1:5432/aicfo');
+        console.error('  On Windows use 127.0.0.1 instead of localhost to avoid IPv6 issues.');
       }
-      if (msg.includes('6379') || (error.parent && String(error.parent.message || '').includes('6379'))) {
-        console.error('Hint: Start Redis or set QUEUE_RESILIENT_MODE=true in .env to run without Redis.');
+      if (has6379) {
+        console.error('Hint: Start Redis, or in development Redis is optional (queue resilient mode is default).');
       }
+      console.error('');
     }
     process.exit(1);
   }

@@ -5,7 +5,10 @@ const IORedis = require('ioredis');
 // Default 127.0.0.1 to avoid IPv6 (::1) connection refused on Windows when Redis binds to IPv4
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const isProduction = process.env.NODE_ENV === 'production';
-const QUEUE_RESILIENT_MODE = process.env.QUEUE_RESILIENT_MODE === 'true';
+// When not in production, default to resilient (no Redis required) unless explicitly disabled
+const QUEUE_RESILIENT_MODE =
+  process.env.QUEUE_RESILIENT_MODE === 'true' ||
+  (process.env.NODE_ENV !== 'production' && process.env.QUEUE_RESILIENT_MODE !== 'false');
 
 /** BullMQ connection options (single source of truth) */
 const connection = {
