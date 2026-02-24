@@ -39,6 +39,15 @@ internal static class Program
 
             ConfigStore.LogWarning = msg => Log.Warning(msg);
 
+            try
+            {
+                ConfigStore.EnsureConfigDirectoriesExist();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not create ProgramData folders; config save may fail. Path: {Path}", ConnectorPaths.ConfigDirectory);
+            }
+
             ApplicationConfiguration.Initialize();
             Application.Run(new TrayApplicationContext(
                 new ConfigStore(),
@@ -296,7 +305,7 @@ internal sealed class ConnectorControlPanel : Form
     {
         var baseFont = prototype ?? SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont ?? Control.DefaultFont;
         if (baseFont is null)
-            return new Font(FontFamily.GenericSansSerif, 9f);
+            return new Font("Segoe UI", 9f);
         return new Font(baseFont, style);
     }
 
@@ -305,7 +314,7 @@ internal sealed class ConnectorControlPanel : Form
         var f = SystemFonts.DefaultFont ?? SystemFonts.MessageBoxFont ?? Control.DefaultFont;
         if (f is not null)
             return new Font(f.FontFamily, 8.5f);
-        return new Font(FontFamily.GenericSansSerif, 8.5f);
+        return new Font("Segoe UI", 8.5f);
     }
     private readonly Label _linkedWebCompany = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedShortId = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };

@@ -40,7 +40,7 @@ public class ConfigStoreTests
             Assert.Single(corruptMessages);
             Assert.Contains("corrupt", corruptMessages[0], StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(path), "Original file should be renamed");
-            var corruptFiles = Directory.GetFiles(dir, "*.corrupt-*.json");
+            var corruptFiles = Directory.GetFiles(dir, "*.bad-*");
             Assert.Single(corruptFiles);
         }
         finally
@@ -69,7 +69,7 @@ public class ConfigStoreTests
             Assert.Equal("http://localhost:5000", config.ApiUrl);
             Assert.Single(corruptMessages);
             Assert.False(File.Exists(path), "Original file should be renamed");
-            var corruptFiles = Directory.GetFiles(dir, "*.corrupt-*.json");
+            var corruptFiles = Directory.GetFiles(dir, "*.bad-*");
             Assert.Single(corruptFiles);
         }
         finally

@@ -65,7 +65,7 @@ public sealed class ConfigStore : IConfigStore
     {
         try
         {
-            var corruptPath = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".json";
+            var corruptPath = path + ".bad-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
             File.Move(path, corruptPath);
             var message = $"Config file corrupt or invalid; renamed to {Path.GetFileName(corruptPath)}. Reason: {reason}";
             onCorrupt?.Invoke(message);
@@ -92,8 +92,7 @@ public sealed class ConfigStore : IConfigStore
     public void Save(ConnectorConfig config)
     {
         config.Validate();
-        Directory.CreateDirectory(ConnectorPaths.ConfigDirectory);
-        Directory.CreateDirectory(ConnectorPaths.LogsDirectory);
+        EnsureConfigDirectoriesExist();
 
         var json = JsonSerializer.Serialize(config, JsonOptions);
         var path = ConnectorPaths.ConfigFile;
@@ -102,11 +101,22 @@ public sealed class ConfigStore : IConfigStore
         try
         {
             File.WriteAllText(tmpPath, json);
-            File.Replace(tmpPath, path, destinationBackupFileName: null);
+            if (File.Exists(path))
+                File.Replace(tmpPath, path, destinationBackupFileName: null);
+            else
+                File.Move(tmpPath, path);
         }
         finally
         {
             try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { /* ignore */ }
         }
+    }
+
+    /// <summary>Ensures ProgramData config and logs directories exist. Call before any file write. Logs and throws on failure.</summary>
+    public static void EnsureConfigDirectoriesExist()
+    {
+        Directory.CreateDirectory(ConnectorPaths.ProgramDataRoot);
+        Directory.CreateDirectory(ConnectorPaths.ConfigDirectory);
+        Directory.CreateDirectory(ConnectorPaths.LogsDirectory);
     }
 }

@@ -157,3 +157,22 @@ jobs:
         with:
           name: AICFOConnectorSetup.msi
           path: connector-dotnet/out/AICFOConnectorSetup.msi
+
+  # Attach MSI to GitHub Release so users get a direct .msi download (not only inside ZIP).
+  upload-msi-to-release:
+    if: github.event_name == 'release'
+    needs: build-msi
+    runs-on: windows-latest
+    steps:
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AICFOConnectorSetup.msi
+
+      - name: Attach MSI to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: connector-dotnet/out/AICFOConnectorSetup.msi
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
