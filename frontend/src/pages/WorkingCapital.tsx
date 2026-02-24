@@ -4,6 +4,7 @@ import { Wallet, RotateCcw, Landmark, PercentCircle, Package } from 'lucide-reac
 import { formatCurrency, formatNumber } from '../lib/format';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { Card, CardContent } from '../components/ui/Card';
 
 type WorkingCapitalPayload = {
   working_capital: number | null;
@@ -59,25 +60,25 @@ export default function WorkingCapital() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Working Capital & Loans</h1>
-          <p className="text-gray-600">Liquidity and debt summary</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Working Capital & Loans</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Liquidity and debt summary</p>
         </div>
-        <div className="card text-red-700 bg-red-50 border border-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <span>{error}</span>
-          <button type="button" onClick={() => { setError(''); setLoading(true); setData(null); setRetryCount((c) => c + 1); }} className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Retry</button>
-        </div>
+        <Card variant="critical" className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+          <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
+          <button type="button" onClick={() => { setError(''); setLoading(true); setData(null); setRetryCount((c) => c + 1); }} className="rounded-md border border-red-300 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-gray-700 shrink-0">Retry</button>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Working Capital & Loans</h1>
-          <p className="text-gray-600">NWC, CCC, DSO/DPO/DIO, liquidity, loans. Latest snapshot from stored metrics.</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Working Capital & Loans</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">NWC, CCC, DSO/DPO/DIO, liquidity, loans. Latest snapshot from stored metrics.</p>
         </div>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
+        <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
           <button type="button" onClick={() => navigate('/pl-pack')} className="text-primary-600 hover:text-primary-700 font-medium">
             P&L Pack →
           </button>
@@ -88,100 +89,98 @@ export default function WorkingCapital() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-emerald-100">
-              <Wallet className="w-6 h-6 text-emerald-600" />
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Wallet className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Net working capital</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.net_working_capital ?? data?.working_capital ?? null)}</p>
-              <p className="text-xs text-gray-500">Receivables + Inventory − Payables</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Net working capital</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(data?.net_working_capital ?? data?.working_capital ?? null)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Receivables + Inventory − Payables</p>
             </div>
-          </div>
-        </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-teal-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-teal-100">
-              <Wallet className="w-6 h-6 text-teal-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Liquidity (Cash + NWC)</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.liquidity_position ?? data?.working_capital ?? null)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-transparent bg-gradient-to-br from-white to-violet-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-violet-100">
-              <Package className="w-6 h-6 text-violet-600" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Wallet className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Inventory</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.inventory_total ?? null)}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Liquidity (Cash + NWC)</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(data?.liquidity_position ?? data?.working_capital ?? null)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Package className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Inventory</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(data?.inventory_total ?? null)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 MoM: {data?.inventory_delta != null ? (data.inventory_delta >= 0 ? '+' : '') + formatCurrency(data.inventory_delta) : '—'} · DIO: {formatNumber(data?.inventory_days ?? null, 'd')} · CCC: {formatNumber(data?.cash_conversion_cycle ?? null, 'd')}
               </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-transparent bg-gradient-to-br from-white to-blue-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-blue-100">
-              <RotateCcw className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Cash Conversion Cycle</p>
-              <p className="text-xl font-bold">{formatNumber(data?.cash_conversion_cycle ?? null, ' days')}</p>
-              <p className="text-xs text-gray-500">
-                Recv: {formatNumber(data?.receivable_days ?? null, 'd')} | Pay: {formatNumber(data?.payable_days ?? null, 'd')}
-              </p>
               {data?.cash_conversion_cycle == null && data?.cash_gap_ex_inventory != null && Number.isFinite(data.cash_gap_ex_inventory) && (
-                <p className="text-xs text-gray-600 mt-1">Cash gap (ex. inventory): {formatNumber(data.cash_gap_ex_inventory, ' days')}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Cash gap (ex. inventory): {formatNumber(data.cash_gap_ex_inventory, ' days')}</p>
               )}
             </div>
-          </div>
-        </div>
-
-        <div className="card border-transparent bg-gradient-to-br from-white to-amber-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-amber-100">
-              <Landmark className="w-6 h-6 text-amber-600" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <RotateCcw className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Loans Outstanding</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.loans_total_outstanding ?? null)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Cash Conversion Cycle</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatNumber(data?.cash_conversion_cycle ?? null, ' days')}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Recv: {formatNumber(data?.receivable_days ?? null, 'd')} | Pay: {formatNumber(data?.payable_days ?? null, 'd')}
+              </p>
             </div>
-          </div>
-        </div>
-
-        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-rose-100">
-              <PercentCircle className="w-6 h-6 text-rose-600" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Landmark className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Interest Expense (Latest)</p>
-              <p className="text-xl font-bold">{formatCurrency(data?.interest_expense_latest ?? null)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loans Outstanding</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(data?.loans_total_outstanding ?? null)}</p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <PercentCircle className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Interest Expense (Latest)</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(data?.interest_expense_latest ?? null)}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Data Sources</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          {Object.entries(data?.sources || {}).map(([key, source]) => (
-            <div key={key} className="rounded-md border border-gray-200 px-3 py-2">
-              <p className="font-medium text-gray-900">{key}</p>
-              <p className="text-gray-500">metric: {source.metric_key}</p>
-              <p className="text-gray-700">value: {formatNumber(source.value)}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Card variant="default">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Data Sources</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            {Object.entries(data?.sources || {}).map(([key, source]) => (
+              <div key={key} className="rounded-md border border-slate-200 dark:border-slate-600 px-3 py-2">
+                <p className="font-medium text-gray-900 dark:text-gray-100">{key}</p>
+                <p className="text-slate-500 dark:text-slate-400">metric: {source.metric_key}</p>
+                <p className="text-gray-700 dark:text-gray-300">value: {formatNumber(source.value)}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { TrendingDown, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../lib/format';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { Card, CardContent } from '../components/ui/Card';
 
 interface ExpenseData {
   summary: {
@@ -75,55 +76,50 @@ export default function Expenses() {
     : 'No trend';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
-          <p className="text-gray-600">Expense breakdown and category trend. For monthly totals and P&L see Review.</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Expenses</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Expense breakdown and category trend. For monthly totals and P&L see Review.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/pl-pack')}
-          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-        >
+        <button type="button" onClick={() => navigate('/pl-pack')} className="text-sm text-primary-600 hover:text-primary-700 font-medium">
           See full monthly performance →
         </button>
       </div>
 
-      {/* Summary: avg spend + top category only (no month total hero — owned by P&L Pack) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card border-transparent bg-gradient-to-br from-white to-amber-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-amber-100">
-              <TrendingDown className="w-6 h-6 text-amber-600" />
+        <Card variant="subtle" className={expenseDelta <= 0 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <TrendingDown className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Avg Monthly Spend</p>
-              <p className="text-2xl font-bold">{formatCurrency(avgMonthly)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Avg Monthly Spend</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(avgMonthly)}</p>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mt-1 ${expenseDelta <= 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                {expenseTrend}
+              </span>
             </div>
-          </div>
-          <div className={`mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${expenseDelta >= 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-            {expenseTrend}
-          </div>
-        </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-slate-100">
-              <AlertTriangle className="w-6 h-6 text-slate-600" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <AlertTriangle className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Top Category</p>
-              <p className="text-lg font-semibold">{topCategory?.category || '—'}</p>
-              <p className="text-sm text-gray-500">{formatCurrency(topCategory?.amount || 0)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Top Category</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{topCategory?.category || '—'}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{formatCurrency(topCategory?.amount || 0)}</p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Expense breakdown — Trailing 3 Closed Months</h2>
+        <Card variant="default">
+          <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Expense breakdown — Trailing 3 Closed Months</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyTrend || []}>
@@ -152,10 +148,12 @@ export default function Expenses() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Expenses by Category (3 Closed Months)</h2>
+        <Card variant="default">
+          <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Expenses by Category (3 Closed Months)</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -187,37 +185,39 @@ export default function Expenses() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Top Expenses */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Top Expenses</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Category</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">Description</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-600">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.topExpenses.map((expense, index) => (
-                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-1 bg-gray-100 rounded text-sm">{expense.category}</span>
-                  </td>
-                  <td className="py-3 px-4">{expense.description}</td>
-                  <td className="py-3 px-4 text-right font-medium">{formatCurrency(expense.amount)}</td>
+      <Card variant="default">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Top Expenses</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-600">
+                  <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Category</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Description</th>
+                  <th className="text-right py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {data?.topExpenses.map((expense, index) => (
+                  <tr key={index} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{new Date(expense.date).toLocaleDateString('en-IN')}</td>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-sm text-gray-900 dark:text-gray-100">{expense.category}</span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-700 dark:text-gray-300">{expense.description}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-gray-100">{formatCurrency(expense.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

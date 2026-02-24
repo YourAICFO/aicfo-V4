@@ -4,6 +4,8 @@ import { useAuthStore } from '../store/authStore';
 import { formatCurrency } from '../lib/format';
 import VarianceDisplay from '../components/common/VarianceDisplay';
 import { TrendingUp, TrendingDown, FileText, Sparkles, Loader2, Download } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/Card';
+import { THEME } from '../lib/theme';
 
 type DriverItem = { key: string; label: string; amount: number };
 type DriverBlock = { deltaAmount: number; topPositive: DriverItem[]; topNegative: DriverItem[] };
@@ -178,8 +180,8 @@ export default function PLPack() {
   if (!selectedCompanyId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">P&L Review Pack</h1>
-        <p className="text-gray-600">Select a company to view the P&L pack.</p>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">P&L Review Pack</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Select a company to view the P&L pack.</p>
       </div>
     );
   }
@@ -195,8 +197,8 @@ export default function PLPack() {
   if (!month && availableMonths.length === 0) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">P&L Review Pack</h1>
-        <p className="text-gray-600">No P&L data available for this company yet. Sync accounting data to see months.</p>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">P&L Review Pack</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">No P&L data available for this company yet. Sync accounting data to see months.</p>
       </div>
     );
   }
@@ -210,11 +212,11 @@ export default function PLPack() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">P&L Review Pack</h1>
-          <p className="text-gray-600">Deterministic P&L with drivers and optional AI narrative</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">P&L Review Pack</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Deterministic P&L with drivers and optional AI narrative</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -251,83 +253,66 @@ export default function PLPack() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-red-700 dark:text-red-300 text-sm flex items-center justify-between gap-3 flex-wrap">
-          <span>{error}</span>
-          <button type="button" onClick={() => { setError(''); loadPackAndRemarks(); }} className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Retry</button>
-        </div>
+        <Card variant="critical" className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+          <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
+          <button type="button" onClick={() => { setError(''); loadPackAndRemarks(); }} className="rounded-md border border-red-300 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-gray-700 shrink-0">Retry</button>
+        </Card>
       )}
 
       {pack && (
         <>
-          {/* Executive Summary (deterministic bullets) */}
           {(pack.executiveSummary?.length ?? 0) > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+            <Card variant="default" className="overflow-hidden">
               <h2 className="sr-only">Executive Summary</h2>
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
                 {pack.executiveSummary!.map((item) => (
-                  <li
-                    key={item.key}
-                    className={`flex px-4 py-3 text-sm border-l-4 ${
-                      item.severity === 'critical' || item.severity === 'high'
-                        ? 'border-l-red-500 bg-red-50/50 dark:bg-red-900/10'
-                        : item.severity === 'medium'
-                          ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10'
-                          : 'border-l-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
-                    }`}
-                  >
+                  <li key={item.key} className={`flex px-4 py-3 text-sm border-l-4 ${item.severity === 'critical' || item.severity === 'high' ? THEME.severity.critical : item.severity === 'medium' ? THEME.severity.medium : THEME.severity.low}`}>
                     <span className="text-gray-800 dark:text-gray-200">{item.text}</span>
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
 
-          {/* Summary (KPI strip) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-500">Revenue (month)</p>
-              <p className="text-xl font-semibold">{formatCurrency(pack.current.totalRevenue)}</p>
-              <p className="text-sm">
-                <VarianceDisplay amount={pack.variances.revenue} pct={pack.variances.revenuePct} suffix=" vs prev" />
-              </p>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-500">Opex (month)</p>
-              <p className="text-xl font-semibold">{formatCurrency(pack.current.totalExpenses)}</p>
-              <p className="text-sm">
-                <VarianceDisplay amount={pack.variances.opex} pct={pack.variances.opexPct} suffix=" vs prev" inverse />
-              </p>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-500">Net Profit (month)</p>
-              <p className="text-xl font-semibold">{formatCurrency(pack.current.netProfit)}</p>
-              <p className="text-sm">
-                <VarianceDisplay amount={pack.variances.netProfit} pct={pack.variances.netProfitPct} suffix=" vs prev" />
-              </p>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-500">YTD Net Profit</p>
-              <p className="text-xl font-semibold">{formatCurrency(pack.ytd.netProfit)}</p>
-              {pack.ytdLastFy != null && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Last FY same period: {formatCurrency(pack.ytdLastFy.netProfit)}
-                </p>
-              )}
-              {pack.ytdVarianceAmount != null && (
-                <p className="text-sm">
-                  <VarianceDisplay amount={pack.ytdVarianceAmount.netProfit} pct={pack.ytdVariancePct?.netProfit} suffix=" vs last FY" />
-                </p>
-              )}
-            </div>
+            <Card variant="subtle">
+              <CardContent className="p-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Revenue (month)</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(pack.current.totalRevenue)}</p>
+                <p className="text-sm"><VarianceDisplay amount={pack.variances.revenue} pct={pack.variances.revenuePct} suffix=" vs prev" /></p>
+              </CardContent>
+            </Card>
+            <Card variant="subtle">
+              <CardContent className="p-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Opex (month)</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(pack.current.totalExpenses)}</p>
+                <p className="text-sm"><VarianceDisplay amount={pack.variances.opex} pct={pack.variances.opexPct} suffix=" vs prev" inverse /></p>
+              </CardContent>
+            </Card>
+            <Card variant="subtle">
+              <CardContent className="p-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Net Profit (month)</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(pack.current.netProfit)}</p>
+                <p className="text-sm"><VarianceDisplay amount={pack.variances.netProfit} pct={pack.variances.netProfitPct} suffix=" vs prev" /></p>
+              </CardContent>
+            </Card>
+            <Card variant="subtle">
+              <CardContent className="p-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">YTD Net Profit</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(pack.ytd.netProfit)}</p>
+                {pack.ytdLastFy != null && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Last FY same period: {formatCurrency(pack.ytdLastFy.netProfit)}</p>}
+                {pack.ytdVarianceAmount != null && <p className="text-sm"><VarianceDisplay amount={pack.ytdVarianceAmount.netProfit} pct={pack.ytdVariancePct?.netProfit} suffix=" vs last FY" /></p>}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Drivers panel */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Drivers (MoM change)</h2>
+          <Card variant="default">
+            <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Drivers (MoM change)</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Revenue</h3>
-                <p className={`text-sm font-medium ${pack.drivers.revenue.deltaAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Revenue</h3>
+                <p className={`text-sm font-medium ${pack.drivers.revenue.deltaAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {pack.drivers.revenue.deltaAmount >= 0 ? '+' : ''}{formatCurrency(pack.drivers.revenue.deltaAmount)}
                 </p>
                 {pack.drivers.revenue.topPositive.length > 0 && (
@@ -352,8 +337,8 @@ export default function PLPack() {
                 )}
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Opex</h3>
-                <p className={`text-sm font-medium ${pack.drivers.opex.deltaAmount <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Opex</h3>
+                <p className={`text-sm font-medium ${pack.drivers.opex.deltaAmount <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {pack.drivers.opex.deltaAmount >= 0 ? '+' : ''}{formatCurrency(pack.drivers.opex.deltaAmount)}
                 </p>
                 {pack.drivers.opex.topPositive.length > 0 && (
@@ -378,22 +363,23 @@ export default function PLPack() {
                 )}
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Net Profit</h3>
-                <p className={`text-sm font-medium ${pack.drivers.netProfit.deltaAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Net Profit</h3>
+                <p className={`text-sm font-medium ${pack.drivers.netProfit.deltaAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {pack.drivers.netProfit.deltaAmount >= 0 ? '+' : ''}{formatCurrency(pack.drivers.netProfit.deltaAmount)}
                 </p>
               </div>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Remarks + AI */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-6">
+          <Card variant="default">
+            <CardContent className="p-6 space-y-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
                 <FileText className="w-5 h-5" /> Remarks
               </h2>
               <textarea
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm min-h-[100px]"
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm min-h-[100px] text-gray-900 dark:text-gray-100"
                 value={manualText}
                 onChange={(e) => setManualText(e.target.value)}
                 placeholder="Manual remarks for this month"
@@ -409,20 +395,20 @@ export default function PLPack() {
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
                 <Sparkles className="w-5 h-5" /> AI Explanation
               </h2>
               {remarks?.aiDraftText ? (
                 <>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                     Generated on {remarks.aiDraftUpdatedAt ? new Date(remarks.aiDraftUpdatedAt).toLocaleString() : '—'}
                   </p>
-                  <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm whitespace-pre-wrap">
+                  <div className="rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-4 text-sm whitespace-pre-wrap text-gray-900 dark:text-gray-100">
                     {remarks.aiDraftText}
                   </div>
                   <button
                     type="button"
-                    className="mt-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                    className="mt-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700 disabled:opacity-50"
                     onClick={() => handleGenerateAi(true)}
                     disabled={aiLoading}
                   >
@@ -431,7 +417,7 @@ export default function PLPack() {
                 </>
               ) : (
                 <div>
-                  <p className="text-sm text-gray-500 mb-2">Generate a short CFO-style narrative from this month’s numbers and drivers (on-demand, cached per month).</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Generate a short CFO-style narrative from this month’s numbers and drivers (on-demand, cached per month).</p>
                   <button
                     type="button"
                     className="rounded-md bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
@@ -443,7 +429,8 @@ export default function PLPack() {
                 </div>
               )}
             </div>
-          </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

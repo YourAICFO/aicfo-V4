@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Target } from 'lucide-react';
 import { formatCurrency } from '../lib/format';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { Card, CardContent } from '../components/ui/Card';
 
 interface RevenueData {
   summary: {
@@ -59,62 +60,52 @@ export default function Revenue() {
   const growthLabel = growthRate >= 0 ? `Up ${growthRate.toFixed(1)}%` : `Down ${Math.abs(growthRate).toFixed(1)}%`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Revenue</h1>
-          <p className="text-gray-600">Revenue breakdown and category trend. For monthly totals and P&L see Review.</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Revenue</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Revenue breakdown and category trend. For monthly totals and P&L see Review.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/pl-pack')}
-          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-        >
+        <button type="button" onClick={() => navigate('/pl-pack')} className="text-sm text-primary-600 hover:text-primary-700 font-medium">
           See full monthly performance →
         </button>
       </div>
 
-      {/* Summary: growth + top category only (no month total hero — owned by P&L Pack) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className={`card border-transparent bg-gradient-to-br ${growthRate >= 0 ? 'from-white to-emerald-50' : 'from-white to-rose-50'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${growthRate >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-              {growthRate >= 0 ? (
-                <TrendingUp className="w-6 h-6 text-emerald-600" />
-              ) : (
-                <TrendingDown className="w-6 h-6 text-rose-600" />
-              )}
+        <Card variant="subtle" className={growthRate >= 0 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              {growthRate >= 0 ? <TrendingUp className="w-5 h-5 text-slate-600 dark:text-slate-300" /> : <TrendingDown className="w-5 h-5 text-slate-600 dark:text-slate-300" />}
             </div>
             <div>
-              <p className="text-sm text-gray-600">Growth Rate</p>
-              <p className={`text-2xl font-bold ${(data?.summary.growthRate || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Growth Rate</p>
+              <p className={`text-2xl font-semibold ${growthRate >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 {(data?.summary.growthRate || 0) >= 0 ? '+' : ''}{data?.summary.growthRate.toFixed(1)}%
               </p>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mt-1 ${growthRate >= 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                {growthLabel}
+              </span>
             </div>
-          </div>
-          <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${growthRate >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-            {growthRate >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {growthLabel}
-          </div>
-        </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-slate-100">
-              <Target className="w-6 h-6 text-slate-600" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Target className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Top Category</p>
-              <p className="text-lg font-semibold">{topCategory?.category || '—'}</p>
-              <p className="text-sm text-gray-500">{formatCurrency(topCategory?.amount || 0)}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Top Category</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{topCategory?.category || '—'}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{formatCurrency(topCategory?.amount || 0)}</p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Revenue breakdown — Trailing 3 Closed Months</h2>
+        <Card variant="default">
+          <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Revenue breakdown — Trailing 3 Closed Months</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyTrend || []}>
@@ -143,10 +134,12 @@ export default function Revenue() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Revenue by Category (3 Closed Months)</h2>
+        <Card variant="default">
+          <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Revenue by Category (3 Closed Months)</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -178,7 +171,8 @@ export default function Revenue() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

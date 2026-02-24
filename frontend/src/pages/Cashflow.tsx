@@ -4,6 +4,7 @@ import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '../lib/format';
 import { dashboardApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { Card, CardContent } from '../components/ui/Card';
 
 interface CashflowData {
   cashflow: {
@@ -61,12 +62,11 @@ export default function Cashflow() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
       </div>
     );
   }
 
-  const months = data?.monthlyCashflow || [];
   const cashflow = data?.cashflow;
   const avgCashInflow = cashflow?.avgCashInflow ?? null;
   const avgCashOutflow = cashflow?.avgCashOutflow ?? null;
@@ -74,168 +74,111 @@ export default function Cashflow() {
   const netPositive = netCashFlow != null && netCashFlow >= 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Cashflow Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400">Based on Cash & Bank movement (last 6 months)</p>
-        </div>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Cashflow Dashboard</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Based on Cash & Bank movement (last 6 months)</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className={`card border-transparent bg-gradient-to-br ${netPositive ? 'from-white to-emerald-50 dark:from-gray-800 dark:to-emerald-900/20' : 'from-white to-rose-50 dark:from-gray-800 dark:to-rose-900/20'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${netPositive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-rose-100 dark:bg-rose-900/30'}`}>
-              <Wallet className={`w-6 h-6 ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} />
+        <Card variant="subtle" className={netPositive ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <Wallet className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Net cash flow</p>
-              <p className={`text-2xl font-bold ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Net cash flow</p>
+              <p className={`text-2xl font-semibold ${netPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 {formatCurrency(netCashFlow)}
               </p>
+              {netCashFlow != null && (
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mt-1 ${netPositive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                  {netPositive ? 'In surplus' : 'Deficit'}
+                </span>
+              )}
             </div>
-          </div>
-        </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-emerald-50 dark:from-gray-800 dark:to-emerald-900/20">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <TrendingUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <TrendingUp className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg cash inflow</p>
-              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Avg cash inflow</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {formatCurrency(avgCashInflow)}
               </p>
             </div>
-          </div>
-        </div>
-        <div className="card border-transparent bg-gradient-to-br from-white to-rose-50 dark:from-gray-800 dark:to-rose-900/20">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-rose-100 dark:bg-rose-900/30">
-              <TrendingDown className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
+              <TrendingDown className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg cash outflow</p>
-              <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Avg cash outflow</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {formatCurrency(avgCashOutflow)}
               </p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Monthly Cashflow */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Monthly Cashflow (Cash & Bank movement)</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
+      <Card variant="default">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Monthly Cashflow (Cash & Bank movement)</h2>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.monthlyCashflow || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="month"
-                tickFormatter={formatMonth}
-                tick={{ fontSize: 12 }}
-              />
-              <YAxis
-                tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                labelFormatter={(label) => formatMonth(label)}
-                contentStyle={{
-                  background: '#0f172a',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  color: '#f8fafc',
-                }}
-                labelStyle={{ color: '#cbd5f5' }}
-              />
-              <Legend />
-              <Bar dataKey="inflow" name="Inflow" fill="#10b981" />
-              <Bar dataKey="outflow" name="Outflow" fill="#ef4444" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => formatMonth(label)} contentStyle={{ background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '12px', color: '#f8fafc' }} labelStyle={{ color: '#cbd5f5' }} />
+                <Legend />
+                <Bar dataKey="inflow" name="Inflow" fill="#10b981" />
+                <Bar dataKey="outflow" name="Outflow" fill="#ef4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Net Cashflow */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Net Cashflow (Cash & Bank movement)</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data?.monthlyCashflow || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="month"
-                tickFormatter={formatMonth}
-                tick={{ fontSize: 12 }}
-              />
-              <YAxis
-                tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                labelFormatter={(label) => formatMonth(label)}
-                contentStyle={{
-                  background: '#0f172a',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  color: '#f8fafc',
-                }}
-                labelStyle={{ color: '#cbd5f5' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="net"
-                stroke="#3b82f6"
-                fill="#3b82f6"
-                fillOpacity={0.3}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <Card variant="default">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Net Cashflow (Cash & Bank movement)</h2>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data?.monthlyCashflow || []}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => formatMonth(label)} contentStyle={{ background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '12px', color: '#f8fafc' }} labelStyle={{ color: '#cbd5f5' }} />
+                <Area type="monotone" dataKey="net" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Cash Balance History */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Cash Balance History</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data?.cashHistory || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(date) => new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                tick={{ fontSize: 12 }}
-              />
-              <YAxis
-                tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN')}
-                contentStyle={{
-                  background: '#0f172a',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  color: '#f8fafc',
-                }}
-                labelStyle={{ color: '#cbd5f5' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="amount"
-                stroke="#8b5cf6"
-                fill="#8b5cf6"
-                fillOpacity={0.3}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <Card variant="default">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Cash Balance History</h2>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data?.cashHistory || []}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tickFormatter={(date) => new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN')} contentStyle={{ background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '12px', color: '#f8fafc' }} labelStyle={{ color: '#cbd5f5' }} />
+                <Area type="monotone" dataKey="amount" stroke="#64748b" fill="#64748b" fillOpacity={0.3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

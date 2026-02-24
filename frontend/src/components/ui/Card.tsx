@@ -8,14 +8,16 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-white border-gray-200 shadow-sm hover:shadow-md',
-        elevated: 'bg-white border-gray-200 shadow-md hover:shadow-lg',
-        flat: 'bg-white border-gray-200 shadow-none',
-        gradient: 'bg-gradient-to-br from-white to-gray-50 border-gray-200 shadow-sm',
+        default: 'bg-white border-gray-200 shadow-sm dark:bg-gray-800 dark:border-gray-700 hover:shadow-md',
+        subtle: 'bg-slate-50 border-slate-200 shadow-sm dark:bg-slate-900/40 dark:border-slate-700',
+        critical: 'bg-red-50 border-red-200 shadow-sm dark:bg-red-900/20 dark:border-red-800',
+        elevated: 'bg-white border-gray-200 shadow-md hover:shadow-lg dark:bg-gray-800 dark:border-gray-700',
+        flat: 'bg-white border-gray-200 shadow-none dark:bg-gray-800 dark:border-gray-700',
+        gradient: 'bg-gradient-to-br from-white to-gray-50 border-gray-200 shadow-sm dark:from-gray-800 dark:to-gray-800/80 dark:border-gray-700',
         dark: 'bg-gray-900 border-gray-700 text-white',
-        success: 'bg-gradient-to-br from-white to-green-50 border-green-200 shadow-sm',
-        warning: 'bg-gradient-to-br from-white to-amber-50 border-amber-200 shadow-sm',
-        error: 'bg-gradient-to-br from-white to-red-50 border-red-200 shadow-sm',
+        success: 'bg-gradient-to-br from-white to-green-50 border-green-200 shadow-sm dark:from-gray-800 dark:to-green-900/20 dark:border-green-800',
+        warning: 'bg-gradient-to-br from-white to-amber-50 border-amber-200 shadow-sm dark:from-gray-800 dark:to-amber-900/20 dark:border-amber-800',
+        error: 'bg-gradient-to-br from-white to-red-50 border-red-200 shadow-sm dark:from-gray-800 dark:to-red-900/20 dark:border-red-800',
       },
       padding: {
         none: 'p-0',
