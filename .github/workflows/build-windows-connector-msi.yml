@@ -24,6 +24,9 @@ jobs:
   validate:
     runs-on: windows-latest
     steps:
+      - name: Enable Git long paths (Windows)
+        run: git config --global core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -79,6 +82,9 @@ jobs:
     env:
       TIMESTAMP_URL: "http://timestamp.digicert.com"
     steps:
+      - name: Enable Git long paths (Windows)
+        run: git config --global core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
 
