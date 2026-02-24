@@ -7,6 +7,17 @@ public sealed class ConnectorConfig
     [JsonPropertyName("api_url")]
     public string ApiUrl { get; set; } = "http://localhost:5000";
 
+    /// <summary>"auto" = use discovery to set api_url; "pinned" = never overwrite api_url from discovery.</summary>
+    [JsonPropertyName("api_url_mode")]
+    public string ApiUrlMode { get; set; } = "auto";
+
+    [JsonPropertyName("api_url_last_discovered_at")]
+    public DateTimeOffset? ApiUrlLastDiscoveredAt { get; set; }
+
+    /// <summary>Optional override for discovery URL; when empty, use default discovery URL.</summary>
+    [JsonPropertyName("discovery_url")]
+    public string? DiscoveryUrl { get; set; }
+
     [JsonPropertyName("tally_host")]
     public string TallyHost { get; set; } = "127.0.0.1";
 
@@ -68,6 +79,9 @@ public sealed class ConnectorConfig
 
     public void EnsureCompatibility()
     {
+        if (string.IsNullOrWhiteSpace(ApiUrlMode) || (ApiUrlMode != "auto" && ApiUrlMode != "pinned"))
+            ApiUrlMode = "auto";
+
         // Migrate old single-company config into mappings list.
         if (Mappings.Count == 0 && !string.IsNullOrWhiteSpace(CompanyId))
         {

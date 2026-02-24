@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.ServiceProcess;
 using System.Text.Json;
 using System.Linq;
@@ -42,7 +43,8 @@ internal static class Program
                 new CredentialStore(),
                 new SyncNowTriggerClient(),
                 new AicfoApiClient(new HttpClient(), NullLogger<AicfoApiClient>.Instance),
-                new TallyXmlClient(new HttpClient(), NullLogger<TallyXmlClient>.Instance)));
+                new TallyXmlClient(new HttpClient(), NullLogger<TallyXmlClient>.Instance),
+                new DiscoveryService()));
         }
         catch (Exception ex)
         {
@@ -77,12 +79,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         ICredentialStore credentialStore,
         ISyncNowTriggerClient syncNowTriggerClient,
         IAicfoApiClient apiClient,
-        ITallyXmlClient tallyClient)
+        ITallyXmlClient tallyClient,
+        IDiscoveryService discoveryService)
     {
         ConnectorControlPanel? panel = null;
         try
         {
-            panel = new ConnectorControlPanel(configStore, credentialStore, syncNowTriggerClient, apiClient, tallyClient);
+            panel = new ConnectorControlPanel(configStore, credentialStore, syncNowTriggerClient, apiClient, tallyClient, discoveryService);
         }
         catch (Exception ex)
         {
@@ -202,10 +205,19 @@ internal sealed class ConnectorControlPanel : Form
     private readonly ISyncNowTriggerClient _syncNowTriggerClient;
     private readonly IAicfoApiClient _apiClient;
     private readonly ITallyXmlClient _tallyClient;
+    private readonly IDiscoveryService _discoveryService;
 
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
 
     private readonly TextBox _apiUrl = new() { Width = 360 };
+    private readonly RadioButton _backendModeAuto = new() { AutoSize = true, Text = "Automatic (recommended)" };
+    private readonly RadioButton _backendModePinned = new() { AutoSize = true, Text = "Pinned (advanced)" };
+    private readonly Label _autoBackendMessageLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "Using automatic backend configuration" };
+    private readonly Label _resolvedApiUrlLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f) };
+    private readonly Label _updateAvailableLabel = new() { AutoSize = true, ForeColor = Color.DarkGreen, Text = "" };
+    private Button? _downloadUpdateButton;
+    private Button? _checkForUpdatesButton;
+    private ConnectorDiscoveryConfig? _lastDiscovery;
     private readonly TextBox _tallyHost = new() { Width = 220, Text = "127.0.0.1" };
     private readonly NumericUpDown _tallyPort = new() { Minimum = 1, Maximum = 65535, Value = 9000, Width = 100 };
     private readonly NumericUpDown _heartbeatSeconds = new() { Minimum = 10, Maximum = 300, Value = 30, Width = 100 };
@@ -302,6 +314,7 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Dictionary<string, MappingStatusSnapshot> _statusSnapshotByMappingId = new(StringComparer.OrdinalIgnoreCase);
     private LoginDiagnostics? _lastLoginDiagnostics;
     private bool _suppressAutostartEvent;
+    private bool _suppressBackendModeEvent;
     private Button? _linkButton;
     private Button? _syncSelectedButton;
 
@@ -310,13 +323,15 @@ internal sealed class ConnectorControlPanel : Form
         ICredentialStore credentialStore,
         ISyncNowTriggerClient syncNowTriggerClient,
         IAicfoApiClient apiClient,
-        ITallyXmlClient tallyClient)
+        ITallyXmlClient tallyClient,
+        IDiscoveryService discoveryService)
     {
         _configStore = configStore;
         _credentialStore = credentialStore;
         _syncNowTriggerClient = syncNowTriggerClient;
         _apiClient = apiClient;
         _tallyClient = tallyClient;
+        _discoveryService = discoveryService;
 
         Text = "AI CFO Connector Control Panel";
         Width = 980;
@@ -373,6 +388,7 @@ internal sealed class ConnectorControlPanel : Form
             _rememberMe.Checked = true;
             _ = RefreshDeviceLinkDataAsync();
         }
+        _ = RunDiscoveryAndApplyAsync(manualUpdateCheck: false);
     }
 
     private TabPage BuildStatusTab()
@@ -382,48 +398,61 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 4,
-            RowCount = 13,
+            RowCount = 15,
             Padding = new Padding(12),
             AutoScroll = true
         };
 
+        var backendModePanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
+        _backendModeAuto.CheckedChanged += (_, _) => OnBackendModeChanged();
+        _backendModePinned.CheckedChanged += (_, _) => OnBackendModeChanged();
+        backendModePanel.Controls.Add(_backendModeAuto);
+        backendModePanel.Controls.Add(_backendModePinned);
         panel.Controls.Add(new Label { Text = "Backend", AutoSize = true }, 0, 0);
-        panel.Controls.Add(new Label { Text = "Managed by installer", AutoSize = true, ForeColor = Color.DimGray }, 1, 0);
+        panel.Controls.Add(backendModePanel, 1, 0);
         panel.Controls.Add(new Label { Text = "Heartbeat (sec)", AutoSize = true }, 2, 0);
         panel.Controls.Add(_heartbeatSeconds, 3, 0);
 
-        panel.Controls.Add(new Label { Text = "Tally Host", AutoSize = true }, 0, 1);
-        panel.Controls.Add(_tallyHost, 1, 1);
-        panel.Controls.Add(new Label { Text = "Tally Port", AutoSize = true }, 2, 1);
-        panel.Controls.Add(_tallyPort, 3, 1);
+        var backendUrlPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown };
+        backendUrlPanel.Controls.Add(_autoBackendMessageLabel);
+        backendUrlPanel.Controls.Add(_resolvedApiUrlLabel);
+        backendUrlPanel.Controls.Add(_apiUrl);
+        panel.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 1);
+        panel.Controls.Add(backendUrlPanel, 1, 1);
+        panel.SetColumnSpan(backendUrlPanel, 3);
 
-        panel.Controls.Add(new Label { Text = "Sync Interval (min)", AutoSize = true }, 0, 2);
-        panel.Controls.Add(_syncMinutes, 1, 2);
+        panel.Controls.Add(new Label { Text = "Tally Host", AutoSize = true }, 0, 2);
+        panel.Controls.Add(_tallyHost, 1, 2);
+        panel.Controls.Add(new Label { Text = "Tally Port", AutoSize = true }, 2, 2);
+        panel.Controls.Add(_tallyPort, 3, 2);
+
+        panel.Controls.Add(new Label { Text = "Sync Interval (min)", AutoSize = true }, 0, 3);
+        panel.Controls.Add(_syncMinutes, 1, 3);
         var saveSettings = new Button { Text = "Save Settings", Width = 120 };
         saveSettings.Click += (_, _) => SaveGlobalSettings();
-        panel.Controls.Add(saveSettings, 3, 2);
+        panel.Controls.Add(saveSettings, 3, 3);
 
-        panel.Controls.Add(new Label { Text = "Mapping", AutoSize = true }, 0, 3);
-        panel.Controls.Add(_statusMappingCombo, 1, 3);
+        panel.Controls.Add(new Label { Text = "Mapping", AutoSize = true }, 0, 4);
+        panel.Controls.Add(_statusMappingCombo, 1, 4);
 
-        panel.Controls.Add(new Label { Text = "Backend", AutoSize = true }, 0, 4);
-        panel.Controls.Add(_backendStatus, 1, 4);
-        panel.Controls.Add(new Label { Text = "Tally", AutoSize = true }, 2, 4);
-        panel.Controls.Add(_tallyStatus, 3, 4);
+        panel.Controls.Add(new Label { Text = "Backend", AutoSize = true }, 0, 5);
+        panel.Controls.Add(_backendStatus, 1, 5);
+        panel.Controls.Add(new Label { Text = "Tally", AutoSize = true }, 2, 5);
+        panel.Controls.Add(_tallyStatus, 3, 5);
 
-        panel.Controls.Add(new Label { Text = "Last Heartbeat", AutoSize = true }, 0, 5);
-        panel.Controls.Add(_lastHeartbeat, 1, 5);
-        panel.Controls.Add(new Label { Text = "Last Sync", AutoSize = true }, 2, 5);
-        panel.Controls.Add(_lastSync, 3, 5);
+        panel.Controls.Add(new Label { Text = "Last Heartbeat", AutoSize = true }, 0, 6);
+        panel.Controls.Add(_lastHeartbeat, 1, 6);
+        panel.Controls.Add(new Label { Text = "Last Sync", AutoSize = true }, 2, 6);
+        panel.Controls.Add(_lastSync, 3, 6);
 
-        panel.Controls.Add(new Label { Text = "Last Result", AutoSize = true }, 0, 6);
-        panel.Controls.Add(_lastResult, 1, 6);
-        panel.Controls.Add(new Label { Text = "Last Error", AutoSize = true }, 2, 6);
-        panel.Controls.Add(_lastError, 3, 6);
+        panel.Controls.Add(new Label { Text = "Last Result", AutoSize = true }, 0, 7);
+        panel.Controls.Add(_lastResult, 1, 7);
+        panel.Controls.Add(new Label { Text = "Last Error", AutoSize = true }, 2, 7);
+        panel.Controls.Add(_lastError, 3, 7);
 
-        panel.Controls.Add(_startWithWindowsToggle, 0, 7);
-        panel.Controls.Add(new Label { Text = "Start at login:", AutoSize = true }, 2, 7);
-        panel.Controls.Add(_startWithWindowsStatus, 3, 7);
+        panel.Controls.Add(_startWithWindowsToggle, 0, 8);
+        panel.Controls.Add(new Label { Text = "Start at login:", AutoSize = true }, 2, 8);
+        panel.Controls.Add(_startWithWindowsStatus, 3, 8);
 
         var buttonBar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var testBackend = new Button { Text = "Test Backend", Width = 120 };
@@ -436,24 +465,181 @@ internal sealed class ConnectorControlPanel : Form
         syncNow.Click += async (_, _) => await TriggerSelectedSyncAsync();
         var syncAll = new Button { Text = "Sync All", Width = 120 };
         syncAll.Click += async (_, _) => await TriggerSyncAllAsync();
+        _checkForUpdatesButton = new Button { Text = "Check for updates", Width = 130 };
+        _checkForUpdatesButton.Click += async (_, _) => await RunDiscoveryAndApplyAsync(manualUpdateCheck: true);
         var openLogs = new Button { Text = "Open Logs", Width = 120 };
         openLogs.Click += (_, _) => OpenLogs();
         var refreshStatus = new Button { Text = "Refresh Status", Width = 120 };
         refreshStatus.Click += async (_, _) => await RefreshStatusGridAsync();
         var copyDiagnostics = new Button { Text = "Copy Diagnostics", Width = 130 };
         copyDiagnostics.Click += (_, _) => CopySelectedDiagnostics();
-        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, refreshStatus, copyDiagnostics, openLogs]);
-        panel.Controls.Add(buttonBar, 0, 8);
+        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, _checkForUpdatesButton, refreshStatus, copyDiagnostics, openLogs]);
+        panel.Controls.Add(buttonBar, 0, 9);
         panel.SetColumnSpan(buttonBar, 4);
 
-        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 9);
+        var updateBannerPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
+        updateBannerPanel.Controls.Add(_updateAvailableLabel);
+        _downloadUpdateButton = new Button { Text = "Download update", Width = 120, Visible = false };
+        _downloadUpdateButton.Click += (_, _) => OpenDownloadUrl();
+        updateBannerPanel.Controls.Add(_downloadUpdateButton);
+        panel.Controls.Add(updateBannerPanel, 0, 10);
+        panel.SetColumnSpan(updateBannerPanel, 4);
+
+        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 11);
         panel.SetColumnSpan(_statusGrid, 4);
-        panel.Controls.Add(_statusGrid, 0, 10);
-        panel.Controls.Add(_statusHint, 0, 11);
+        panel.Controls.Add(_statusGrid, 0, 12);
+        panel.Controls.Add(_statusHint, 0, 13);
         panel.SetColumnSpan(_statusHint, 4);
 
         tab.Controls.Add(panel);
         return tab;
+    }
+
+    private void RefreshBackendModeUi()
+    {
+        var isAuto = _backendModeAuto.Checked;
+        _apiUrl.Visible = !isAuto;
+        _autoBackendMessageLabel.Visible = isAuto;
+        _resolvedApiUrlLabel.Visible = isAuto;
+        _resolvedApiUrlLabel.Text = string.IsNullOrWhiteSpace(_config.ApiUrl) ? "" : _config.ApiUrl;
+        if (!isAuto)
+            _apiUrl.Text = _config.ApiUrl;
+    }
+
+    private void OnBackendModeChanged()
+    {
+        if (_suppressBackendModeEvent) return;
+        var isAuto = _backendModeAuto.Checked;
+        _config.ApiUrlMode = isAuto ? "auto" : "pinned";
+        if (!isAuto)
+            _apiUrl.Text = _config.ApiUrl;
+        RefreshBackendModeUi();
+        _configStore.Save(_config);
+    }
+
+    private void OpenDownloadUrl()
+    {
+        var url = _lastDiscovery?.DownloadUrl ?? _discoveryService.LastSuccess?.DownloadUrl;
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not open link: {ex.Message}", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task RunDiscoveryAndApplyAsync(bool manualUpdateCheck)
+    {
+        var discoveryUrl = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl.Trim();
+        var (config, error) = await _discoveryService.FetchAsync(discoveryUrl, CancellationToken.None).ConfigureAwait(true);
+
+        if (config is not null)
+        {
+            _lastDiscovery = config;
+            Log.Information("Discovery succeeded from {Url}", discoveryUrl);
+
+            if (string.Equals(_config.ApiUrlMode, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseUrl = (config.ApiBaseUrl ?? "").Trim().TrimEnd('/');
+                if (!string.IsNullOrWhiteSpace(baseUrl) && baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ApiUrl = baseUrl;
+                    _config.ApiUrlLastDiscoveredAt = DateTimeOffset.UtcNow;
+                    _configStore.Save(_config);
+                    if (InvokeRequired)
+                        BeginInvoke(() => { _resolvedApiUrlLabel.Text = _config.ApiUrl; });
+                    else
+                        _resolvedApiUrlLabel.Text = _config.ApiUrl;
+                }
+            }
+        }
+        else
+        {
+            Log.Warning("Discovery failed: {Error}", error ?? "unknown");
+            if (string.Equals(_config.ApiUrlMode, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                var current = (_config.ApiUrl ?? "").Trim();
+                var useFallback = string.IsNullOrWhiteSpace(current) || current.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase);
+                if (useFallback)
+                {
+                    _config.ApiUrl = DiscoveryService.FallbackApiBaseUrl;
+                    _configStore.Save(_config);
+                    if (InvokeRequired)
+                        BeginInvoke(() =>
+                        {
+                            _resolvedApiUrlLabel.Text = _config.ApiUrl;
+                            MessageBox.Show("Could not reach the automatic configuration server. Using fallback backend URL. You can switch to \"Pinned\" and set a custom URL if needed.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        });
+                    else
+                    {
+                        _resolvedApiUrlLabel.Text = _config.ApiUrl;
+                        MessageBox.Show("Could not reach the automatic configuration server. Using fallback backend URL. You can switch to \"Pinned\" and set a custom URL if needed.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+        }
+
+        SetUpdateBanner();
+        if (manualUpdateCheck)
+        {
+            void ShowResult()
+            {
+                if (_lastDiscovery is null)
+                    MessageBox.Show("Could not check for updates. Try again later.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else if (_downloadUpdateButton?.Visible != true)
+                    MessageBox.Show("You are running the latest version.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            if (InvokeRequired)
+                BeginInvoke(ShowResult);
+            else
+                ShowResult();
+        }
+    }
+
+    private void SetUpdateBanner()
+    {
+        var latest = _lastDiscovery?.LatestConnectorVersion ?? _discoveryService.LastSuccess?.LatestConnectorVersion;
+        var minVer = _lastDiscovery?.MinConnectorVersion ?? _discoveryService.LastSuccess?.MinConnectorVersion;
+        var currentVer = Assembly.GetExecutingAssembly().GetName().Version;
+        Version? current = currentVer;
+        Version? latestParsed = null;
+        Version? minParsed = null;
+        if (!string.IsNullOrWhiteSpace(latest) && Version.TryParse(latest, out var l))
+            latestParsed = l;
+        if (!string.IsNullOrWhiteSpace(minVer) && Version.TryParse(minVer, out var m))
+            minParsed = m;
+
+        var tooOld = minParsed is not null && current is not null && current < minParsed;
+        var updateAvailable = latestParsed is not null && current is not null && latestParsed > current;
+
+        void Apply()
+        {
+            if (tooOld)
+            {
+                _updateAvailableLabel.Text = "Connector is too old. Please update.";
+                _updateAvailableLabel.ForeColor = Color.DarkRed;
+                _downloadUpdateButton!.Visible = true;
+            }
+            else if (updateAvailable)
+            {
+                _updateAvailableLabel.Text = $"Update available: v{latest}";
+                _updateAvailableLabel.ForeColor = Color.DarkGreen;
+                _downloadUpdateButton!.Visible = true;
+            }
+            else
+            {
+                _updateAvailableLabel.Text = "";
+                _downloadUpdateButton!.Visible = false;
+            }
+        }
+
+        if (InvokeRequired)
+            BeginInvoke(Apply);
+        else
+            Apply();
     }
 
     private TabPage BuildMappingTab()
@@ -864,19 +1050,22 @@ internal sealed class ConnectorControlPanel : Form
 
     private void CopyLoginDiagnostics()
     {
-        if (_lastLoginDiagnostics is null)
+        var diagnostics = new Dictionary<string, object?>
         {
-            MessageBox.Show("No login diagnostics available yet. Attempt login first.", "AI CFO Connector");
-            return;
-        }
-
-        var responseBodyForCopy = LogRedaction.RedactSecrets(_lastLoginDiagnostics.ResponseBody);
-        var diagnostics = new
-        {
-            endpointPath = _lastLoginDiagnostics.EndpointPath,
-            statusCode = _lastLoginDiagnostics.StatusCode,
-            responseBody = responseBodyForCopy
+            ["apiUrlMode"] = _config.ApiUrlMode,
+            ["discoveryUrl"] = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl,
+            ["resolvedApiUrl"] = _config.ApiUrl,
+            ["discoveryLastSuccessAt"] = _config.ApiUrlLastDiscoveredAt?.ToString("O"),
+            ["latestConnectorVersion"] = _lastDiscovery?.LatestConnectorVersion ?? _discoveryService.LastSuccess?.LatestConnectorVersion,
+            ["minConnectorVersion"] = _lastDiscovery?.MinConnectorVersion ?? _discoveryService.LastSuccess?.MinConnectorVersion
         };
+        if (_lastLoginDiagnostics is not null)
+        {
+            var responseBodyForCopy = LogRedaction.RedactSecrets(_lastLoginDiagnostics.ResponseBody);
+            diagnostics["endpointPath"] = _lastLoginDiagnostics.EndpointPath;
+            diagnostics["statusCode"] = _lastLoginDiagnostics.StatusCode;
+            diagnostics["responseBody"] = responseBodyForCopy;
+        }
 
         Clipboard.SetText(JsonSerializer.Serialize(diagnostics, new JsonSerializerOptions { WriteIndented = true }));
         MessageBox.Show("Login diagnostics copied.", "AI CFO Connector");
@@ -1116,7 +1305,8 @@ internal sealed class ConnectorControlPanel : Form
 
     private void SaveGlobalSettings()
     {
-        _config.ApiUrl = _apiUrl.Text.Trim().TrimEnd('/');
+        if (string.Equals(_config.ApiUrlMode, "pinned", StringComparison.OrdinalIgnoreCase))
+            _config.ApiUrl = _apiUrl.Text.Trim().TrimEnd('/');
         _config.TallyHost = _tallyHost.Text.Trim();
         _config.TallyPort = (int)_tallyPort.Value;
         _config.HeartbeatIntervalSeconds = (int)_heartbeatSeconds.Value;
@@ -1219,6 +1409,11 @@ internal sealed class ConnectorControlPanel : Form
         _config.EnsureCompatibility();
 
         _apiUrl.Text = _config.ApiUrl;
+        _suppressBackendModeEvent = true;
+        _backendModeAuto.Checked = string.Equals(_config.ApiUrlMode, "auto", StringComparison.OrdinalIgnoreCase);
+        _backendModePinned.Checked = !_backendModeAuto.Checked;
+        _suppressBackendModeEvent = false;
+        RefreshBackendModeUi();
         _tallyHost.Text = _config.TallyHost;
         _tallyPort.Value = Math.Clamp(_config.TallyPort, 1, 65535);
         _heartbeatSeconds.Value = Math.Clamp(_config.HeartbeatIntervalSeconds, 10, 300);

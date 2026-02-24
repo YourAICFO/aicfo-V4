@@ -7,6 +7,7 @@ public static class ConnectorPaths
     public const string LogsDirectory = @"C:\ProgramData\AICFO\logs";
     public const string ConfigFile = @"C:\ProgramData\AICFO\config\config.json";
     public const string DeviceIdFile = @"C:\ProgramData\AICFO\config\device_id.txt";
+    public static string DiscoveryCacheFile => Path.Combine(ConfigDirectory, "discovery_cache.json");
     public const string CredentialPrefix = "AICFO_CONNECTOR_TOKEN_";
     public const string SyncNowPipeName = "AICFOConnectorSyncNow";
 
