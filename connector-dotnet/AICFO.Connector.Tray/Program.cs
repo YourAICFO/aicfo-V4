@@ -215,6 +215,10 @@ internal sealed class ConnectorControlPanel : Form
     private readonly Label _autoBackendMessageLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "Using automatic backend configuration" };
     private readonly Label _resolvedApiUrlLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f) };
     private readonly Label _updateAvailableLabel = new() { AutoSize = true, ForeColor = Color.DarkGreen, Text = "" };
+    private readonly Label _discoveryFailureBanner = new() { AutoSize = true, ForeColor = Color.DarkOrange, Text = "", MaximumSize = new Size(700, 0), AutoEllipsis = true };
+    private readonly Label _statusResolvedApiUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f), MaximumSize = new Size(500, 0), AutoEllipsis = true };
+    private readonly Label _statusDiscoveryUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f), MaximumSize = new Size(500, 0), AutoEllipsis = true };
+    private readonly Label _statusDiscoveryLastSuccess = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f) };
     private Button? _downloadUpdateButton;
     private Button? _checkForUpdatesButton;
     private ConnectorDiscoveryConfig? _lastDiscovery;
@@ -398,7 +402,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 4,
-            RowCount = 15,
+            RowCount = 17,
             Padding = new Padding(12),
             AutoScroll = true
         };
@@ -436,23 +440,41 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(_statusMappingCombo, 1, 4);
 
         panel.Controls.Add(new Label { Text = "Backend", AutoSize = true }, 0, 5);
-        panel.Controls.Add(_backendStatus, 1, 5);
+        var backendStatusRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
+        backendStatusRow.Controls.Add(_backendStatus);
+        var copyDiagnosticsBtn = new Button { Text = "Copy Diagnostics", Width = 120 };
+        copyDiagnosticsBtn.Click += (_, _) => CopyBackendDiagnostics();
+        backendStatusRow.Controls.Add(copyDiagnosticsBtn);
+        panel.Controls.Add(backendStatusRow, 1, 5);
         panel.Controls.Add(new Label { Text = "Tally", AutoSize = true }, 2, 5);
         panel.Controls.Add(_tallyStatus, 3, 5);
 
-        panel.Controls.Add(new Label { Text = "Last Heartbeat", AutoSize = true }, 0, 6);
-        panel.Controls.Add(_lastHeartbeat, 1, 6);
-        panel.Controls.Add(new Label { Text = "Last Sync", AutoSize = true }, 2, 6);
-        panel.Controls.Add(_lastSync, 3, 6);
+        panel.Controls.Add(_discoveryFailureBanner, 0, 6);
+        panel.SetColumnSpan(_discoveryFailureBanner, 4);
 
-        panel.Controls.Add(new Label { Text = "Last Result", AutoSize = true }, 0, 7);
-        panel.Controls.Add(_lastResult, 1, 7);
-        panel.Controls.Add(new Label { Text = "Last Error", AutoSize = true }, 2, 7);
-        panel.Controls.Add(_lastError, 3, 7);
+        var statusInfoPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown };
+        statusInfoPanel.Controls.Add(new Label { Text = "Resolved API:", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) });
+        statusInfoPanel.Controls.Add(_statusResolvedApiUrl);
+        statusInfoPanel.Controls.Add(new Label { Text = "Discovery URL:", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) });
+        statusInfoPanel.Controls.Add(_statusDiscoveryUrl);
+        statusInfoPanel.Controls.Add(new Label { Text = "Last discovery success:", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) });
+        statusInfoPanel.Controls.Add(_statusDiscoveryLastSuccess);
+        panel.Controls.Add(statusInfoPanel, 0, 7);
+        panel.SetColumnSpan(statusInfoPanel, 4);
 
-        panel.Controls.Add(_startWithWindowsToggle, 0, 8);
-        panel.Controls.Add(new Label { Text = "Start at login:", AutoSize = true }, 2, 8);
-        panel.Controls.Add(_startWithWindowsStatus, 3, 8);
+        panel.Controls.Add(new Label { Text = "Last Heartbeat", AutoSize = true }, 0, 8);
+        panel.Controls.Add(_lastHeartbeat, 1, 8);
+        panel.Controls.Add(new Label { Text = "Last Sync", AutoSize = true }, 2, 8);
+        panel.Controls.Add(_lastSync, 3, 8);
+
+        panel.Controls.Add(new Label { Text = "Last Result", AutoSize = true }, 0, 9);
+        panel.Controls.Add(_lastResult, 1, 9);
+        panel.Controls.Add(new Label { Text = "Last Error", AutoSize = true }, 2, 9);
+        panel.Controls.Add(_lastError, 3, 9);
+
+        panel.Controls.Add(_startWithWindowsToggle, 0, 10);
+        panel.Controls.Add(new Label { Text = "Start at login:", AutoSize = true }, 2, 10);
+        panel.Controls.Add(_startWithWindowsStatus, 3, 10);
 
         var buttonBar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var testBackend = new Button { Text = "Test Backend", Width = 120 };
@@ -474,7 +496,7 @@ internal sealed class ConnectorControlPanel : Form
         var copyDiagnostics = new Button { Text = "Copy Diagnostics", Width = 130 };
         copyDiagnostics.Click += (_, _) => CopySelectedDiagnostics();
         buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, _checkForUpdatesButton, refreshStatus, copyDiagnostics, openLogs]);
-        panel.Controls.Add(buttonBar, 0, 9);
+        panel.Controls.Add(buttonBar, 0, 11);
         panel.SetColumnSpan(buttonBar, 4);
 
         var updateBannerPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
@@ -482,13 +504,13 @@ internal sealed class ConnectorControlPanel : Form
         _downloadUpdateButton = new Button { Text = "Download update", Width = 120, Visible = false };
         _downloadUpdateButton.Click += (_, _) => OpenDownloadUrl();
         updateBannerPanel.Controls.Add(_downloadUpdateButton);
-        panel.Controls.Add(updateBannerPanel, 0, 10);
+        panel.Controls.Add(updateBannerPanel, 0, 12);
         panel.SetColumnSpan(updateBannerPanel, 4);
 
-        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 11);
+        panel.Controls.Add(new Label { Text = "Connector Status by Mapping", AutoSize = true, Font = SafeFontForStyle(Font, FontStyle.Bold) }, 0, 13);
         panel.SetColumnSpan(_statusGrid, 4);
-        panel.Controls.Add(_statusGrid, 0, 12);
-        panel.Controls.Add(_statusHint, 0, 13);
+        panel.Controls.Add(_statusGrid, 0, 14);
+        panel.Controls.Add(_statusHint, 0, 15);
         panel.SetColumnSpan(_statusHint, 4);
 
         tab.Controls.Add(panel);
@@ -504,6 +526,59 @@ internal sealed class ConnectorControlPanel : Form
         _resolvedApiUrlLabel.Text = string.IsNullOrWhiteSpace(_config.ApiUrl) ? "" : _config.ApiUrl;
         if (!isAuto)
             _apiUrl.Text = _config.ApiUrl;
+        RefreshDiscoveryStatusLabels();
+    }
+
+    private void RefreshDiscoveryStatusLabels()
+    {
+        _statusResolvedApiUrl.Text = string.IsNullOrWhiteSpace(_config.ApiUrl) ? "(none)" : _config.ApiUrl;
+        _statusDiscoveryUrl.Text = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl.Trim();
+        _statusDiscoveryLastSuccess.Text = _config.ApiUrlLastDiscoveredAt.HasValue
+            ? _config.ApiUrlLastDiscoveredAt.Value.ToLocalTime().ToString("g")
+            : "Never";
+    }
+
+    private void CopyBackendDiagnostics()
+    {
+        var diagnostics = BuildBackendDiagnostics();
+        Clipboard.SetText(JsonSerializer.Serialize(diagnostics, new JsonSerializerOptions { WriteIndented = true }));
+        MessageBox.Show("Diagnostics copied to clipboard.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private Dictionary<string, object?> BuildBackendDiagnostics()
+    {
+        var d = new Dictionary<string, object?>
+        {
+            ["apiUrlMode"] = _config.ApiUrlMode,
+            ["discoveryUrl"] = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl,
+            ["resolvedApiUrl"] = _config.ApiUrl,
+            ["discoveryLastSuccessAt"] = _config.ApiUrlLastDiscoveredAt?.ToString("O"),
+            ["latestConnectorVersion"] = _lastDiscovery?.LatestConnectorVersion ?? _discoveryService.LastSuccess?.LatestConnectorVersion,
+            ["minConnectorVersion"] = _lastDiscovery?.MinConnectorVersion ?? _discoveryService.LastSuccess?.MinConnectorVersion
+        };
+        return d;
+    }
+
+    private static void ShowProgramDataError(Exception ex, string path)
+    {
+        var dir = Path.GetDirectoryName(path) ?? path;
+        var message = "Could not write to:\r\n" + path + "\r\n\r\n"
+            + (ex?.Message ?? "Unknown error") + "\r\n\r\n"
+            + "Ensure the folder exists and you have write permission. "
+            + "For ProgramData (e.g. C:\\ProgramData\\AICFO), try running the connector as administrator or check that the folder is not read-only.";
+        MessageBox.Show(message, "AI CFO Connector - Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+
+    private void SafeSaveConfig()
+    {
+        try
+        {
+            _configStore.Save(_config);
+        }
+        catch (Exception ex)
+        {
+            ShowProgramDataError(ex, ConnectorPaths.ConfigFile);
+        }
     }
 
     private void OnBackendModeChanged()
@@ -514,7 +589,7 @@ internal sealed class ConnectorControlPanel : Form
         if (!isAuto)
             _apiUrl.Text = _config.ApiUrl;
         RefreshBackendModeUi();
-        _configStore.Save(_config);
+        SafeSaveConfig();
     }
 
     private void OpenDownloadUrl()
@@ -548,11 +623,16 @@ internal sealed class ConnectorControlPanel : Form
                 {
                     _config.ApiUrl = baseUrl;
                     _config.ApiUrlLastDiscoveredAt = DateTimeOffset.UtcNow;
-                    _configStore.Save(_config);
+                    SafeSaveConfig();
                     if (InvokeRequired)
-                        BeginInvoke(() => { _resolvedApiUrlLabel.Text = _config.ApiUrl; });
+                        BeginInvoke(() => { _resolvedApiUrlLabel.Text = _config.ApiUrl; _discoveryFailureBanner.Text = ""; _discoveryFailureBanner.Visible = false; RefreshDiscoveryStatusLabels(); });
                     else
+                    {
                         _resolvedApiUrlLabel.Text = _config.ApiUrl;
+                        _discoveryFailureBanner.Text = "";
+                        _discoveryFailureBanner.Visible = false;
+                        RefreshDiscoveryStatusLabels();
+                    }
                 }
             }
         }
@@ -566,18 +646,27 @@ internal sealed class ConnectorControlPanel : Form
                 if (useFallback)
                 {
                     _config.ApiUrl = DiscoveryService.FallbackApiBaseUrl;
-                    _configStore.Save(_config);
-                    if (InvokeRequired)
-                        BeginInvoke(() =>
-                        {
-                            _resolvedApiUrlLabel.Text = _config.ApiUrl;
-                            MessageBox.Show("Could not reach the automatic configuration server. Using fallback backend URL. You can switch to \"Pinned\" and set a custom URL if needed.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        });
-                    else
+                    SafeSaveConfig();
+                }
+                var displayUrl = _config.ApiUrl;
+                if (InvokeRequired)
+                    BeginInvoke(() =>
                     {
-                        _resolvedApiUrlLabel.Text = _config.ApiUrl;
+                        _resolvedApiUrlLabel.Text = displayUrl;
+                        _discoveryFailureBanner.Text = "Automatic backend configuration failed. Using fallback: " + displayUrl;
+                        _discoveryFailureBanner.Visible = true;
+                        RefreshDiscoveryStatusLabels();
+                        if (useFallback)
+                            MessageBox.Show("Could not reach the automatic configuration server. Using fallback backend URL. You can switch to \"Pinned\" and set a custom URL if needed.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    });
+                else
+                {
+                    _resolvedApiUrlLabel.Text = displayUrl;
+                    _discoveryFailureBanner.Text = "Automatic backend configuration failed. Using fallback: " + displayUrl;
+                    _discoveryFailureBanner.Visible = true;
+                    RefreshDiscoveryStatusLabels();
+                    if (useFallback)
                         MessageBox.Show("Could not reach the automatic configuration server. Using fallback backend URL. You can switch to \"Pinned\" and set a custom URL if needed.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
                 }
             }
         }
@@ -1032,7 +1121,7 @@ internal sealed class ConnectorControlPanel : Form
             existing.LinkId = link.Id;
 
             _credentialStore.SaveMappingToken(existing.Id, _deviceAuthToken);
-            _configStore.Save(_config);
+            SafeSaveConfig();
             await RefreshDeviceLinkDataAsync();
             LoadConfig();
             SetActionBanner($"Linked successfully: {companyItem.Company.Name} ↔ {tallyCompany}", Color.DarkGreen);
@@ -1050,15 +1139,7 @@ internal sealed class ConnectorControlPanel : Form
 
     private void CopyLoginDiagnostics()
     {
-        var diagnostics = new Dictionary<string, object?>
-        {
-            ["apiUrlMode"] = _config.ApiUrlMode,
-            ["discoveryUrl"] = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl,
-            ["resolvedApiUrl"] = _config.ApiUrl,
-            ["discoveryLastSuccessAt"] = _config.ApiUrlLastDiscoveredAt?.ToString("O"),
-            ["latestConnectorVersion"] = _lastDiscovery?.LatestConnectorVersion ?? _discoveryService.LastSuccess?.LatestConnectorVersion,
-            ["minConnectorVersion"] = _lastDiscovery?.MinConnectorVersion ?? _discoveryService.LastSuccess?.MinConnectorVersion
-        };
+        var diagnostics = new Dictionary<string, object?>(BuildBackendDiagnostics());
         if (_lastLoginDiagnostics is not null)
         {
             var responseBodyForCopy = LogRedaction.RedactSecrets(_lastLoginDiagnostics.ResponseBody);
@@ -1126,7 +1207,7 @@ internal sealed class ConnectorControlPanel : Form
                     _credentialStore.SaveMappingToken(mapping.Id, _deviceAuthToken);
                 }
             }
-            _configStore.Save(_config);
+            SafeSaveConfig();
 
             var linkedCompanyIds = new HashSet<string>(
                 links.Where(l => !string.IsNullOrWhiteSpace(l.CompanyId)).Select(l => l.CompanyId),
@@ -1286,7 +1367,7 @@ internal sealed class ConnectorControlPanel : Form
                     foreach (var name in names) _tallyCompanyCombo.Items.Add(name);
                     if (_tallyCompanyCombo.Items.Count > 0) _tallyCompanyCombo.SelectedIndex = 0;
                     _tallyStatus.Text = $"Detected ({host}:{port}, {names.Count} companies)";
-                    _configStore.Save(_config);
+                    SafeSaveConfig();
                     await RefreshDeviceLinkDataAsync();
                     _tallyCompaniesEmptyState.Visible = false;
                     return;
@@ -1313,7 +1394,7 @@ internal sealed class ConnectorControlPanel : Form
         _config.SyncIntervalMinutes = (int)_syncMinutes.Value;
         _config.StartWithWindows = _startWithWindowsToggle.Checked;
         _config.EnsureCompatibility();
-        _configStore.Save(_config);
+        SafeSaveConfig();
     }
 
     private void HandleStartWithWindowsChanged()
@@ -1331,7 +1412,7 @@ internal sealed class ConnectorControlPanel : Form
             }
 
             _config.StartWithWindows = _startWithWindowsToggle.Checked;
-            _configStore.Save(_config);
+            SafeSaveConfig();
             UpdateAutoStartStatusLabel();
         }
         catch (Exception ex)
@@ -1386,7 +1467,7 @@ internal sealed class ConnectorControlPanel : Form
 
         _config.Mappings.Remove(mapping);
         _credentialStore.DeleteMappingToken(mapping.Id);
-        _configStore.Save(_config);
+        SafeSaveConfig();
         AddRecentAction($"Unlinked: {mapping.WebCompanyName ?? "Web"} ↔ {mapping.TallyCompanyName}");
         _ = RefreshDeviceLinkDataAsync();
         LoadConfig();
@@ -1405,8 +1486,11 @@ internal sealed class ConnectorControlPanel : Form
 
     private void LoadConfig()
     {
-        _config = _configStore.Load() ?? new ConnectorConfig();
+        var loaded = _configStore.Load();
+        _config = loaded ?? new ConnectorConfig();
         _config.EnsureCompatibility();
+        if (loaded is null)
+            SafeSaveConfig();
 
         _apiUrl.Text = _config.ApiUrl;
         _suppressBackendModeEvent = true;
@@ -1471,6 +1555,7 @@ internal sealed class ConnectorControlPanel : Form
         _linksEmptyState.Visible = _config.Mappings.Count == 0;
         SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
 
+        RefreshDiscoveryStatusLabels();
         RefreshStatusView();
     }
 
