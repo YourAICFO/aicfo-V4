@@ -38,6 +38,7 @@ internal static class Program
                 .CreateLogger();
 
             ConfigStore.LogWarning = msg => Log.Warning(msg);
+            DiscoveryService.LogWarning = msg => Log.Warning(msg);
 
             try
             {
@@ -1507,77 +1508,93 @@ internal sealed class ConnectorControlPanel : Form
 
     private void LoadConfig()
     {
-        var loaded = _configStore.Load();
-        _config = loaded ?? new ConnectorConfig();
-        _config.EnsureCompatibility();
-        if (loaded is null)
-            SafeSaveConfig();
-
-        _apiUrl.Text = _config.ApiUrl;
-        _suppressBackendModeEvent = true;
-        _backendModeAuto.Checked = string.Equals(_config.ApiUrlMode, "auto", StringComparison.OrdinalIgnoreCase);
-        _backendModePinned.Checked = !_backendModeAuto.Checked;
-        _suppressBackendModeEvent = false;
-        RefreshBackendModeUi();
-        _tallyHost.Text = _config.TallyHost;
-        _tallyPort.Value = Math.Clamp(_config.TallyPort, 1, 65535);
-        _heartbeatSeconds.Value = Math.Clamp(_config.HeartbeatIntervalSeconds, 10, 300);
-        _syncMinutes.Value = Math.Clamp(_config.SyncIntervalMinutes, 1, 240);
-        _suppressAutostartEvent = true;
-        _startWithWindowsToggle.Checked = _config.StartWithWindows;
-        _suppressAutostartEvent = false;
         try
         {
-            if (_config.StartWithWindows) AutoStartManager.EnableAutoStart();
-            else AutoStartManager.DisableAutoStart();
-        }
-        catch
-        {
-            // Non-fatal. UI status still reflects real registry state.
-        }
-        UpdateAutoStartStatusLabel();
+            var loaded = _configStore.Load();
+            _config = loaded ?? new ConnectorConfig();
+            _config.EnsureCompatibility();
+            if (loaded is null)
+                SafeSaveConfig();
 
-        _statusMappingCombo.Items.Clear();
-        foreach (var mapping in _config.Mappings)
-        {
-            _statusMappingCombo.Items.Add(new MappingComboItem(mapping));
-        }
-        if (_statusMappingCombo.Items.Count > 0) _statusMappingCombo.SelectedIndex = 0;
-
-        _mappingsList.Items.Clear();
-        foreach (var mapping in _config.Mappings)
-        {
-            var webName = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "(Unnamed)" : mapping.WebCompanyName;
-            var authMethod = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
-                ? "Device Token"
-                : "Legacy";
-            var linkStatus = (_deviceLinks.FirstOrDefault(l => string.Equals(l.Id, mapping.LinkId, StringComparison.OrdinalIgnoreCase))?.Status ?? mapping.LastSyncResult ?? "-")
-                .Trim()
-                .ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(linkStatus)) linkStatus = "-";
-
-            var item = new ListViewItem(webName)
+            _apiUrl.Text = _config.ApiUrl;
+            _suppressBackendModeEvent = true;
+            _backendModeAuto.Checked = string.Equals(_config.ApiUrlMode, "auto", StringComparison.OrdinalIgnoreCase);
+            _backendModePinned.Checked = !_backendModeAuto.Checked;
+            _suppressBackendModeEvent = false;
+            RefreshBackendModeUi();
+            _tallyHost.Text = _config.TallyHost;
+            _tallyPort.Value = Math.Clamp(_config.TallyPort, 1, 65535);
+            _heartbeatSeconds.Value = Math.Clamp(_config.HeartbeatIntervalSeconds, 10, 300);
+            _syncMinutes.Value = Math.Clamp(_config.SyncIntervalMinutes, 1, 240);
+            _suppressAutostartEvent = true;
+            _startWithWindowsToggle.Checked = _config.StartWithWindows;
+            _suppressAutostartEvent = false;
+            try
             {
-                Tag = mapping.Id
-            };
-            item.SubItems.Add(mapping.TallyCompanyName);
-            item.SubItems.Add(authMethod);
-            item.SubItems.Add(linkStatus);
-            item.SubItems.Add(mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never");
-            item.SubItems.Add(mapping.LastSyncResult);
-            item.SubItems.Add(string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError);
-            if (string.Equals(linkStatus, "failed", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(mapping.LastError))
-            {
-                item.ToolTipText = mapping.LastError;
+                if (_config.StartWithWindows) AutoStartManager.EnableAutoStart();
+                else AutoStartManager.DisableAutoStart();
             }
-            _mappingsList.Items.Add(item);
+            catch
+            {
+                // Non-fatal. UI status still reflects real registry state.
+            }
+            UpdateAutoStartStatusLabel();
+
+            _statusMappingCombo.Items.Clear();
+            foreach (var mapping in _config.Mappings)
+            {
+                _statusMappingCombo.Items.Add(new MappingComboItem(mapping));
+            }
+            if (_statusMappingCombo.Items.Count > 0) _statusMappingCombo.SelectedIndex = 0;
+
+            _mappingsList.Items.Clear();
+            foreach (var mapping in _config.Mappings)
+            {
+                var webName = string.IsNullOrWhiteSpace(mapping.WebCompanyName) ? "(Unnamed)" : mapping.WebCompanyName;
+                var authMethod = string.Equals(mapping.AuthMethod, "device_token", StringComparison.OrdinalIgnoreCase)
+                    ? "Device Token"
+                    : "Legacy";
+                var linkStatus = (_deviceLinks.FirstOrDefault(l => string.Equals(l.Id, mapping.LinkId, StringComparison.OrdinalIgnoreCase))?.Status ?? mapping.LastSyncResult ?? "-")
+                    .Trim()
+                    .ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(linkStatus)) linkStatus = "-";
+
+                var item = new ListViewItem(webName)
+                {
+                    Tag = mapping.Id
+                };
+                item.SubItems.Add(mapping.TallyCompanyName);
+                item.SubItems.Add(authMethod);
+                item.SubItems.Add(linkStatus);
+                item.SubItems.Add(mapping.LastSyncAt?.ToLocalTime().ToString("g") ?? "Never");
+                item.SubItems.Add(mapping.LastSyncResult);
+                item.SubItems.Add(string.IsNullOrWhiteSpace(mapping.LastError) ? "-" : mapping.LastError);
+                if (string.Equals(linkStatus, "failed", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(mapping.LastError))
+                {
+                    item.ToolTipText = mapping.LastError;
+                }
+                _mappingsList.Items.Add(item);
+            }
+
+            _linksEmptyState.Visible = _config.Mappings.Count == 0;
+            SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
+
+            RefreshDiscoveryStatusLabels();
+            RefreshStatusView();
         }
-
-        _linksEmptyState.Visible = _config.Mappings.Count == 0;
-        SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
-
-        RefreshDiscoveryStatusLabels();
-        RefreshStatusView();
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Config load failed; using defaults");
+            _config = ConnectorConfig.Default();
+            try { _apiUrl.Text = _config.ApiUrl; } catch { }
+            try { _suppressBackendModeEvent = true; _backendModeAuto.Checked = true; _backendModePinned.Checked = false; _suppressBackendModeEvent = false; } catch { }
+            try { RefreshBackendModeUi(); } catch { }
+            try { _tallyHost.Text = _config.TallyHost; _tallyPort.Value = Math.Clamp(_config.TallyPort, 1, 65535); } catch { }
+            try { _heartbeatSeconds.Value = Math.Clamp(_config.HeartbeatIntervalSeconds, 10, 300); _syncMinutes.Value = Math.Clamp(_config.SyncIntervalMinutes, 1, 240); } catch { }
+            try { _startWithWindowsToggle.Checked = _config.StartWithWindows; } catch { }
+            try { UpdateAutoStartStatusLabel(); } catch { }
+            SetActionBanner("Config was corrupt and has been reset; see logs.", Color.DarkOrange);
+        }
     }
 
     private void SyncSelectionToStatusMapping()

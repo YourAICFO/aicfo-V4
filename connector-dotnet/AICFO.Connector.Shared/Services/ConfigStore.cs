@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using AICFO.Connector.Shared.Models;
 
@@ -11,25 +12,38 @@ public interface IConfigStore
 
 public sealed class ConfigStore : IConfigStore
 {
+    private readonly string _configFilePath;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
         WriteIndented = true
     };
 
+    private static readonly UTF8Encoding Utf8NoBom = new(false);
+
     /// <summary>Optional callback for corruption warning (e.g. set by Tray to log to Serilog).</summary>
     public static Action<string>? LogWarning { get; set; }
 
-    /// <summary>Load from a specific path. Used by tests and by Load(). Returns default config if file missing or corrupt.</summary>
+    /// <summary>Uses default path (ConnectorPaths.ConfigFile).</summary>
+    public ConfigStore() : this(ConnectorPaths.ConfigFile) { }
+
+    /// <summary>Uses the given path (for tests or custom install).</summary>
+    public ConfigStore(string configFilePath)
+    {
+        _configFilePath = configFilePath ?? ConnectorPaths.ConfigFile;
+    }
+
+    /// <summary>Load from a specific path. Returns default config if file missing or corrupt. Never throws.</summary>
     public static ConnectorConfig LoadFromPath(string path, Action<string>? onCorrupt = null)
     {
         if (!File.Exists(path))
             return ConnectorConfig.Default();
 
-        string json;
+        byte[] bytes;
         try
         {
-            json = File.ReadAllText(path);
+            bytes = File.ReadAllBytes(path);
         }
         catch (Exception ex)
         {
@@ -37,9 +51,46 @@ public sealed class ConfigStore : IConfigStore
             return ConnectorConfig.Default();
         }
 
-        if (string.IsNullOrEmpty(json) || json.Contains('\0'))
+        if (bytes.Length == 0)
         {
-            RenameCorrupt(path, onCorrupt, "File empty or contains null bytes");
+            RenameCorrupt(path, onCorrupt, "Empty file");
+            return ConnectorConfig.Default();
+        }
+
+        int i = 0;
+        while (i < bytes.Length && (bytes[i] == 0x20 || bytes[i] == 0x09 || bytes[i] == 0x0A || bytes[i] == 0x0D))
+            i++;
+        if (i < bytes.Length && bytes[i] == 0x00)
+        {
+            RenameCorrupt(path, onCorrupt, "Leading null byte before first non-whitespace");
+            return ConnectorConfig.Default();
+        }
+
+        int nullCount = 0;
+        foreach (var b in bytes)
+        {
+            if (b == 0x00) nullCount++;
+        }
+        if (nullCount > 0)
+        {
+            RenameCorrupt(path, onCorrupt, "File contains null bytes (possibly UTF-16 or corrupt)");
+            return ConnectorConfig.Default();
+        }
+
+        string json;
+        try
+        {
+            json = Utf8NoBom.GetString(bytes);
+        }
+        catch (Exception ex)
+        {
+            RenameCorrupt(path, onCorrupt, "Invalid UTF-8: " + ex.Message);
+            return ConnectorConfig.Default();
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            RenameCorrupt(path, onCorrupt, "Decoded content empty or whitespace");
             return ConnectorConfig.Default();
         }
 
@@ -65,7 +116,7 @@ public sealed class ConfigStore : IConfigStore
     {
         try
         {
-            var corruptPath = path + ".bad-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var corruptPath = path + ".bad-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
             File.Move(path, corruptPath);
             var message = $"Config file corrupt or invalid; renamed to {Path.GetFileName(corruptPath)}. Reason: {reason}";
             onCorrupt?.Invoke(message);
@@ -86,25 +137,51 @@ public sealed class ConfigStore : IConfigStore
 
     public ConnectorConfig? Load()
     {
-        return LoadFromPath(ConnectorPaths.ConfigFile, LogWarning);
+        return LoadFromPath(_configFilePath, LogWarning);
     }
 
     public void Save(ConnectorConfig config)
     {
         config.Validate();
-        EnsureConfigDirectoriesExist();
+        EnsureConfigDirectoriesExist(_configFilePath);
 
-        var json = JsonSerializer.Serialize(config, JsonOptions);
-        var path = ConnectorPaths.ConfigFile;
+        var path = _configFilePath;
         var tmpPath = path + ".tmp";
 
         try
         {
-            File.WriteAllText(tmpPath, json);
+            var json = JsonSerializer.Serialize(config, JsonOptions);
+            var bytes = Utf8NoBom.GetBytes(json);
+
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, FileOptions.None))
+            {
+                fs.Write(bytes, 0, bytes.Length);
+                fs.Flush(true);
+            }
+
             if (File.Exists(path))
-                File.Replace(tmpPath, path, destinationBackupFileName: null);
+            {
+                try
+                {
+                    File.Replace(tmpPath, path, destinationBackupFileName: null);
+                }
+                catch (IOException)
+                {
+                    try
+                    {
+                        File.Delete(path);
+                        File.Move(tmpPath, path);
+                    }
+                    catch
+                    {
+                        throw;
+                    }
+                }
+            }
             else
+            {
                 File.Move(tmpPath, path);
+            }
         }
         finally
         {
@@ -112,9 +189,12 @@ public sealed class ConfigStore : IConfigStore
         }
     }
 
-    /// <summary>Ensures ProgramData config and logs directories exist. Call before any file write. Logs and throws on failure.</summary>
-    public static void EnsureConfigDirectoriesExist()
+    /// <summary>Ensures config directory for the given path and ProgramData logs directory exist. Call before any file write.</summary>
+    public static void EnsureConfigDirectoriesExist(string? configFilePath = null)
     {
+        var configDir = string.IsNullOrEmpty(configFilePath) ? ConnectorPaths.ConfigDirectory : Path.GetDirectoryName(configFilePath)!;
+        if (!string.IsNullOrEmpty(configDir))
+            Directory.CreateDirectory(configDir);
         Directory.CreateDirectory(ConnectorPaths.ProgramDataRoot);
         Directory.CreateDirectory(ConnectorPaths.ConfigDirectory);
         Directory.CreateDirectory(ConnectorPaths.LogsDirectory);

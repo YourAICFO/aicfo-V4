@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using AICFO.Connector.Shared.Models;
 
@@ -27,6 +28,11 @@ public sealed class DiscoveryService : IDiscoveryService
     /// <summary>Fallback API base URL only when discovery fails and no api_url is saved.</summary>
     public const string FallbackApiBaseUrl = "https://web-production-be25.up.railway.app";
 
+    /// <summary>Optional callback for safe diagnostics (e.g. set by Tray to log to Serilog). No secrets.</summary>
+    public static Action<string>? LogWarning { get; set; }
+
+    private static string ConnectorVersion => typeof(DiscoveryService).Assembly.GetName().Version?.ToString(3) ?? "1.0";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -54,18 +60,40 @@ public sealed class DiscoveryService : IDiscoveryService
 
         try
         {
-            using var client = new HttpClient
+            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
             {
                 Timeout = TimeSpan.FromSeconds(10)
             };
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "AICFO-Connector/1.0");
-            var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"AICFOConnector/{ConnectorVersion}");
+            var response = await client.GetAsync(url, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
             var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            var config = JsonSerializer.Deserialize<ConnectorDiscoveryConfig>(json, JsonOptions);
+            var safeSnippet = TruncateForLog(json, 300);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var msg = $"Discovery failed: HTTP {(int)response.StatusCode}. Response (first 300 chars): {safeSnippet}";
+                LogWarning?.Invoke(msg);
+                return (null, msg);
+            }
+
+            ConnectorDiscoveryConfig? config;
+            try
+            {
+                config = JsonSerializer.Deserialize<ConnectorDiscoveryConfig>(json, JsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                var msg = $"Discovery invalid JSON: {ex.Message}. Response (first 300 chars): {safeSnippet}";
+                LogWarning?.Invoke(msg);
+                return (null, msg);
+            }
+
             if (config is null)
             {
-                return (null, "Discovery response was empty or invalid JSON.");
+                var msg = $"Discovery response was empty or invalid JSON. Response (first 300 chars): {safeSnippet}";
+                LogWarning?.Invoke(msg);
+                return (null, msg);
             }
 
             _lastSuccess = config;
@@ -91,7 +119,16 @@ public sealed class DiscoveryService : IDiscoveryService
         }
         catch (Exception ex)
         {
-            return (null, $"Discovery failed: {ex.Message}");
+            var msg = $"Discovery failed: {ex.Message}";
+            LogWarning?.Invoke(msg);
+            return (null, msg);
         }
+    }
+
+    private static string TruncateForLog(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value)) return "(empty)";
+        if (value.Length <= maxLength) return value;
+        return value.Substring(0, maxLength) + "...";
     }
 }

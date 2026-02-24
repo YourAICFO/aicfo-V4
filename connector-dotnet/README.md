@@ -105,3 +105,22 @@ Then open `%TEMP%\aicfo-connector-install.log` to see the reason for failure (e.
 7. Verify mapping appears in current mappings list.
 8. Trigger **Sync Selected** or **Sync All** and confirm backend sync status updates.
 9. Verify logs in `C:\ProgramData\AICFO\logs\agent.log`.
+
+## How to verify (connector stability)
+
+1. **Config clean start**  
+   Delete the ProgramData config file (`C:\ProgramData\AICFO\config\config.json`), then launch the tray. It should start with defaults and create a new valid `config.json`.
+
+2. **Corrupt config (null byte)**  
+   - Close the tray.  
+   - Open `config.json` in a binary/hex editor and insert a `0x00` at the start (or overwrite part of the file with nulls).  
+   - Save and launch the tray.  
+   - Tray should start without crashing; you should see an orange banner: “Config was corrupt and has been reset; see logs.”  
+   - The corrupt file should be renamed to `config.json.bad-<yyyyMMdd-HHmmss>` in the same folder.
+
+3. **Discovery URL**  
+   - From a command line:  
+     `curl -i -H "Accept: application/json" -H "User-Agent: AICFOConnector/1.0" "https://aicfo.in/.well-known/aicfo-connector.json"`  
+     (Or use the tray’s discovery/diagnostics if available.)  
+   - Connector uses GET, `Accept: application/json`, `User-Agent: AICFOConnector/<version>`, and follows redirects.  
+   - On non-200 or invalid JSON, the connector logs safe diagnostics (status code + first 300 chars of response); it does not crash and keeps the fallback API URL.
