@@ -10,3 +10,6 @@ frontend/dist/
 # connector-dotnet build artifacts (MSI and publish outputs)
 connector-dotnet/out/
 connector-dotnet/publish/
+
+# backend: do not store MSI binaries in repo; production uses CONNECTOR_DOWNLOAD_URL redirect
+backend/downloads/*.msi

@@ -5,36 +5,43 @@ const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
-// Connector download configuration
-const CONNECTOR_CONFIG = {
-  filename: 'AICFOConnectorSetup.msi',
-  version: '1.0.0',
-  supportedPlatforms: ['win32', 'win64'],
-  filePath: path.join(__dirname, '../../downloads/AICFOConnectorSetup.msi'),
-  downloadUrl: process.env.CONNECTOR_DOWNLOAD_URL || '/download/connector',
-};
+// Connector download: production uses CONNECTOR_DOWNLOAD_URL (302 redirect); dev can serve local file.
+const CONNECTOR_FILENAME = 'AICFOConnectorSetup.msi';
+const CONNECTOR_FILE_PATH = path.join(__dirname, '../../downloads', CONNECTOR_FILENAME);
+const isProduction = process.env.NODE_ENV === 'production';
 
 /**
  * GET /download/connector
- * Download the Windows Tally Connector installer (MSI)
+ * - If CONNECTOR_DOWNLOAD_URL is set: respond with HTTP 302 redirect to that URL.
+ * - If not set in production: return 500 with JSON { success: false, error: "CONNECTOR_DOWNLOAD_URL not configured" }.
+ * - If not set in dev and backend/downloads/AICFOConnectorSetup.msi exists: serve file (application/octet-stream, attachment).
+ * - Otherwise: 404 with helpful message.
  */
 router.get('/connector', async (req, res) => {
   try {
-    const redirectUrl = process.env.CONNECTOR_DOWNLOAD_URL;
+    const redirectUrl = process.env.CONNECTOR_DOWNLOAD_URL
+      ? String(process.env.CONNECTOR_DOWNLOAD_URL).trim()
+      : null;
+
     if (redirectUrl) {
       res.setHeader('Cache-Control', 'no-store');
       return res.redirect(302, redirectUrl);
     }
 
-    await fs.access(CONNECTOR_CONFIG.filePath);
-    const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_CONFIG.filename}"`);
-    res.setHeader('Content-Length', stats.size);
-    res.setHeader('X-Connector-Version', CONNECTOR_CONFIG.version);
-    res.setHeader('Access-Control-Expose-Headers', 'X-Connector-Version, Content-Disposition');
+    if (isProduction) {
+      return res.status(500).json({
+        success: false,
+        error: 'CONNECTOR_DOWNLOAD_URL not configured',
+      });
+    }
 
-    res.sendFile(CONNECTOR_CONFIG.filePath, (err) => {
+    await fs.access(CONNECTOR_FILE_PATH);
+    const stats = await fs.stat(CONNECTOR_FILE_PATH);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${CONNECTOR_FILENAME}"`);
+    res.setHeader('Content-Length', stats.size);
+
+    res.sendFile(CONNECTOR_FILE_PATH, (err) => {
       if (err) {
         logger.error({ error: err }, 'Error sending connector file');
         if (!res.headersSent) {
@@ -44,21 +51,24 @@ router.get('/connector', async (req, res) => {
           });
         }
       } else {
-        logger.info({ 
-          userAgent: req.headers['user-agent'] || '', 
-          ip: req.ip,
-          timestamp: new Date().toISOString(),
-          fileType: CONNECTOR_CONFIG.filename
-        }, 'Connector downloaded successfully');
+        logger.info(
+          {
+            userAgent: req.headers['user-agent'] || '',
+            ip: req.ip,
+            timestamp: new Date().toISOString(),
+            fileType: CONNECTOR_FILENAME,
+          },
+          'Connector downloaded successfully (local file)'
+        );
       }
     });
   } catch (error) {
     if (error && error.code === 'ENOENT') {
-      logger.error({ error }, 'Connector installer not found');
+      logger.warn({ path: CONNECTOR_FILE_PATH }, 'Connector installer not found (local dev fallback)');
       return res.status(404).json({
         success: false,
         error: 'Connector installer not available',
-        message: 'Set CONNECTOR_DOWNLOAD_URL to a GitHub release asset URL, or upload backend/downloads/AICFOConnectorSetup.msi',
+        message: 'Set CONNECTOR_DOWNLOAD_URL, or place MSI at backend/downloads/AICFOConnectorSetup.msi (see backend/downloads/README.md).',
       });
     }
 
@@ -72,6 +82,12 @@ router.get('/connector', async (req, res) => {
   }
 });
 
+// For /download/info and /download/check: resolved download URL (redirect URL when set, else path)
+const getEffectiveDownloadUrl = () =>
+  process.env.CONNECTOR_DOWNLOAD_URL
+    ? String(process.env.CONNECTOR_DOWNLOAD_URL).trim()
+    : '/download/connector';
+
 /**
  * GET /download/info
  * Get connector download information and system requirements
@@ -80,25 +96,24 @@ router.get('/info', async (req, res) => {
   try {
     const userAgent = req.headers['user-agent'] || '';
     const isWindows = /windows|win32|win64/i.test(userAgent);
-    
+
     let fileSize = null;
     let lastUpdated = null;
-    
-    // Get file info if it exists
+
     try {
-      const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
+      const stats = await fs.stat(CONNECTOR_FILE_PATH);
       fileSize = stats.size;
       lastUpdated = stats.mtime;
-    } catch (error) {
+    } catch {
       // File doesn't exist, keep null values
     }
-    
+
     res.json({
       success: true,
       data: {
-        filename: CONNECTOR_CONFIG.filename,
-        version: CONNECTOR_CONFIG.version,
-        supportedPlatforms: CONNECTOR_CONFIG.supportedPlatforms,
+        filename: CONNECTOR_FILENAME,
+        version: '1.0.0',
+        supportedPlatforms: ['win32', 'win64'],
         systemRequirements: {
           os: 'Windows 7 or later',
           framework: '.NET Desktop Runtime 8.0 (included with installer)',
@@ -106,7 +121,7 @@ router.get('/info', async (req, res) => {
           ram: 'Minimum 2GB RAM',
           disk: '50MB free disk space',
         },
-        downloadUrl: CONNECTOR_CONFIG.downloadUrl,
+        downloadUrl: getEffectiveDownloadUrl(),
         isWindows,
         canDownload: isWindows,
         fileSize,
@@ -148,11 +163,11 @@ router.get('/check', async (req, res) => {
     let lastModified = null;
 
     try {
-      const stats = await fs.stat(CONNECTOR_CONFIG.filePath);
+      const stats = await fs.stat(CONNECTOR_FILE_PATH);
       fileExists = true;
       fileSize = stats.size;
       lastModified = stats.mtime;
-    } catch (error) {
+    } catch {
       // File doesn't exist
     }
 
@@ -162,8 +177,8 @@ router.get('/check', async (req, res) => {
         fileExists,
         fileSize,
         lastModified,
-        version: CONNECTOR_CONFIG.version,
-        filename: CONNECTOR_CONFIG.filename,
+        version: '1.0.0',
+        filename: CONNECTOR_FILENAME,
       },
     });
   } catch (error) {

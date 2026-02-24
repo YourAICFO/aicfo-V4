@@ -1,8 +1,42 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs').promises;
 const { authenticate } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/adminAuth');
 const { Company, ConnectorDevice } = require('../models');
 
 const router = express.Router();
+
+const CONNECTOR_FILE_PATH = path.join(__dirname, '../../downloads/AICFOConnectorSetup.msi');
+
+/**
+ * GET /api/admin/connector/download-info
+ * Auth: required, admin. Returns connector download configuration (no secrets).
+ */
+router.get('/download-info', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const connectorDownloadUrl = process.env.CONNECTOR_DOWNLOAD_URL
+      ? String(process.env.CONNECTOR_DOWNLOAD_URL).trim()
+      : null;
+    let localFileExists = false;
+    try {
+      await fs.access(CONNECTOR_FILE_PATH);
+      localFileExists = true;
+    } catch {
+      // file not present
+    }
+    return res.json({
+      connectorDownloadUrlConfigured: !!connectorDownloadUrl,
+      connectorDownloadUrl: connectorDownloadUrl || null,
+      localFileExists,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 
 router.get('/devices', authenticate, async (req, res) => {
   try {
