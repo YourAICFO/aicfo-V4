@@ -24,11 +24,12 @@ jobs:
   validate:
     runs-on: windows-latest
     steps:
-      - name: Enable Git long paths (Windows)
-        run: git config --global core.longpaths true
-
-      - name: Checkout
+      - name: Checkout (connector only, avoids node_modules)
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            connector-dotnet
+            .github
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -82,11 +83,12 @@ jobs:
     env:
       TIMESTAMP_URL: "http://timestamp.digicert.com"
     steps:
-      - name: Enable Git long paths (Windows)
-        run: git config --global core.longpaths true
-
-      - name: Checkout
+      - name: Checkout (connector only, avoids node_modules)
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            connector-dotnet
+            .github
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
