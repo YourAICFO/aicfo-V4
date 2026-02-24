@@ -69,27 +69,49 @@ const ModernLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { name: 'Revenue', href: '/revenue', icon: '💰' },
-    { name: 'Expenses', href: '/expenses', icon: '💸' },
-    { name: 'Cashflow', href: '/cashflow', icon: '💳' },
-    { name: 'Debtors', href: '/debtors', icon: '👥' },
-    { name: 'Creditors', href: '/creditors', icon: '🏢' },
-    { name: 'Working Capital', href: '/working-capital', icon: '🏦' },
-    { name: 'Inventory', href: '/working-capital#inventory', icon: '📦' },
-    { name: 'P&L Pack', href: '/pl-pack', icon: '📋' },
-    { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
-    { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
-    { name: 'Integrations', href: '/integrations', icon: '🔗' },
-    { name: 'Data Health', href: '/data-health', icon: '📊' },
-    ...(isAdmin
-      ? [
-          { name: 'Admin Control Tower', href: '/admin/control-tower', icon: '🛡️' },
-          { name: 'Admin Dashboard', href: '/admin', icon: '🧭' }
-        ]
-      : []),
+  const NAV_GROUPS: { label: string; items: { name: string; href: string; icon: string }[] }[] = [
+    {
+      label: 'Review',
+      items: [
+        { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+        { name: 'P&L Pack', href: '/pl-pack', icon: '📋' },
+      ],
+    },
+    {
+      label: 'Performance',
+      items: [
+        { name: 'Revenue', href: '/revenue', icon: '💰' },
+        { name: 'Expenses', href: '/expenses', icon: '💸' },
+        { name: 'Cashflow', href: '/cashflow', icon: '💳' },
+        { name: 'Working Capital', href: '/working-capital', icon: '🏦' },
+        { name: 'Inventory', href: '/working-capital#inventory', icon: '📦' },
+        { name: 'Debtors', href: '/debtors', icon: '👥' },
+        { name: 'Creditors', href: '/creditors', icon: '🏢' },
+      ],
+    },
+    {
+      label: 'Intelligence',
+      items: [
+        { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
+        { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
+        { name: 'Data Health', href: '/data-health', icon: '📊' },
+      ],
+    },
+    {
+      label: 'Setup',
+      items: [
+        { name: 'Integrations', href: '/integrations', icon: '🔗' },
+        { name: 'Settings', href: '/settings', icon: '⚙️' },
+      ],
+    },
   ];
+
+  const adminNav = isAdmin
+    ? [
+        { name: 'Admin Control Tower', href: '/admin/control-tower', icon: '🛡️' },
+        { name: 'Admin Dashboard', href: '/admin', icon: '🧭' },
+      ]
+    : [];
 
   const isActive = (path: string) => location.pathname === path;
   const hasCompanies = companies.length > 0;
@@ -131,22 +153,57 @@ const ModernLayout: React.FC = () => {
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={cn(
-                  'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive(item.href)
-                    ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/20 dark:text-primary-300'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                )}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <span className="mr-3 text-lg">{item.icon}</span>
-                {item.name}
-              </Link>
+            {NAV_GROUPS.map((group, groupIndex) => (
+              <div key={group.label}>
+                <p
+                  className={cn(
+                    'text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500',
+                    groupIndex === 0 ? 'mt-0 mb-2 px-3' : 'mt-6 mb-2 px-3'
+                  )}
+                >
+                  {group.label}
+                </p>
+                {group.items.map((item) => (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={cn(
+                      'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                      isActive(item.href)
+                        ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/20 dark:text-primary-300'
+                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                    )}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <span className="mr-3 text-lg">{item.icon}</span>
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
             ))}
+            {adminNav.length > 0 && (
+              <div>
+                <p className="mt-6 mb-2 px-3 text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Admin
+                </p>
+                {adminNav.map((item) => (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={cn(
+                      'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                      isActive(item.href)
+                        ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/20 dark:text-primary-300'
+                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                    )}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <span className="mr-3 text-lg">{item.icon}</span>
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
+            )}
           </nav>
 
           {/* Sidebar footer */}

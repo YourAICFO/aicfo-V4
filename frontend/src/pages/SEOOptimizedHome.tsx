@@ -64,29 +64,18 @@ const SEOOptimizedHome: React.FC = () => {
   const subheadingClass = 'mt-2 text-sm text-slate-600 dark:text-slate-400';
   const cardClass = 'rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-6 shadow-sm';
 
-  const heroImgFallback = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const t = e.currentTarget;
-    if (t.src.endsWith('.png')) {
-      t.onerror = null;
-      t.src = '/landing/hero.svg';
-    }
-  };
-  const previewImgFallback = (e: React.SyntheticEvent<HTMLImageElement>, svgPath: string) => {
-    const t = e.currentTarget;
-    if (t.src.endsWith('.png')) {
-      t.onerror = null;
-      t.src = svgPath;
-    }
-  };
-
+  // Assets are served from frontend/public → /landing/* (SVG defaults; PNG used when present)
   const HeroIllustration = () => (
-    <div className="relative w-full max-w-lg mx-auto aspect-[4/3] flex items-center justify-center rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 shadow-lg">
-      <img
-        src="/landing/hero.png"
-        alt="Financial dashboard overview"
-        className="w-full h-full object-contain"
-        onError={heroImgFallback}
-      />
+    <div className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-slate-900/40 shadow-lg p-4">
+      <picture>
+        <source srcSet="/landing/hero.png" type="image/png" />
+        <img
+          src="/landing/hero.svg"
+          alt="AI CFO dashboard preview"
+          className="w-full h-auto block object-contain"
+          style={{ minHeight: 240 }}
+        />
+      </picture>
     </div>
   );
 
@@ -229,24 +218,30 @@ const SEOOptimizedHome: React.FC = () => {
             </p>
             <div className="mt-10 grid gap-8 sm:grid-cols-2">
               <div className="space-y-2">
-                <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/30 shadow-sm">
-                  <img
-                    src="/landing/pl-pack.png"
-                    alt="P&L Pack preview"
-                    className="w-full h-auto object-cover"
-                    onError={(e) => previewImgFallback(e, '/landing/pl-pack.svg')}
-                  />
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-slate-900/40 shadow-sm p-3">
+                  <picture>
+                    <source srcSet="/landing/pl-pack.png" type="image/png" />
+                    <img
+                      src="/landing/pl-pack.svg"
+                      alt="P&L Pack preview"
+                      className="w-full h-auto block object-contain"
+                      style={{ minHeight: 200 }}
+                    />
+                  </picture>
                 </div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">P&L Pack — revenue, expenses, drivers, AI narrative</p>
               </div>
               <div className="space-y-2">
-                <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/30 shadow-sm">
-                  <img
-                    src="/landing/data-health.png"
-                    alt="Data Health preview"
-                    className="w-full h-auto object-cover"
-                    onError={(e) => previewImgFallback(e, '/landing/data-health.svg')}
-                  />
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-slate-900/40 shadow-sm p-3">
+                  <picture>
+                    <source srcSet="/landing/data-health.png" type="image/png" />
+                    <img
+                      src="/landing/data-health.svg"
+                      alt="Data Health preview"
+                      className="w-full h-auto block object-contain"
+                      style={{ minHeight: 200 }}
+                    />
+                  </picture>
                 </div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Data Health — coverage, sync status, impact</p>
               </div>
