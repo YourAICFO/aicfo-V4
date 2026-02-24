@@ -1,5 +1,5 @@
-# Windows Connector: validate Tray build and produce portable ZIP. MSI is built locally (build-release-local.ps1).
-name: Windows Connector Validate (No MSI)
+# Windows Connector: validate Tray + always build and upload MSI on push/main, workflow_dispatch, or release.
+name: Windows Connector (MSI)
 
 on:
   push:
@@ -13,14 +13,11 @@ on:
       - "connector-dotnet/**"
       - ".github/workflows/build-windows-connector-msi.yml"
   workflow_dispatch:
-    inputs:
-      build_msi:
-        description: "Run full MSI build (WiX). Default false; MSI is normally built locally."
-        required: false
-        default: false
-        type: boolean
+  release:
+    types: [ published ]
 
 jobs:
+  # Lightweight: Tray build + portable ZIP. Runs on push and PR.
   validate:
     runs-on: windows-latest
     steps:
@@ -55,8 +52,7 @@ jobs:
 
       - name: Verify Tray (optional)
         shell: pwsh
-        run: |
-          .\connector-dotnet\verify-tray.ps1
+        run: .\connector-dotnet\verify-tray.ps1
         continue-on-error: true
 
       - name: Create portable ZIP
@@ -76,9 +72,9 @@ jobs:
           name: "AICFO-Connector-Portable-win-x64"
           path: "connector-dotnet/out/release/AICFO-Connector-Portable-win-x64.zip"
 
-  # MSI build only when explicitly requested via workflow_dispatch (build_msi = true). Not run on push/PR.
+  # Full MSI build: runs on push to main, workflow_dispatch, or release. Skipped on PR.
   build-msi:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_msi == 'true'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'release'
     runs-on: windows-latest
     env:
       TIMESTAMP_URL: "http://timestamp.digicert.com"
@@ -107,12 +103,19 @@ jobs:
         shell: pwsh
         run: ./connector-dotnet/build.ps1 -Configuration Release
 
-      - name: Locate MSI
+      - name: Assert MSI exists and print evidence
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
-          if (-not $msi) { throw "AICFOConnectorSetup.msi not found after build." }
-          Write-Host "MSI at $($msi.FullName)"
+          $ErrorActionPreference = "Stop"
+          $msiPath = "connector-dotnet/out/AICFOConnectorSetup.msi"
+          if (-not (Test-Path -LiteralPath $msiPath -PathType Leaf)) {
+            throw "MSI was not produced. Expected file: $msiPath"
+          }
+          $f = Get-Item -LiteralPath $msiPath
+          $hash = (Get-FileHash -LiteralPath $msiPath -Algorithm SHA256).Hash
+          Write-Host "MSI path:   $($f.FullName)"
+          Write-Host "MSI size:   $($f.Length) bytes"
+          Write-Host "SHA256:     $hash"
 
       - name: Sign binaries and MSI (optional)
         id: sign
@@ -135,21 +138,22 @@ jobs:
           $sign = { param($f) & $signtool sign /tr $ts /td sha256 /fd sha256 /f $pfxPath /p $env:CODESIGN_PFX_PASSWORD $f }
           & $sign "connector-dotnet\publish\service\AICFO.Connector.Service.exe"
           & $sign "connector-dotnet\publish\tray\AICFO.Connector.Tray.exe"
-          $msiPath = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1 -ExpandProperty FullName
-          & $sign $msiPath
+          & $sign "connector-dotnet\out\AICFOConnectorSetup.msi"
           Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
           "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Copy MSI to out
+      - name: Re-print MSI evidence after signing
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path connector-dotnet -Recurse -Filter AICFOConnectorSetup.msi -File | Select-Object -First 1
-          $outDir = "connector-dotnet/out"
-          if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
-          Copy-Item -Path $msi.FullName -Destination "$outDir/AICFOConnectorSetup.msi" -Force
+          $msiPath = "connector-dotnet/out/AICFOConnectorSetup.msi"
+          $f = Get-Item -LiteralPath $msiPath
+          $hash = (Get-FileHash -LiteralPath $msiPath -Algorithm SHA256).Hash
+          Write-Host "MSI path:   $($f.FullName)"
+          Write-Host "MSI size:   $($f.Length) bytes"
+          Write-Host "SHA256:     $hash"
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "AICFOConnectorSetup.msi"
-          path: "connector-dotnet/out/AICFOConnectorSetup.msi"
+          name: AICFOConnectorSetup.msi
+          path: connector-dotnet/out/AICFOConnectorSetup.msi
