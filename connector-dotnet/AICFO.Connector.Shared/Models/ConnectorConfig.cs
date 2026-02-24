@@ -61,6 +61,14 @@ public sealed class ConnectorConfig
     [JsonPropertyName("last_error")]
     public string? LastError { get; set; }
 
+    /// <summary>Returns a new default config with EnsureCompatibility applied. Use when file is missing or corrupt.</summary>
+    public static ConnectorConfig Default()
+    {
+        var c = new ConnectorConfig();
+        c.EnsureCompatibility();
+        return c;
+    }
+
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(ApiUrl)) throw new InvalidOperationException("api_url is required");

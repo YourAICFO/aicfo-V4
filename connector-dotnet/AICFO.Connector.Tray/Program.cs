@@ -37,6 +37,8 @@ internal static class Program
                 .WriteTo.File(Path.Combine(logDir, "tray.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, shared: true)
                 .CreateLogger();
 
+            ConfigStore.LogWarning = msg => Log.Warning(msg);
+
             ApplicationConfiguration.Initialize();
             Application.Run(new TrayApplicationContext(
                 new ConfigStore(),
@@ -213,12 +215,12 @@ internal sealed class ConnectorControlPanel : Form
     private readonly RadioButton _backendModeAuto = new() { AutoSize = true, Text = "Automatic (recommended)" };
     private readonly RadioButton _backendModePinned = new() { AutoSize = true, Text = "Pinned (advanced)" };
     private readonly Label _autoBackendMessageLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "Using automatic backend configuration" };
-    private readonly Label _resolvedApiUrlLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f) };
+    private readonly Label _resolvedApiUrlLabel = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = SafeSmallLabelFont() };
     private readonly Label _updateAvailableLabel = new() { AutoSize = true, ForeColor = Color.DarkGreen, Text = "" };
     private readonly Label _discoveryFailureBanner = new() { AutoSize = true, ForeColor = Color.DarkOrange, Text = "", MaximumSize = new Size(700, 0), AutoEllipsis = true };
-    private readonly Label _statusResolvedApiUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f), MaximumSize = new Size(500, 0), AutoEllipsis = true };
-    private readonly Label _statusDiscoveryUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f), MaximumSize = new Size(500, 0), AutoEllipsis = true };
-    private readonly Label _statusDiscoveryLastSuccess = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5f) };
+    private readonly Label _statusResolvedApiUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = SafeSmallLabelFont(), MaximumSize = new Size(500, 0), AutoEllipsis = true };
+    private readonly Label _statusDiscoveryUrl = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = SafeSmallLabelFont(), MaximumSize = new Size(500, 0), AutoEllipsis = true };
+    private readonly Label _statusDiscoveryLastSuccess = new() { AutoSize = true, ForeColor = Color.DimGray, Text = "", Font = SafeSmallLabelFont() };
     private Button? _downloadUpdateButton;
     private Button? _checkForUpdatesButton;
     private ConnectorDiscoveryConfig? _lastDiscovery;
@@ -292,8 +294,18 @@ internal sealed class ConnectorControlPanel : Form
 
     private static Font SafeFontForStyle(Font? prototype, FontStyle style)
     {
-        var baseFont = prototype ?? SystemFonts.MessageBoxFont ?? Control.DefaultFont;
+        var baseFont = prototype ?? SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont ?? Control.DefaultFont;
+        if (baseFont is null)
+            return new Font(FontFamily.GenericSansSerif, 9f);
         return new Font(baseFont, style);
+    }
+
+    private static Font SafeSmallLabelFont()
+    {
+        var f = SystemFonts.DefaultFont ?? SystemFonts.MessageBoxFont ?? Control.DefaultFont;
+        if (f is not null)
+            return new Font(f.FontFamily, 8.5f);
+        return new Font(FontFamily.GenericSansSerif, 8.5f);
     }
     private readonly Label _linkedWebCompany = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedShortId = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };
