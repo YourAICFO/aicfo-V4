@@ -76,6 +76,11 @@ const SEOOptimizedHome: React.FC = () => {
           style={{ minHeight: 240 }}
         />
       </picture>
+      {import.meta.env.DEV && (
+        <div className="mt-2 text-xs text-slate-400">
+          img src: /landing/hero.svg · <a href="/landing/hero.svg" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">Open SVG</a>
+        </div>
+      )}
     </div>
   );
 
@@ -228,6 +233,11 @@ const SEOOptimizedHome: React.FC = () => {
                       style={{ minHeight: 200 }}
                     />
                   </picture>
+                  {import.meta.env.DEV && (
+                    <div className="mt-2 text-xs text-slate-400">
+                      img src: /landing/pl-pack.svg · <a href="/landing/pl-pack.svg" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">Open SVG</a>
+                    </div>
+                  )}
                 </div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">P&L Pack — revenue, expenses, drivers, AI narrative</p>
               </div>
@@ -242,6 +252,11 @@ const SEOOptimizedHome: React.FC = () => {
                       style={{ minHeight: 200 }}
                     />
                   </picture>
+                  {import.meta.env.DEV && (
+                    <div className="mt-2 text-xs text-slate-400">
+                      img src: /landing/data-health.svg · <a href="/landing/data-health.svg" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">Open SVG</a>
+                    </div>
+                  )}
                 </div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Data Health — coverage, sync status, impact</p>
               </div>
