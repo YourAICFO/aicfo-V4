@@ -1,5 +1,10 @@
 const { Company, Subscription, Integration, sequelize } = require('../models');
 const { createTrialSubscription } = require('./subscriptionService');
+const planService = require('./planService');
+const { logger } = require('../utils/logger');
+
+const ENFORCE_COMPANY_LIMITS = process.env.ENFORCE_COMPANY_LIMITS === 'true';
+
 let loggedCompanyModelMapping = false;
 
 const isAdminEmail = (email) => {
@@ -11,6 +16,20 @@ const isAdminEmail = (email) => {
 };
 
 const createCompany = async (userId, companyData) => {
+  const { planKey, caps, companyCount } = await planService.getEffectivePlanForUser(userId);
+  if (companyCount >= caps.companyLimit) {
+    if (ENFORCE_COMPANY_LIMITS) {
+      const err = new Error('Upgrade to add more companies.');
+      err.code = 'PLAN_LIMIT_COMPANIES';
+      err.statusCode = 403;
+      throw err;
+    }
+    logger.warn(
+      { userId, planKey, companyLimit: caps.companyLimit, companyCount },
+      'Company limit exceeded but ENFORCE_COMPANY_LIMITS=false; allowing create'
+    );
+  }
+
   const company = await Company.create({
     ...companyData,
     ownerId: userId

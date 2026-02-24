@@ -2,6 +2,8 @@
 
 Deterministic inventory metrics and working-capital extensions. No SKU-level tracking; no stock-management UI. Uses normalized accounting data only.
 
+**Discoverability:** Inventory is available under **Working Capital**; the sidebar shortcut **Inventory** jumps to the inventory section (`/working-capital#inventory`).
+
 ## Audit summary: DIO / DSO / DPO / CCC denominators
 
 | Metric | Denominator (preferred) | Fallback / note |

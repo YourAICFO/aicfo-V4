@@ -3,8 +3,8 @@ const router = express.Router();
 const { Op, fn, col } = require('sequelize');
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { debtorsService, creditorsService, adminUsageService, plPackService, alertsService, reportService, dataHealthService } = require('../services');
-const { CFOMetric, CurrentLoan } = require('../models');
+const { debtorsService, creditorsService, adminUsageService, plPackService, alertsService, reportService, dataHealthService, planService, usageService } = require('../services');
+const { CFOMetric, CurrentLoan, MonthlyTrialBalanceSummary } = require('../models');
 
 const getLatestMetricValue = async (companyId, metricKey) => {
   const row = await CFOMetric.findOne({
@@ -138,6 +138,9 @@ router.post('/pl-remarks', authenticate, requireCompany, checkSubscriptionAccess
   }
 });
 
+const ENFORCE_USAGE_LIMITS = process.env.ENFORCE_USAGE_LIMITS === 'true';
+const currentMonthKey = () => new Date().toISOString().slice(0, 7);
+
 router.post('/pl-ai-explanation', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
     const companyId = req.companyId;
@@ -146,13 +149,27 @@ router.post('/pl-ai-explanation', authenticate, requireCompany, checkSubscriptio
     if (!monthKey) {
       return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
     }
+    const { caps } = await planService.getCompanyPlan(companyId);
+    const usage = await usageService.getUsage(companyId, 'ai_pl_explanation', currentMonthKey());
+    if (usage >= caps.aiExplanationLimit) {
+      if (ENFORCE_USAGE_LIMITS) {
+        return res.status(403).json({
+          success: false,
+          error: 'Monthly AI explanation limit reached. Upgrade for more.',
+          code: 'USAGE_LIMIT'
+        });
+      }
+      res.setHeader('X-Usage-Warning', 'Monthly AI explanation limit reached');
+    }
     const result = await plPackService.getOrCreateAiExplanation(companyId, monthKey, {
       forceRegenerate,
       userId: req.userId
     });
+    await usageService.recordUsage(companyId, 'ai_pl_explanation', 1);
     res.json({ success: true, aiDraftText: result.aiDraftText, aiDraftUpdatedAt: result.aiDraftUpdatedAt });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    const status = error.statusCode === 403 || error.code === 'USAGE_LIMIT' ? 403 : 400;
+    res.status(status).json({ success: false, error: error.message });
   }
 });
 
@@ -181,8 +198,24 @@ router.get('/monthly-report', authenticate, requireCompany, checkSubscriptionAcc
     if (!monthKey) {
       return res.status(400).json({ success: false, error: 'month (YYYY-MM) is required' });
     }
+    const { caps } = await planService.getCompanyPlan(companyId);
+    if (!caps.reports) {
+      return res.status(403).json({ success: false, error: 'Reports not available on your plan.', code: 'PLAN_FEATURE' });
+    }
+    const usage = await usageService.getUsage(companyId, 'report_download', currentMonthKey());
+    if (usage >= caps.reportDownloadLimit) {
+      if (ENFORCE_USAGE_LIMITS) {
+        return res.status(403).json({
+          success: false,
+          error: 'Monthly report download limit reached. Upgrade for more.',
+          code: 'USAGE_LIMIT'
+        });
+      }
+      res.setHeader('X-Usage-Warning', 'Monthly report download limit reached');
+    }
     const report = await reportService.buildMonthlyReport(companyId, monthKey);
     const pdfBuffer = await reportService.renderMonthlyReportPdf(report);
+    await usageService.recordUsage(companyId, 'report_download', 1);
     const companyName = (report.company && report.company.name)
       ? String(report.company.name).replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').trim() || 'Company'
       : 'Company';
@@ -191,7 +224,8 @@ router.get('/monthly-report', authenticate, requireCompany, checkSubscriptionAcc
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    const status = error.statusCode === 403 || error.code === 'USAGE_LIMIT' ? 403 : 500;
+    res.status(status).json({ success: false, error: error.message });
   }
 });
 
@@ -267,7 +301,8 @@ router.get('/working-capital', authenticate, requireCompany, checkSubscriptionAc
       loansMetricFallback,
       inventoryTotal,
       inventoryDelta,
-      inventoryDays
+      inventoryDays,
+      latestSummary
     ] = await Promise.all([
       getLatestMetricValue(companyId, 'working_capital'),
       getLatestMetricValue(companyId, 'net_working_capital'),
@@ -285,13 +320,23 @@ router.get('/working-capital', authenticate, requireCompany, checkSubscriptionAc
       getLatestMetricValue(companyId, 'loans_balance_live'),
       getLatestMetricValue(companyId, 'inventory_total'),
       getLatestMetricValue(companyId, 'inventory_delta'),
-      getLatestMetricValue(companyId, 'inventory_days')
+      getLatestMetricValue(companyId, 'inventory_days'),
+      MonthlyTrialBalanceSummary.findOne({
+        where: { companyId },
+        order: [['month', 'DESC']],
+        attributes: ['totalRevenue', 'totalExpenses'],
+        raw: true
+      })
     ]);
 
     const loanTotalFromTable = Number(loansAggregate?.total);
     const loansTotalOutstanding = Number.isFinite(loanTotalFromTable)
       ? loanTotalFromTable
       : (Number.isFinite(Number(loansMetricFallback)) ? Number(loansMetricFallback) : null);
+
+    const revenueLatest = Number(latestSummary?.totalRevenue ?? latestSummary?.total_revenue ?? 0) || 0;
+    const expensesLatest = Number(latestSummary?.totalExpenses ?? latestSummary?.total_expenses ?? 0) || 0;
+    const plActivityLatestMonth = revenueLatest > 0 || expensesLatest > 0;
 
     const data = {
       working_capital: workingCapital,
@@ -307,6 +352,7 @@ router.get('/working-capital', authenticate, requireCompany, checkSubscriptionAc
       inventory_total: inventoryTotal,
       inventory_delta: inventoryDelta,
       inventory_days: inventoryDays,
+      pl_activity_latest_month: plActivityLatestMonth,
       sources: {
         working_capital: { metric_key: 'working_capital', value: workingCapital },
         net_working_capital: { metric_key: 'net_working_capital', value: netWorkingCapital },

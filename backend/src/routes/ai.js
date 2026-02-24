@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
-const { aiService, adminUsageService } = require('../services');
+const { aiService, adminUsageService, planService, usageService } = require('../services');
 const { AIChatThread, AIChatMessage } = require('../models');
 
 const buildThreadTitle = (text) => {
@@ -74,6 +74,9 @@ router.post('/insights/:id/dismiss', authenticate, requireCompany, checkSubscrip
   }
 });
 
+const ENFORCE_USAGE_LIMITS = process.env.ENFORCE_USAGE_LIMITS === 'true';
+const currentMonthKey = () => new Date().toISOString().slice(0, 7);
+
 // POST /api/ai/chat
 router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
   try {
@@ -85,10 +88,24 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
       });
     }
 
+    const companyId = req.companyId;
+    const { caps } = await planService.getCompanyPlan(companyId);
+    const usage = await usageService.getUsage(companyId, 'ai_chat_message', currentMonthKey());
+    if (usage >= caps.aiChatLimit) {
+      if (ENFORCE_USAGE_LIMITS) {
+        return res.status(403).json({
+          success: false,
+          error: 'Monthly AI chat limit reached. Upgrade for more.',
+          code: 'USAGE_LIMIT'
+        });
+      }
+      res.setHeader('X-Usage-Warning', 'Monthly AI chat limit reached');
+    }
+
     let thread = null;
     if (threadId) {
       thread = await AIChatThread.findOne({
-        where: { id: threadId, userId: req.userId, companyId: req.companyId }
+        where: { id: threadId, userId: req.userId, companyId }
       });
       if (!thread) {
         return res.status(404).json({
@@ -99,12 +116,12 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
     } else {
       thread = await AIChatThread.create({
         userId: req.userId,
-        companyId: req.companyId,
+        companyId,
         title: buildThreadTitle(message)
       });
     }
 
-    const response = await aiService.chatWithCFO(req.companyId, message);
+    const response = await aiService.chatWithCFO(companyId, message);
 
     await AIChatMessage.bulkCreate([
       {
@@ -122,6 +139,8 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
       updatedAt: new Date(),
       title: thread.title || buildThreadTitle(message)
     });
+
+    await usageService.recordUsage(companyId, 'ai_chat_message', 1);
 
     adminUsageService.logUsageEvent({
       companyId: req.companyId,
@@ -171,9 +190,11 @@ router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, asyn
     adminUsageService.logAIQuestion(req.companyId, req.userId, req.body?.message || '', false, {
       failureReason: error.message
     });
-    res.status(400).json({
+    const status = error.statusCode === 403 || error.code === 'USAGE_LIMIT' ? 403 : 400;
+    res.status(status).json({
       success: false,
-      error: error.message
+      error: error.message,
+      ...(error.code === 'USAGE_LIMIT' && { code: 'USAGE_LIMIT' })
     });
   }
 });

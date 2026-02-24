@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import ModernLayout from './components/layout/ModernLayout';
 import Login from './pages/Login';
@@ -14,7 +14,6 @@ import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import CreateCompany from './pages/CreateCompany';
-import Home from './pages/Home';
 import Debtors from './pages/Debtors';
 import Creditors from './pages/Creditors';
 import WorkingCapital from './pages/WorkingCapital';
@@ -38,7 +37,7 @@ function App() {
       <UserProfileLoader />
       <Routes>
         <Route path="/" element={<SEOOptimizedHome />} />
-        <Route path="/home" element={<Home />} />
+        <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/login" element={<Login />} />

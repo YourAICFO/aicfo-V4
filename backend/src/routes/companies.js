@@ -63,9 +63,11 @@ router.post('/', authenticate, companyValidation, async (req, res) => {
     });
   } catch (error) {
     console.error('Create company error:', error);
-    res.status(400).json({
+    const status = error.statusCode === 403 || error.code === 'PLAN_LIMIT_COMPANIES' ? 403 : 400;
+    res.status(status).json({
       success: false,
-      error: error.message
+      error: error.message,
+      ...(error.code === 'PLAN_LIMIT_COMPANIES' && { code: 'PLAN_LIMIT_COMPANIES' })
     });
   }
 });

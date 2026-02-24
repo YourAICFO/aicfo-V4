@@ -55,6 +55,7 @@ const { CompanyNotificationSetting } = require('./CompanyNotificationSetting');
 const { EmailDelivery } = require('./EmailDelivery');
 const { PLRemarks } = require('./PLRemarks');
 const { AlertState } = require('./AlertState');
+const { AiUsageDaily } = require('./AiUsageDaily');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -204,6 +205,8 @@ EmailDelivery.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
 Company.hasMany(PLRemarks, { foreignKey: 'company_id', as: 'plRemarks' });
 PLRemarks.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+Company.hasMany(AiUsageDaily, { foreignKey: 'company_id', as: 'aiUsageDaily' });
+AiUsageDaily.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 User.hasMany(PLRemarks, { foreignKey: 'updated_by', as: 'plRemarksUpdated' });
 PLRemarks.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
 
@@ -267,5 +270,6 @@ module.exports = {
   CompanyNotificationSetting,
   EmailDelivery,
   PLRemarks,
-  AlertState
+  AlertState,
+  AiUsageDaily
 };

@@ -6,6 +6,7 @@ import DarkModeToggle from '../ui/DarkModeToggle';
 import { Button } from '../ui/Button';
 import { useAuthStore } from '../../store/authStore';
 import { companyApi } from '../../services/api';
+import UpgradeModal from '../UpgradeModal';
 
 interface Company {
   id: string;
@@ -76,6 +77,7 @@ const ModernLayout: React.FC = () => {
     { name: 'Debtors', href: '/debtors', icon: '👥' },
     { name: 'Creditors', href: '/creditors', icon: '🏢' },
     { name: 'Working Capital', href: '/working-capital', icon: '🏦' },
+    { name: 'Inventory', href: '/working-capital#inventory', icon: '📦' },
     { name: 'P&L Pack', href: '/pl-pack', icon: '📋' },
     { name: 'AI Insights', href: '/ai-insights', icon: '🤖' },
     { name: 'AI Chat', href: '/ai-chat', icon: '💬' },
@@ -346,6 +348,7 @@ const ModernLayout: React.FC = () => {
           </div>
         </main>
       </div>
+      <UpgradeModal />
     </div>
   );
 };

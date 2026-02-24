@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Building2, Lock, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { authApi, billingApi, companyApi, settingsApi } from '../services/api';
@@ -52,7 +52,12 @@ interface NotificationSettings {
 export default function Settings() {
   const navigate = useNavigate();
   const { user, selectedCompanyId, setSelectedCompany } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const validTabs = ['profile', 'company', 'billing', 'security', 'notifications'];
+  const [activeTab, setActiveTab] = useState(
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'profile'
+  );
   const [companies, setCompanies] = useState<Company[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -86,6 +91,12 @@ export default function Settings() {
     loadBilling();
     loadNotificationSettings();
   }, []);
+
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   const loadCompanies = async () => {
     try {

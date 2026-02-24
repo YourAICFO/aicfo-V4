@@ -1,10 +1,26 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, LineChart, Wallet, PlugZap, CheckCircle2, ArrowRight, Star, Users, TrendingUp } from 'lucide-react';
+import {
+  BarChart3,
+  Wallet,
+  TrendingUp,
+  Activity,
+  FileText,
+  Shield,
+  Lock,
+  Cpu,
+  Sparkles,
+  MessageSquare,
+  Lightbulb,
+  User,
+  Briefcase,
+  Scale,
+  ArrowRight,
+  Check,
+} from 'lucide-react';
 import SEOMetaTags from '../components/seo/SEOMetaTags';
 
 const SEOOptimizedHome: React.FC = () => {
-  // Structured data for better SEO
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
@@ -42,69 +58,17 @@ const SEOOptimizedHome: React.FC = () => {
     },
   };
 
-  const features = [
-    {
-      icon: <LineChart className="h-6 w-6 text-emerald-200" />,
-      title: 'Cash Health Monitoring',
-      description: 'Real-time visibility into your cash position, runway, and burn rate with automatic risk assessment.',
-    },
-    {
-      icon: <Wallet className="h-6 w-6 text-teal-200" />,
-      title: 'Revenue & Expense Analytics',
-      description: 'Understand your money flow with clear breakdowns, trends, and month-over-month comparisons.',
-    },
-    {
-      icon: <Sparkles className="h-6 w-6 text-sky-200" />,
-      title: 'AI-Powered Insights',
-      description: 'Get CFO-grade analysis and recommendations based on your actual financial data.',
-    },
-    {
-      icon: <PlugZap className="h-6 w-6 text-emerald-200" />,
-      title: 'Tally Integration',
-      description: 'Connect your Tally software for automatic data sync with real-time reconciliation.',
-    },
-    {
-      icon: <CheckCircle2 className="h-6 w-6 text-sky-200" />,
-      title: 'Risk Detection',
-      description: 'Early warnings for cash risks, expense spikes, and revenue declines before they become problems.',
-    },
-  ];
-
-  const testimonials = [
-    {
-      name: 'Rajesh Kumar',
-      role: 'Founder, TechStart Solutions',
-      company: 'IT Services',
-      rating: 5,
-      text: 'AI CFO helped us identify a cash flow issue 3 months before it would have become critical. The Tally integration is seamless.',
-    },
-    {
-      name: 'Priya Sharma',
-      role: 'Finance Manager, RetailChain',
-      company: 'Retail',
-      rating: 5,
-      text: 'The AI insights are incredibly accurate. We\'ve reduced unnecessary expenses by 23% in just 2 months.',
-    },
-    {
-      name: 'Amit Patel',
-      role: 'CEO, Manufacturing Co.',
-      company: 'Manufacturing',
-      rating: 5,
-      text: 'Finally, a financial tool that speaks our language. The runway calculations have been a game-changer for planning.',
-    },
-  ];
-
-  const stats = [
-    { value: '500+', label: 'SMEs Trust AI CFO', icon: <Users className="h-5 w-5" /> },
-    { value: '₹50Cr+', label: 'Cash Analyzed', icon: <TrendingUp className="h-5 w-5" /> },
-    { value: '4.8/5', label: 'Average Rating', icon: <Star className="h-5 w-5" /> },
-  ];
+  const sectionSpacing = 'py-16 md:py-20';
+  const containerClass = 'mx-auto w-full max-w-6xl px-6';
+  const headingClass = 'text-2xl font-semibold tracking-tight text-white md:text-3xl';
+  const subheadingClass = 'mt-2 text-sm text-slate-400';
+  const cardClass = 'rounded-xl border border-white/10 bg-white/5 p-6';
 
   return (
     <>
       <SEOMetaTags
-        title="AI CFO - Your AI-Powered Financial Intelligence Platform for Indian SMEs"
-        description="Stop guessing about your finances. Get clear visibility into cash health, revenue trends, and expenses with AI insights that help Indian SMEs make confident financial decisions. 30-day free trial."
+        title="AI CFO - Financial Intelligence for Indian SMEs"
+        description="Clear visibility into cash health, P&L, working capital, and data quality. Bank-grade security, read-only access, signed connector. 30-day free trial."
         keywords={[
           'AI CFO',
           'financial intelligence platform',
@@ -120,12 +84,6 @@ const SEOOptimizedHome: React.FC = () => {
           'financial planning',
           'SME finance',
           'startup finance',
-          'financial decision making',
-          'AI-powered CFO',
-          'financial analysis tool',
-          'cash management',
-          'revenue optimization',
-          'expense management'
         ]}
         ogImage="/og-homepage.jpg"
         ogType="website"
@@ -135,286 +93,300 @@ const SEOOptimizedHome: React.FC = () => {
       />
 
       <main className="min-h-screen bg-slate-950 text-white">
-        {/* Hero Section */}
+        {/* ——— Hero ——— */}
         <section className="relative overflow-hidden" aria-labelledby="hero-heading">
-          <div className="absolute inset-0">
-            <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
-            <div className="absolute top-32 -left-20 h-80 w-80 rounded-full bg-sky-500/20 blur-3xl" />
-            <div className="absolute bottom-0 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl" />
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/50 to-slate-950" aria-hidden="true" />
+          <div className="absolute top-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-500/10 blur-3xl" aria-hidden="true" />
 
-          <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6" role="banner">
+          <header className={`relative ${containerClass} flex items-center justify-between py-6`} role="banner">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 ring-1 ring-emerald-400/40" aria-hidden="true">
-                <Wallet className="h-5 w-5 text-emerald-300" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-400/30">
+                <Wallet className="h-4 w-4 text-blue-300" aria-hidden="true" />
               </div>
-              <div>
-                <p className="text-sm text-emerald-200/80">AI CFO</p>
-                <p className="text-lg font-semibold">AI CFO Platform</p>
-              </div>
+              <span className="text-base font-semibold text-white">AI CFO</span>
             </div>
-            <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex" role="navigation" aria-label="Main navigation">
-              <a href="#features" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Features
-              </a>
-              <a href="#pricing" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Pricing
-              </a>
-              <a href="#testimonials" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Testimonials
-              </a>
+            <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex" role="navigation" aria-label="Main navigation">
+              <a href="#what-you-get" className="hover:text-white transition-colors">Features</a>
+              <a href="#security" className="hover:text-white transition-colors">Security</a>
+              <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
             </nav>
             <div className="flex items-center gap-3">
-              <Link to="/login" className="text-sm text-slate-200 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
+              <Link to="/login" className="text-sm text-slate-400 hover:text-white transition-colors">
                 Log in
               </Link>
-              <Link to="/register" className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                Get Started
+              <Link
+                to="/register"
+                className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+              >
+                Get started
               </Link>
             </div>
           </header>
 
-          <div className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-14">
-            <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-              <div>
-                <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-emerald-200">
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Built for Indian SMEs
-                </p>
-                <h1 id="hero-heading" className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
-                  Your AI-Powered CFO for
-                  <span className="block text-emerald-200">Smarter Financial Decisions</span>
-                </h1>
-                <p className="mt-5 text-lg text-slate-200/80">
-                  Stop guessing about your finances. Get clear visibility into cash health, revenue trends,
-                  and expenses with AI insights that help Indian SMEs make confident financial decisions.
-                </p>
-                <div className="mt-8 flex flex-wrap items-center gap-4">
-                  <Link to="/register" className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    Start your 30-day free trial
-                  </Link>
-                  <Link to="/login" className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 hover:border-white/40 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50">
-                    View Demo Dashboard
-                  </Link>
-                </div>
-                
-                {/* Stats Section */}
-                <div className="mt-8 grid gap-4 text-sm text-slate-200/80 sm:grid-cols-3">
-                  {stats.map((stat, index) => (
-                    <div key={index} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-                      <div className="flex items-center gap-2">
-                        {stat.icon}
-                        <span className="font-semibold">{stat.value}</span>
-                      </div>
-                      <p className="mt-1 text-xs">{stat.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="relative">
-                <div className="rounded-3xl bg-slate-900/70 p-6 ring-1 ring-white/10 backdrop-blur" role="img" aria-label="AI CFO Dashboard Preview">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-300">Runway Snapshot</p>
-                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200">Healthy</span>
-                  </div>
-                  <div className="mt-6 space-y-5">
-                    <div className="rounded-2xl bg-slate-950/70 p-4 ring-1 ring-white/5">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">Cash Balance</p>
-                      <p className="mt-2 text-3xl font-semibold text-white">₹48,23,000</p>
-                      <p className="text-sm text-emerald-300">+12% vs last month</p>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-                        <p className="text-xs uppercase text-slate-400">Monthly Inflow</p>
-                        <p className="mt-2 text-xl font-semibold">₹9,24,000</p>
-                        <p className="text-xs text-slate-400">Trailing 6 months</p>
-                      </div>
-                      <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-                        <p className="text-xs uppercase text-slate-400">Monthly Outflow</p>
-                        <p className="mt-2 text-xl font-semibold">₹6,12,000</p>
-                        <p className="text-xs text-slate-400">Trailing 6 months</p>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500/20 to-sky-500/20 p-4 ring-1 ring-white/10">
-                      <p className="text-xs uppercase text-slate-200/70">AI Recommendation</p>
-                      <p className="mt-2 text-sm text-slate-100">
-                        Extend runway to 11 months by adjusting software spend and renegotiating two vendor contracts.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section id="features" className="mx-auto w-full max-w-6xl px-6 py-16" aria-labelledby="features-heading">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm text-emerald-200/80">Everything You Need to Manage Finances</p>
-              <h2 id="features-heading" className="text-3xl font-semibold">
-                A complete financial intelligence platform designed specifically for Indian founders and SMEs.
-              </h2>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((item, index) => (
-              <article key={index} className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10" aria-hidden="true">
-                  {item.icon}
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm text-slate-300">{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        {/* Testimonials Section */}
-        <section id="testimonials" className="mx-auto w-full max-w-6xl px-6 py-16" aria-labelledby="testimonials-heading">
-          <div className="text-center">
-            <p className="text-sm text-emerald-200/80">Trusted by Indian SMEs</p>
-            <h2 id="testimonials-heading" className="mt-2 text-3xl font-semibold">What Our Customers Say</h2>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-            {testimonials.map((testimonial, index) => (
-              <article key={index} className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-                <div className="flex items-center gap-1 mb-4" role="img" aria-label={`${testimonial.rating} out of 5 stars`}>
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" aria-hidden="true" />
-                  ))}
-                </div>
-                <blockquote className="text-sm text-slate-300 mb-4">
-                  <p>"{testimonial.text}"</p>
-                </blockquote>
-                <footer>
-                  <p className="font-semibold text-white">{testimonial.name}</p>
-                  <p className="text-xs text-slate-400">{testimonial.role}, {testimonial.company}</p>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        {/* Pricing Section */}
-        <section id="pricing" className="mx-auto w-full max-w-6xl px-6 pb-20" aria-labelledby="pricing-heading">
-          <div className="rounded-3xl bg-white/5 p-10 ring-1 ring-white/10">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-sm text-emerald-200/80">Simple, Transparent Pricing</p>
-                <h2 id="pricing-heading" className="text-3xl font-semibold">Start your 30-day free trial.</h2>
-              </div>
-            </div>
-
-            <div className="mt-10 grid gap-6 md:grid-cols-1">
-              <div className="relative rounded-3xl bg-emerald-500/10 p-8 ring-2 ring-emerald-300/40">
-                <span className="absolute -top-3 right-6 rounded-full bg-emerald-400 px-3 py-1 text-xs font-semibold text-slate-900">
-                  30-Day Trial
-                </span>
-                <p className="text-sm text-emerald-200/90">AI CFO</p>
-                <h3 className="mt-2 text-xl font-semibold">Full AI CFO experience</h3>
-                <p className="mt-4 text-3xl font-semibold">₹4,999/month</p>
-                <p className="mt-2 text-sm text-emerald-100/80">After your 30-day free trial</p>
-                <ul className="mt-6 space-y-2 text-sm text-slate-200">
-                  <li>Tally integration</li>
-                  <li>AI CFO insights</li>
-                  <li>Priority alerts</li>
-                  <li>AI chat assistant</li>
-                  <li>Advanced dashboards</li>
-                </ul>
-                <Link to="/register" className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  Start your 30-day free trial
+          <div className={`relative ${containerClass} pb-20 pt-10 md:pt-16`}>
+            <div className="max-w-2xl">
+              <h1 id="hero-heading" className={headingClass}>
+                Financial intelligence for Indian SMEs
+              </h1>
+              <p className="mt-4 text-lg text-slate-300">
+                P&L, working capital, cashflow, and data health in one place. Connect Tally once—get runway, alerts, and on-demand AI narrative. Read-only layer. No guesswork.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link
+                  to="/register"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                >
+                  Start 30-day free trial
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center rounded-lg border border-white/20 px-5 py-2.5 text-sm font-medium text-slate-200 hover:border-white/40 hover:text-white transition-colors"
+                >
+                  View demo
                 </Link>
               </div>
             </div>
           </div>
         </section>
 
-        {/* FAQ Section */}
-        <section className="mx-auto w-full max-w-6xl px-6 py-16" aria-labelledby="faq-heading">
-          <div className="text-center">
-            <h2 id="faq-heading" className="text-3xl font-semibold">Frequently Asked Questions</h2>
-            <p className="mt-2 text-slate-400">Everything you need to know about AI CFO</p>
-          </div>
-
-          <div className="mt-10 space-y-6">
-            <details className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-              <summary className="flex cursor-pointer items-center justify-between text-lg font-semibold">
-                How does AI CFO integrate with Tally?
-                <ArrowRight className="h-5 w-5 transition-transform group-open:rotate-90" />
-              </summary>
-              <p className="mt-4 text-sm text-slate-300">
-                AI CFO connects to your Tally installation through our secure Windows connector. Once connected, 
-                it automatically syncs your financial data while maintaining end-to-end encryption and compliance 
-                with Indian data protection standards.
-              </p>
-            </details>
-
-            <details className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-              <summary className="flex cursor-pointer items-center justify-between text-lg font-semibold">
-                Is my financial data secure?
-                <ArrowRight className="h-5 w-5 transition-transform group-open:rotate-90" />
-              </summary>
-              <p className="mt-4 text-sm text-slate-300">
-                Yes, we use bank-grade encryption and follow RBI guidelines for financial data handling. 
-                Your data is encrypted in transit and at rest, and we never store your Tally credentials. 
-                We're also compliant with Indian data localization requirements.
-              </p>
-            </details>
-
-            <details className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-              <summary className="flex cursor-pointer items-center justify-between text-lg font-semibold">
-                What makes AI CFO different from other accounting tools?
-                <ArrowRight className="h-5 w-5 transition-transform group-open:rotate-90" />
-              </summary>
-              <p className="mt-4 text-sm text-slate-300">
-                Unlike generic accounting software, AI CFO is specifically designed for Indian SMEs and provides 
-                CFO-level insights. We analyze your Tally data to give you actionable recommendations, not just 
-                reports. Plus, our AI understands Indian business contexts and GST compliance requirements.
-              </p>
-            </details>
+        {/* ——— Social proof ——— */}
+        <section className={`${sectionSpacing} border-t border-white/10`} aria-label="Social proof">
+          <div className={containerClass}>
+            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+              <div className={cardClass}>
+                <p className="text-2xl font-semibold text-white">500+</p>
+                <p className="mt-1 text-xs text-slate-400">SMEs</p>
+              </div>
+              <div className={cardClass}>
+                <p className="text-2xl font-semibold text-white">₹50Cr+</p>
+                <p className="mt-1 text-xs text-slate-400">Cash analyzed</p>
+              </div>
+              <div className={cardClass}>
+                <p className="text-2xl font-semibold text-white">4.8/5</p>
+                <p className="mt-1 text-xs text-slate-400">Rating</p>
+              </div>
+              <div className={cardClass}>
+                <p className="text-2xl font-semibold text-white">Read-only</p>
+                <p className="mt-1 text-xs text-slate-400">No write-back</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="mx-auto w-full max-w-6xl px-6 pb-20" aria-labelledby="cta-heading">
-          <div className="rounded-3xl bg-gradient-to-r from-emerald-500/20 to-sky-500/20 p-10 ring-1 ring-white/10 text-center">
-            <h2 id="cta-heading" className="text-3xl font-semibold">Ready to Transform Your Financial Management?</h2>
-            <p className="mt-4 text-lg text-slate-200/80">
-              Join hundreds of Indian SMEs who are making smarter financial decisions with AI CFO.
+        {/* ——— What you get ——— */}
+        <section id="what-you-get" className={sectionSpacing} aria-labelledby="what-you-get-heading">
+          <div className={containerClass}>
+            <h2 id="what-you-get-heading" className={headingClass}>
+              What you get
+            </h2>
+            <p className={subheadingClass}>
+              One platform: command center, P&L pack, working capital, cashflow, data health, and monthly report.
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link to="/register" className="rounded-full bg-emerald-400 px-8 py-4 text-lg font-semibold text-slate-900 hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                Start Free Trial
-              </Link>
-              <Link to="/login" className="rounded-full border border-white/20 px-8 py-4 text-lg font-semibold text-white/80 hover:border-white/40 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50">
-                Schedule Demo
-              </Link>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { icon: BarChart3, title: 'P&L Pack', desc: 'Month-wise revenue, expenses, drivers, and optional AI narrative.' },
+                { icon: Wallet, title: 'Working capital', desc: 'NWC, CCC, DSO/DPO, liquidity, and loans at a glance.' },
+                { icon: TrendingUp, title: 'Cashflow', desc: 'Cash & bank movement: inflow, outflow, net—no P&L proxy.' },
+                { icon: Activity, title: 'Data health', desc: 'Coverage, sync status, and impact so you know data is ready.' },
+                { icon: FileText, title: 'Monthly report', desc: 'Downloadable PDF for the selected closed month.' },
+              ].map((item) => (
+                <article key={item.title} className={cardClass}>
+                  <item.icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  <h3 className="mt-3 font-semibold text-white">{item.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+                </article>
+              ))}
             </div>
-            <p className="mt-6 text-sm text-slate-400">No credit card required • 30-day free trial • Cancel anytime</p>
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-white/10 pb-10 pt-8 text-center text-xs text-slate-400" role="contentinfo">
-          <div className="mx-auto max-w-6xl px-6">
-            <p>AI CFO provides decision support, not statutory advice.</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-6 text-xs">
-              <Link to="/privacy" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Terms of Service
-              </Link>
-              <a href="mailto:support@aicfo.in" className="hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded px-2 py-1">
-                Support
-              </a>
+        {/* ——— Safety & Security ——— */}
+        <section id="security" className={`${sectionSpacing} border-t border-white/10`} aria-labelledby="security-heading">
+          <div className={containerClass}>
+            <h2 id="security-heading" className={headingClass}>
+              Safety & security
+            </h2>
+            <p className={subheadingClass}>
+              Your data stays protected. We never write back to your books.
+            </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {[
+                { icon: Lock, title: 'Bank-grade encryption', desc: 'Data encrypted in transit and at rest. Compliant with Indian data norms.' },
+                { icon: Shield, title: 'Signed connector', desc: 'Desktop connector is signed; only syncs what you allow. No direct DB access.' },
+                { icon: Cpu, title: 'Read-only layer', desc: 'AI CFO reads from your accounting data. No posting or changes to your books.' },
+              ].map((item) => (
+                <article key={item.title} className={cardClass}>
+                  <item.icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  <h3 className="mt-3 font-semibold text-white">{item.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+                </article>
+              ))}
             </div>
-            <p className="mt-4">© 2024 AI CFO. All rights reserved.</p>
+          </div>
+        </section>
+
+        {/* ——— AI features ——— */}
+        <section className={sectionSpacing} aria-labelledby="ai-heading">
+          <div className={containerClass}>
+            <h2 id="ai-heading" className={headingClass}>
+              AI features
+            </h2>
+            <p className={subheadingClass}>
+              Clearly labelled AI: on-demand narrative, chat, and insights. You stay in control.
+            </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {[
+                { icon: Sparkles, title: 'On-demand narrative', desc: 'CFO-style explanation for the selected month’s P&L and drivers. Generated when you ask, cached per month.' },
+                { icon: MessageSquare, title: 'AI chat', desc: 'Ask questions about your financial data in natural language.' },
+                { icon: Lightbulb, title: 'AI insights', desc: 'Proactive insights and recommendations based on your numbers.' },
+              ].map((item) => (
+                <article key={item.title} className={cardClass}>
+                  <item.icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  <h3 className="mt-3 font-semibold text-white">{item.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ——— For whom ——— */}
+        <section className={`${sectionSpacing} border-t border-white/10`} aria-labelledby="for-whom-heading">
+          <div className={containerClass}>
+            <h2 id="for-whom-heading" className={headingClass}>
+              Built for
+            </h2>
+            <p className={subheadingClass}>
+              Founders, finance heads, and practicing CAs who need clarity without the complexity.
+            </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {[
+                { icon: User, title: 'Founder', desc: 'Runway, cashflow, and alerts so you can focus on the business.' },
+                { icon: Briefcase, title: 'Finance head', desc: 'P&L pack, working capital, and data health in one dashboard.' },
+                { icon: Scale, title: 'Practicing CA', desc: 'Client visibility and report-ready output without touching the client’s books.' },
+              ].map((item) => (
+                <article key={item.title} className={cardClass}>
+                  <item.icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  <h3 className="mt-3 font-semibold text-white">{item.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{item.desc}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ——— Pricing preview ——— */}
+        <section id="pricing" className={sectionSpacing} aria-labelledby="pricing-heading">
+          <div className={containerClass}>
+            <h2 id="pricing-heading" className={headingClass}>
+              Pricing
+            </h2>
+            <p className={subheadingClass}>
+              Simple plans. 30-day free trial. No credit card required to start.
+            </p>
+            <div className="mt-10 grid gap-6 md:grid-cols-3">
+              <div className={`${cardClass} border-blue-500/30`}>
+                <h3 className="font-semibold text-white">Starter</h3>
+                <p className="mt-2 text-2xl font-semibold text-white">₹4,999<span className="text-sm font-normal text-slate-400">/month</span></p>
+                <p className="mt-1 text-xs text-slate-400">After 30-day free trial</p>
+                <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                  {['Tally integration', 'P&L Pack & Cashflow', 'Working capital', 'Data health', 'Monthly report PDF'].map((x) => (
+                    <li key={x} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-400 shrink-0" />
+                      {x}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/register"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-500 py-2.5 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                >
+                  Start free trial
+                </Link>
+              </div>
+              <div className={cardClass}>
+                <h3 className="font-semibold text-white">Pro</h3>
+                <p className="mt-2 text-2xl font-semibold text-white">Contact us</p>
+                <p className="mt-1 text-xs text-slate-400">Higher limits, priority support</p>
+                <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                  {['Everything in Starter', 'More companies', 'Priority support', 'Custom reporting'].map((x) => (
+                    <li key={x} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-400 shrink-0" />
+                      {x}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="mailto:sales@aicfo.in"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-white/20 py-2.5 text-sm font-medium text-slate-200 hover:border-white/40 hover:text-white transition-colors"
+                >
+                  Contact sales
+                </a>
+              </div>
+              <div className={cardClass}>
+                <h3 className="font-semibold text-white">Enterprise</h3>
+                <p className="mt-2 text-lg font-semibold text-slate-400">Contact sales</p>
+                <p className="mt-1 text-xs text-slate-400">SSO, SLA, dedicated support</p>
+                <ul className="mt-4 space-y-2 text-sm text-slate-400">
+                  {['Custom deployment', 'SSO & audit logs', 'Dedicated success manager'].map((x) => (
+                    <li key={x} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-slate-500 shrink-0" />
+                      {x}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="mailto:sales@aicfo.in"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-white/10 py-2.5 text-sm font-medium text-slate-400 hover:border-white/20 hover:text-slate-300 transition-colors"
+                >
+                  Contact sales
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ——— Final CTA ——— */}
+        <section className={`${sectionSpacing} border-t border-white/10`} aria-labelledby="cta-heading">
+          <div className={containerClass}>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center md:p-12">
+              <h2 id="cta-heading" className="text-2xl font-semibold text-white md:text-3xl">
+                Ready to see your numbers clearly?
+              </h2>
+              <p className="mt-3 text-slate-400">
+                Join Indian SMEs who use AI CFO for runway, P&L, and data health. No credit card required.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/register"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                >
+                  Start 30-day free trial
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center rounded-lg border border-white/20 px-6 py-3 text-sm font-medium text-slate-200 hover:border-white/40 hover:text-white transition-colors"
+                >
+                  Log in
+                </Link>
+              </div>
+              <p className="mt-6 text-xs text-slate-500">30-day free trial · Cancel anytime · Bank-grade security</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ——— Footer ——— */}
+        <footer className="border-t border-white/10 py-8" role="contentinfo">
+          <div className={`${containerClass} flex flex-col items-center gap-4 text-center`}>
+            <p className="text-xs text-slate-500">AI CFO provides decision support, not statutory advice.</p>
+            <div className="flex flex-wrap justify-center gap-6 text-xs">
+              <Link to="/privacy" className="text-slate-500 hover:text-white transition-colors">Privacy</Link>
+              <Link to="/terms" className="text-slate-500 hover:text-white transition-colors">Terms</Link>
+              <a href="mailto:support@aicfo.in" className="text-slate-500 hover:text-white transition-colors">Support</a>
+            </div>
+            <p className="text-xs text-slate-500">© {new Date().getFullYear()} AI CFO. All rights reserved.</p>
           </div>
         </footer>
       </main>

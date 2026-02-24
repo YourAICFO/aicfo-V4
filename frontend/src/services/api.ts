@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { useUpgradeModalStore } from '../store/upgradeModalStore';
 import { getApiBaseUrl } from '../lib/env';
 
 const API_URL = getApiBaseUrl();
@@ -34,6 +35,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();
       window.location.href = '/login';
+    }
+    if (error.response?.status === 403) {
+      const data = error.response?.data as { code?: string; error?: string } | undefined;
+      const isPlanError =
+        data?.code === 'PLAN_LIMIT_COMPANIES' ||
+        data?.code === 'USAGE_LIMIT' ||
+        (typeof data?.error === 'string' && /upgrade/i.test(data.error));
+      if (isPlanError) {
+        useUpgradeModalStore.getState().openModal(data?.error || 'Upgrade to continue.');
+      }
     }
     return Promise.reject(error);
   }

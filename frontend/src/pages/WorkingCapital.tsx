@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Wallet, RotateCcw, Landmark, PercentCircle, Package } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Wallet, RotateCcw, Landmark, PercentCircle, Package, Info } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../lib/format';
 import { financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -20,16 +20,24 @@ type WorkingCapitalPayload = {
   inventory_total?: number | null;
   inventory_delta?: number | null;
   inventory_days?: number | null;
+  pl_activity_latest_month?: boolean;
   sources: Record<string, { metric_key: string; value: number | null }>;
 };
 
 export default function WorkingCapital() {
   const navigate = useNavigate();
+  const location = useLocation();
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const [data, setData] = useState<WorkingCapitalPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (location.hash === '#inventory' && !loading) {
+      document.getElementById('inventory')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [location.hash, loading]);
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -112,6 +120,29 @@ export default function WorkingCapital() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <section id="inventory" className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Inventory</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Closing stock, movement, and inventory days (DIO).</p>
+        </div>
+        {data?.pl_activity_latest_month && (data?.inventory_total === 0 || data?.inventory_total == null) && (
+          <div className="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+            <Info className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
+            <div>
+              <p>Inventory is ₹0. If you track stock, map Stock-in-Hand / Inventory ledgers in Data Health.</p>
+              <button
+                type="button"
+                onClick={() => navigate('/data-health')}
+                className="mt-2 font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                Review Data Health →
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card variant="subtle">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/50">
@@ -166,6 +197,7 @@ export default function WorkingCapital() {
           </CardContent>
         </Card>
       </div>
+      </section>
 
       <Card variant="default">
         <CardContent className="p-6">
