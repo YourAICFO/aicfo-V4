@@ -68,11 +68,11 @@ cd connector-dotnet
 Expected MSI output name:
 - `AICFOConnectorSetup.msi`
 
-Typical output path:
-- `connector-dotnet/installer/bin/Release/**/AICFOConnectorSetup.msi`
+Output paths:
+- **CI / build.ps1:** `connector-dotnet/out/AICFOConnectorSetup.msi` (deterministic for GitHub Actions upload).
+- WiX build: `connector-dotnet/installer/bin/Release/**/AICFOConnectorSetup.msi`.
 
-After build, rename/copy artifact to backend download location:
-- `backend/downloads/AICFOConnectorSetup.msi`
+**GitHub Release:** The workflow attaches the raw `.msi` to the release when you publish a release (or run **workflow_dispatch** with `tag_name`). Set `CONNECTOR_DOWNLOAD_URL=https://github.com/YourAICFO/aicfo-V4/releases/latest/download/AICFOConnectorSetup.msi` so `/download/connector` 302-redirects to it.
 
 ### Install troubleshooting (install log)
 If the MSI fails to install or the UI does not open, capture a verbose log:
@@ -119,8 +119,8 @@ Then open `%TEMP%\aicfo-connector-install.log` to see the reason for failure (e.
    - The corrupt file should be renamed to `config.json.bad-<yyyyMMdd-HHmmss>` in the same folder.
 
 3. **Discovery URL**  
-   - From a command line:  
-     `curl -i -H "Accept: application/json" -H "User-Agent: AICFOConnector/1.0" "https://aicfo.in/.well-known/aicfo-connector.json"`  
-     (Or use the tray’s discovery/diagnostics if available.)  
+   - Default discovery URL is the Railway backend (returns JSON). From a command line:  
+     `curl -i -H "Accept: application/json" -H "User-Agent: AICFOConnector/1.0" "https://web-production-be25.up.railway.app/.well-known/aicfo-connector.json"`  
+     Expect **200** and JSON with `apiBaseUrl`, `latestConnectorVersion`.  
    - Connector uses GET, `Accept: application/json`, `User-Agent: AICFOConnector/<version>`, and follows redirects.  
    - On non-200 or invalid JSON, the connector logs safe diagnostics (status code + first 300 chars of response); it does not crash and keeps the fallback API URL.

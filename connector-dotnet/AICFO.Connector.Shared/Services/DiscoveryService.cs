@@ -24,7 +24,8 @@ public interface IDiscoveryService
 
 public sealed class DiscoveryService : IDiscoveryService
 {
-    public const string DefaultDiscoveryUrlConstant = "https://aicfo.in/.well-known/aicfo-connector.json";
+    /// <summary>Discovery URL we control (Railway backend). aicfo.in returns 400 HTML; backend serves JSON.</summary>
+    public const string DefaultDiscoveryUrlConstant = "https://web-production-be25.up.railway.app/.well-known/aicfo-connector.json";
     /// <summary>Fallback API base URL only when discovery fails and no api_url is saved.</summary>
     public const string FallbackApiBaseUrl = "https://web-production-be25.up.railway.app";
 

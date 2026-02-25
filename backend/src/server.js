@@ -138,6 +138,25 @@ app.get('/health', (req, res) => {
 });
 
 /* ===============================
+   Connector discovery (no auth)
+   GET /.well-known/aicfo-connector.json → 200 JSON with apiBaseUrl, version.
+   Used by Windows connector to resolve API URL; avoid WAF/redirect issues on aicfo.in.
+================================ */
+const discoveryApiBaseUrl = process.env.API_BASE_URL || process.env.BACKEND_URL || 'https://web-production-be25.up.railway.app';
+app.get('/.well-known/aicfo-connector.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.status(200).json({
+    apiBaseUrl: discoveryApiBaseUrl.replace(/\/$/, ''),
+    latestConnectorVersion: '1.0.0',
+    minConnectorVersion: '1.0.0',
+    downloadUrl: process.env.CONNECTOR_DOWNLOAD_URL || `${discoveryApiBaseUrl}/download/connector`,
+    releaseNotesUrl: '',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* ===============================
    API routes
 ================================ */
 app.use('/api/auth', authLimiter, authRoutes);

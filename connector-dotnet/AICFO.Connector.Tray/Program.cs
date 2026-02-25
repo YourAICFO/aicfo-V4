@@ -307,15 +307,29 @@ internal sealed class ConnectorControlPanel : Form
         var baseFont = prototype ?? SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont ?? Control.DefaultFont;
         if (baseFont is null)
             return new Font("Segoe UI", 9f);
-        return new Font(baseFont, style);
+        try
+        {
+            return new Font(baseFont, style);
+        }
+        catch (Exception)
+        {
+            return new Font("Segoe UI", 9f);
+        }
     }
 
     private static Font SafeSmallLabelFont()
     {
         var f = SystemFonts.DefaultFont ?? SystemFonts.MessageBoxFont ?? Control.DefaultFont;
-        if (f is not null)
+        if (f is null)
+            return new Font("Segoe UI", 8.5f);
+        try
+        {
             return new Font(f.FontFamily, 8.5f);
-        return new Font("Segoe UI", 8.5f);
+        }
+        catch (Exception)
+        {
+            return new Font("Segoe UI", 8.5f);
+        }
     }
     private readonly Label _linkedWebCompany = new() { AutoSize = true, Text = "-" };
     private readonly Label _linkedShortId = new() { AutoSize = true, Text = "-", ForeColor = Color.DimGray };
@@ -599,6 +613,8 @@ internal sealed class ConnectorControlPanel : Form
         }
         catch (Exception ex)
         {
+            Log.Warning(ex, "Config save failed");
+            SetActionBanner("Config could not be saved. Ensure " + ConnectorPaths.ConfigDirectory + " exists and is writable. See logs.", Color.DarkRed);
             ShowProgramDataError(ex, ConnectorPaths.ConfigFile);
         }
     }

@@ -19,3 +19,12 @@ Set environment variable:
 If you do not set this variable, upload local fallback file:
 
 - `backend/downloads/AICFOConnectorSetup.msi`
+
+## Connector discovery (Windows connector)
+
+`GET /.well-known/aicfo-connector.json` returns JSON (no auth) so the connector can resolve the API URL:
+
+- **apiBaseUrl:** from `API_BASE_URL` or `BACKEND_URL` (default: Railway production URL).
+- **latestConnectorVersion**, **minConnectorVersion**, **downloadUrl**, **timestamp**.
+
+Set `API_BASE_URL` (or `BACKEND_URL`) in production if your backend URL differs from the default.

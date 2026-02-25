@@ -1,4 +1,8 @@
-# Windows Connector: validate Tray + always build and upload MSI on push/main, workflow_dispatch, or release.
+# Windows Connector: validate Tray + build MSI; attach raw .msi to Release on publish or manual dispatch.
+# DIAGNOSIS (why upload was skipped / wrong artifacts):
+# - upload-msi-to-release only ran when event_name == 'release' (publish from Releases UI). Push/workflow_dispatch did not attach to any release.
+# - download-artifact extracts to a directory named after the artifact; the release action was given the wrong path (connector-dotnet/out/...). Fixed by copying the MSI to workspace root after download.
+# - Users saw ZIP or exe-only when they downloaded "artifacts" from the Actions run (validate job uploads portable ZIP; build-msi uploads the MSI artifact). The Release page must have the raw .msi attached by this workflow.
 name: Windows Connector (MSI)
 
 on:
@@ -13,6 +17,11 @@ on:
       - "connector-dotnet/**"
       - ".github/workflows/build-windows-connector-msi.yml"
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Optional: attach built MSI to this existing release tag (e.g. connector-v0.1.0)'
+        required: false
+        type: string
   release:
     types: [ published ]
 
@@ -158,9 +167,10 @@ jobs:
           name: AICFOConnectorSetup.msi
           path: connector-dotnet/out/AICFOConnectorSetup.msi
 
-  # Attach MSI to GitHub Release so users get a direct .msi download (not only inside ZIP).
+  # Attach raw .msi to GitHub Release so /releases/latest/download/AICFOConnectorSetup.msi works.
+  # Runs on: release (published) OR workflow_dispatch with tag_name (attach to existing release).
   upload-msi-to-release:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
     needs: build-msi
     runs-on: windows-latest
     steps:
@@ -169,10 +179,19 @@ jobs:
         with:
           name: AICFOConnectorSetup.msi
 
+      # download-artifact extracts to a folder named after the artifact; put MSI at workspace root for gh-release.
+      - name: Place MSI at workspace root
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Recurse -Filter "AICFOConnectorSetup.msi" -File | Select-Object -First 1
+          if (-not $msi) { throw "MSI not found in artifact" }
+          Copy-Item -LiteralPath $msi.FullName -Destination "AICFOConnectorSetup.msi" -Force
+          if (-not (Test-Path "AICFOConnectorSetup.msi")) { throw "Copy failed" }
+
       - name: Attach MSI to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: connector-dotnet/out/AICFOConnectorSetup.msi
-          tag_name: ${{ github.event.release.tag_name }}
+          files: AICFOConnectorSetup.msi
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
