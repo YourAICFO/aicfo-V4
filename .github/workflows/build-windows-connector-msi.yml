@@ -179,14 +179,17 @@ jobs:
         with:
           name: AICFOConnectorSetup.msi
 
-      # download-artifact extracts to a folder named after the artifact; put MSI at workspace root for gh-release.
+      # download-artifact may put the file at root or in a subfolder; ensure it is at workspace root for gh-release.
       - name: Place MSI at workspace root
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Recurse -Filter "AICFOConnectorSetup.msi" -File | Select-Object -First 1
           if (-not $msi) { throw "MSI not found in artifact" }
-          Copy-Item -LiteralPath $msi.FullName -Destination "AICFOConnectorSetup.msi" -Force
-          if (-not (Test-Path "AICFOConnectorSetup.msi")) { throw "Copy failed" }
+          $dest = Join-Path $env:GITHUB_WORKSPACE "AICFOConnectorSetup.msi"
+          if (-not [string]::Equals($msi.FullName, $dest, [StringComparison]::OrdinalIgnoreCase)) {
+            Copy-Item -LiteralPath $msi.FullName -Destination $dest -Force
+          }
+          if (-not (Test-Path $dest)) { throw "MSI not at workspace root" }
 
       - name: Attach MSI to Release
         uses: softprops/action-gh-release@v2
