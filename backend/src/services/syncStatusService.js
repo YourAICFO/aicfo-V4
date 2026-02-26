@@ -1,6 +1,7 @@
 const { IntegrationSyncRun, IntegrationSyncEvent, ConnectorClient, Company } = require('../models');
 const { Op } = require('sequelize');
 const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/auth');
 
 class SyncStatusService {
   /**
@@ -266,7 +267,7 @@ class SyncStatusService {
       type: 'connector'
     };
 
-    return jwt.sign(payload, process.env.JWT_SECRET || 'fallback-secret', {
+    return jwt.sign(payload, jwtSecret, {
       expiresIn: '15m'
     });
   }
@@ -278,7 +279,7 @@ class SyncStatusService {
    */
   verifyConnectorToken(token) {
     try {
-      return jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+      return jwt.verify(token, jwtSecret);
     } catch (error) {
       throw new Error('Invalid or expired connector token');
     }
