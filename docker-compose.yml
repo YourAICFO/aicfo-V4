@@ -1,23 +1,36 @@
-version: "3.9"
-
+###############################################################################
+# Local development services only — NOT used in production (Railway / Docker)
+###############################################################################
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: aicfo-postgres
     environment:
-      POSTGRES_USER: aicfo
-      POSTGRES_PASSWORD: aicfo123
-      POSTGRES_DB: aicfo
+      POSTGRES_USER: ${POSTGRES_USER:-aicfo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aicfo123}
+      POSTGRES_DB: ${POSTGRES_DB:-aicfo}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - aicfo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aicfo} -d ${POSTGRES_DB:-aicfo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: aicfo-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   aicfo_postgres_data:
