@@ -62,48 +62,36 @@ app.use(
 );
 
 /* ===============================
-   CORS — PRODUCTION-READY CONFIGURATION
+   CORS — environment-aware allowlist
+   Production: ONLY origins listed in ALLOWED_ORIGINS (comma-separated).
+   Development/test: localhost on common dev ports + any ALLOWED_ORIGINS.
 ================================ */
-const corsOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:5173', 'http://localhost:3000'];
+const isProdCors = env.NODE_ENV === 'production' || env.NODE_ENV === 'staging';
+const explicitOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const localhostPattern = /^https?:\/\/localhost(:\d+)?$/;
 
-// Add Vercel preview deployments pattern
-const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
-      
-      // Check if origin is in allowed list
-      if (corsOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      // Allow Vercel preview deployments
-      if (vercelPattern.test(origin)) {
-        return callback(null, true);
-      }
-      
-      // For development, allow localhost origins
-      if (origin.includes('localhost')) {
-        return callback(null, true);
-      }
-      
-      callback(new Error(`CORS policy violation: ${origin}`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With', 'Accept', 'Origin'],
-    exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
-    maxAge: 86400 // 24 hours
-  })
-);
+    if (explicitOrigins.includes(origin)) return callback(null, true);
 
-// Handle preflight OPTIONS requests explicitly
-app.options('*', cors());
+    if (!isProdCors && localhostPattern.test(origin)) return callback(null, true);
+
+    callback(new Error(`CORS policy violation: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 /* ===============================
    Request context + logging
