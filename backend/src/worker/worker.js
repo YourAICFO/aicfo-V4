@@ -1,6 +1,8 @@
 require('dotenv').config();
+const { loadEnv } = require('../config/env');
+const env = loadEnv();
 
-if (process.env.DISABLE_WORKER === 'true') {
+if (env.DISABLE_WORKER) {
   console.log('WORKER_DISABLED=true; exiting 0');
   process.exit(0);
 }

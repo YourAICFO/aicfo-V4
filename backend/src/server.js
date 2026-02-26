@@ -1,4 +1,7 @@
 require('dotenv').config();
+const { loadEnv } = require('./config/env');
+const env = loadEnv();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -335,9 +338,11 @@ const startServer = async () => {
       }
     }
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (env.NODE_ENV === 'development' && env.ALLOW_SEQUELIZE_SYNC) {
       await sequelize.sync({ alter: false });
-      logger.info('Database models synchronized.');
+      logger.info('Database models synchronized (ALLOW_SEQUELIZE_SYNC=true).');
+    } else if (env.NODE_ENV === 'staging' || env.NODE_ENV === 'production') {
+      logger.info('sequelize.sync skipped — use db:migrate for schema changes.');
     }
 
     app.listen(PORT, '0.0.0.0', () => {
