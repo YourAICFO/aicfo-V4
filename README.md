@@ -29,44 +29,32 @@ AI CFO is a read-only financial intelligence platform that monitors your account
 
 ### Prerequisites
 - Node.js 22.x
-- PostgreSQL 14+
+- Docker & Docker Compose (for local PostgreSQL + Redis)
 
 ### Local Development
 
-1. Clone the repository
 ```bash
+# 1. Clone & install
 git clone <repo-url>
 cd aicfo
-```
-
-2. Install dependencies
-```bash
 npm run install:all
-```
 
-3. Set up environment variables
-```bash
+# 2. Configure environment
 cp backend/.env.example backend/.env
-# Edit backend/.env with your database credentials
+# Edit backend/.env — at minimum set DATABASE_URL and JWT_SECRET
+
+# 3. Start databases, run migrations, seed, and launch
+npm run db:up                    # Start Postgres + Redis containers
+npm run db:migrate               # Apply all database migrations
+npm run db:seed                  # (Optional) Create demo user
+npm run dev                      # Start backend + frontend
 ```
 
-4. Run migrations
-```bash
-npm run migrate
-```
+Backend runs on http://localhost:5000 — Frontend runs on http://localhost:5173
 
-5. Seed demo data (optional)
-```bash
-npm run seed
-```
+Demo credentials (after seeding): `demo@aicfo.com` / `demo123456`
 
-6. Start development servers
-```bash
-npm run dev
-```
-
-Backend will run on http://localhost:5000
-Frontend will run on http://localhost:5173
+> For full infrastructure docs see [docs/INFRA_SETUP.md](docs/INFRA_SETUP.md)
 
 ### Railway Deployment
 
