@@ -35,6 +35,9 @@ Or all at once: `npm run dev` (starts DB containers + both servers).
 ### Environment variables
 
 - Env validation runs on startup via `backend/src/config/env.js` (zod). Missing vars produce a clear error.
-- `QUEUE_RESILIENT_MODE=true` in `backend/.env` allows running without Redis
-- `OPENAI_API_KEY` is optional; AI features degrade gracefully without it
-- Docker-compose credentials: user=`aicfo`, password=`aicfo123`, db=`aicfo`
+- `JWT_SECRET` is required in ALL environments (min 32 chars). No fallback secrets exist anywhere in the codebase.
+- `ALLOWED_ORIGINS` is required in production/staging (comma-separated CORS origins).
+- `ENABLE_CONNECTOR_DEV_ROUTES=true` must be set alongside `NODE_ENV=development` to enable connector dev routes. These also require admin auth.
+- `QUEUE_RESILIENT_MODE=true` in `backend/.env` allows running without Redis.
+- `OPENAI_API_KEY` is optional; AI features degrade gracefully without it.
+- Docker-compose credentials: user=`aicfo`, password=`aicfo123`, db=`aicfo`.
