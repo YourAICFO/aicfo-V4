@@ -4,13 +4,16 @@
   "description": "AI CFO Platform Backend",
   "main": "src/server.js",
   "scripts": {
-    "prestart": "node migrations/run-sql.js",
+    "prestart": "node src/db/migrate.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "worker": "node src/worker/worker.js",
     "test": "node --test",
     "cron:lock-trials": "node src/cron/lockExpiredTrials.js",
     "migrate": "node migrations/run-sql.js",
+    "db:migrate": "node src/db/migrate.js",
+    "db:migrate:status": "node src/db/migrate.js --status",
+    "db:migrate:verify": "node src/db/migrate.js --verify",
     "doctor": "node src/doctor.js"
   },
   "engines": {
