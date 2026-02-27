@@ -105,6 +105,14 @@ const schema = z
       });
     }
 
+    if (data.RATE_LIMIT_REDIS_ENABLED && !data.REDIS_URL && data.NODE_ENV !== 'test') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REDIS_URL'],
+        message: 'REDIS_URL is required when RATE_LIMIT_REDIS_ENABLED=true',
+      });
+    }
+
     // ALLOWED_ORIGINS: required in prod in principle, but we apply a safe default so containers can start
     if (isProdLike && !data.ALLOWED_ORIGINS) {
       // Don't abort; default will be applied in loadEnv() and a warning logged

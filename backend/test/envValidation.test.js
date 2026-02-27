@@ -78,11 +78,32 @@ test('env validation — production accepts missing ALLOWED_ORIGINS (default app
   assert.equal(result.data.ALLOWED_ORIGINS, undefined);
 });
 
+test('env validation — requires REDIS_URL when RATE_LIMIT_REDIS_ENABLED=true in non-test', () => {
+  const result = envSchema.safeParse({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://x:x@localhost/db',
+    JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    REDIS_URL: 'redis://localhost:6379',
+    RATE_LIMIT_REDIS_ENABLED: 'true',
+  });
+  assert.equal(result.success, true);
+  const failResult = envSchema.safeParse({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://x:x@localhost/db',
+    JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    RATE_LIMIT_REDIS_ENABLED: 'true',
+    // REDIS_URL missing
+  });
+  assert.equal(failResult.success, false);
+  assert.ok(failResult.error.issues.some((i) => i.path[0] === 'REDIS_URL' && i.message.includes('RATE_LIMIT_REDIS_ENABLED')));
+});
+
 test('env validation — parses boolean env vars correctly', () => {
   const result = envSchema.safeParse({
     NODE_ENV: 'development',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    RATE_LIMIT_REDIS_ENABLED: 'false',
     ENFORCE_COMPANY_LIMITS: 'true',
     ENFORCE_USAGE_LIMITS: '1',
     ENABLE_CONNECTOR_DEV_ROUTES: 'false',

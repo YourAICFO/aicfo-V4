@@ -75,6 +75,23 @@ if [ -n "$TOKEN" ]; then
   echo ""
   echo "── Companies (authed) ──"
   check "GET /api/companies" "$BASE/api/companies" "200" "$TOKEN"
+
+  echo ""
+  echo "── Rate limit (429) ──"
+  seen_429=0
+  for i in $(seq 1 30); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
+      -H "Content-Type: application/json" -d '{"email":"rate-limit-check@example.com","password":"x"}' 2>/dev/null) || code="000"
+    if [ "$code" = "429" ]; then
+      seen_429=1
+      echo "  ✅ Rate limit enforced (429) after $i requests"
+      PASS=$((PASS + 1))
+      break
+    fi
+  done
+  if [ "$seen_429" -eq 0 ]; then
+    echo "  ⚠️  No 429 seen after 30 login attempts (rate limit may be high or Redis disabled)"
+  fi
 else
   echo ""
   echo "  ⚠️  TOKEN not set — skipping admin + authed endpoint checks"

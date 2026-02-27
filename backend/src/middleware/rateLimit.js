@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Rate limiting middleware — Redis-backed when available, in-memory fallback.
+ * Rate limiting middleware — Redis-backed when enabled (multi-instance safe), in-memory fallback.
  *
- * Uses express-rate-limit + rate-limit-redis for distributed enforcement.
+ * When RATE_LIMIT_REDIS_ENABLED=true and REDIS_URL is set: uses rate-limit-redis (shared across instances).
  * Each limiter gets its own RedisStore instance with a unique prefix (required by express-rate-limit).
- * Falls back to in-memory when REDIS_URL is absent or RATE_LIMIT_REDIS_ENABLED=false.
+ * On Redis connection/usage errors: fail-open (allow request), single structured warning (no log spam).
  */
 const rateLimit = require('express-rate-limit');
 const { loadEnv } = require('../config/env');
@@ -14,21 +14,68 @@ const env = loadEnv();
 
 /** Shared Redis client; each limiter gets its own RedisStore with a unique prefix. */
 let redisClient = null;
+/** 'redis' | 'memory' — for tests and diagnostics. */
+let rateLimitBackend = 'memory';
 
-if (env.RATE_LIMIT_ENABLED && env.RATE_LIMIT_REDIS_ENABLED && process.env.REDIS_URL) {
+let redisRateLimitWarned = false;
+function warnRedisOnce(message, err) {
+  if (redisRateLimitWarned) return;
+  redisRateLimitWarned = true;
+  try {
+    const { logger } = require('../utils/logger');
+    logger.warn({ err: err?.message ?? err, rateLimit: 'redis_fail_open' }, message);
+  } catch {
+    console.warn('[rate-limit]', message, err?.message ?? err);
+  }
+}
+
+/** Wraps a Redis store to fail-open on errors: allows the request and logs once. */
+function wrapStoreWithFailOpen(store, windowMs) {
+  return {
+    async increment(key) {
+      try {
+        return await store.increment(key);
+      } catch (err) {
+        warnRedisOnce('Rate limit Redis store error; allowing request (fail-open).', err);
+        return { totalHits: 0, resetTime: new Date(Date.now() + windowMs) };
+      }
+    },
+    async decrement(key) {
+      try {
+        await store.decrement(key);
+      } catch {
+        // no-op on error
+      }
+    },
+    async resetKey(key) {
+      try {
+        await store.resetKey(key);
+      } catch {
+        // no-op
+      }
+    }
+  };
+}
+
+if (env.RATE_LIMIT_ENABLED && env.RATE_LIMIT_REDIS_ENABLED && env.REDIS_URL) {
   try {
     const IORedis = require('ioredis');
-    redisClient = new IORedis(process.env.REDIS_URL, {
+    const client = new IORedis(env.REDIS_URL, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       connectTimeout: 5000,
       lazyConnect: true,
       retryStrategy: (times) => (times > 3 ? null : Math.min(times * 500, 2000)),
     });
-    redisClient.on('error', () => {});
-    redisClient.connect().catch(() => {});
-  } catch (_) {
-    // Redis unavailable — fall through to in-memory
+    client.on('error', () => {});
+    client.connect().catch((err) => {
+      warnRedisOnce('Rate limit Redis connection failed; using in-memory (fail-open).', err);
+      try { client.quit(); } catch { /* ignore */ }
+    });
+    redisClient = client;
+    rateLimitBackend = 'redis';
+  } catch (err) {
+    warnRedisOnce('Rate limit Redis init failed; using in-memory (fail-open).', err);
   }
 }
 
@@ -51,11 +98,16 @@ function createLimiter(prefix, windowMs, max, opts = {}) {
   }
   let store;
   if (redisClient) {
-    const { RedisStore } = require('rate-limit-redis');
-    store = new RedisStore({
-      sendCommand: (...args) => redisClient.call(...args),
-      prefix: `rl:${prefix}:`,
-    });
+    try {
+      const { RedisStore } = require('rate-limit-redis');
+      const redisStore = new RedisStore({
+        sendCommand: (...args) => redisClient.call(...args),
+        prefix: `rl:${prefix}:`,
+      });
+      store = wrapStoreWithFailOpen(redisStore, windowMs);
+    } catch (err) {
+      warnRedisOnce('Rate limit Redis store init failed; using in-memory (fail-open).', err);
+    }
   }
   return rateLimit({
     windowMs,
@@ -95,6 +147,11 @@ const jobsLimiter = createLimiter('jobs', 60_000, env.RATE_LIMIT_JOBS_PER_MIN, {
 
 const globalLimiter = createLimiter('global', 60_000, env.RATE_LIMIT_GLOBAL_PER_MIN);
 
+/** Returns 'redis' | 'memory' for tests and diagnostics. */
+function getRateLimitBackend() {
+  return rateLimitBackend;
+}
+
 module.exports = {
   authLimiter,
   aiLimiter,
@@ -103,4 +160,5 @@ module.exports = {
   adminLimiter,
   jobsLimiter,
   globalLimiter,
+  getRateLimitBackend,
 };
