@@ -69,14 +69,34 @@ const startScheduledEmailTicker = () => {
     }
 
     try {
-      const { checkFailureSpike, pruneOldFailures } = require('../services/jobFailureService');
-      await checkFailureSpike(process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs');
+      const { pruneOldFailures } = require('../services/jobFailureService');
       await pruneOldFailures();
     } catch (_) {}
   };
 
   runTick().catch(() => {});
   setInterval(runTick, tickMs);
+};
+
+const startQueueMonitor = () => {
+  const monitoringEnabled = process.env.QUEUE_MONITORING_ENABLED !== 'false';
+  if (!monitoringEnabled) return;
+
+  const MONITOR_INTERVAL_MS = 5 * 60 * 1000;
+  const queueName = process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs';
+
+  const tick = async () => {
+    try {
+      const { checkFailureSpike } = require('../services/jobFailureService');
+      const count = await checkFailureSpike(queueName);
+      if (count > 0) {
+        logger.info({ event: 'queue_monitor_tick', failedLastHour: count, queueName }, 'Queue monitor tick');
+      }
+    } catch (_) {}
+  };
+
+  tick().catch(() => {});
+  setInterval(tick, MONITOR_INTERVAL_MS);
 };
 
 const startWorker = async () => {
@@ -135,6 +155,7 @@ const startWorker = async () => {
     global.processJobDirectly = processJobDirectly;
     logger.info({ event: 'worker_resilient_ready' }, 'Worker ready in resilient mode');
     startScheduledEmailTicker();
+    startQueueMonitor();
 
     process.on('SIGINT', () => {
       logger.info({ event: 'worker_shutdown' }, 'Worker shutting down gracefully');
@@ -247,6 +268,7 @@ const startWorker = async () => {
   });
 
   startScheduledEmailTicker();
+  startQueueMonitor();
 
   process.on('SIGINT', async () => {
     await worker.close();

@@ -263,6 +263,9 @@ app.use((req, res) => {
    Global error handler
 ================================ */
 app.use(sentryErrorHandler);
+
+const { record5xx } = require('./middleware/errorSpikeMonitor');
+
 app.use((err, req, res, next) => {
   const runId = req.run_id || null;
   if (req.log) {
@@ -276,6 +279,8 @@ app.use((err, req, res, next) => {
     event: 'api_unhandled_error',
     service: 'ai-cfo-api'
   }, 'Unhandled API error', err);
+
+  record5xx(req.originalUrl);
 
   res.status(500).json({
     success: false,
