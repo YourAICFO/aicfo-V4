@@ -13,9 +13,9 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  # ─── Backend checks ───────────────────────────────────────────────
+  # ─── Backend ───────────────────────────────────────────────────────
   backend-check:
-    name: Backend — lint & test
+    name: Backend — test & audit
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -48,11 +48,15 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
-      - name: Bootstrap database for tests
-        run: npm run db:migrate
-      - run: npm test
+      - name: Bootstrap database
+        run: npm run db:bootstrap
+      - name: Run tests
+        run: npm test
+      - name: Dependency audit (non-blocking)
+        run: npm audit --omit=dev || true
+        continue-on-error: true
 
-  # ─── Frontend checks ──────────────────────────────────────────────
+  # ─── Frontend ──────────────────────────────────────────────────────
   frontend-check:
     name: Frontend — typecheck & build
     runs-on: ubuntu-latest
@@ -107,10 +111,13 @@ jobs:
       - run: npm ci
 
       - name: Run migrations from scratch
-        run: npm run db:migrate
+        run: npm run db:bootstrap
 
-      - name: Verify core tables exist
+      - name: Verify core tables
         run: npm run db:migrate:verify
+
+      - name: Schema sanity check
+        run: npm run db:check
 
       - name: Smoke-test — start server briefly
         run: |
