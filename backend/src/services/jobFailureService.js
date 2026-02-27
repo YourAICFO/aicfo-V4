@@ -15,7 +15,7 @@ function getModel() {
 function redactPayload(data) {
   if (!data || typeof data !== 'object') return data;
   const redacted = { ...data };
-  const sensitiveKeys = ['password', 'token', 'secret', 'apiKey', 'api_key', 'authorization'];
+  const sensitiveKeys = ['password', 'token', 'secret', 'key', 'authorization'];
   for (const key of Object.keys(redacted)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {
       redacted[key] = '[REDACTED]';
