@@ -31,9 +31,25 @@ test('redactPayload — handles null/undefined safely', () => {
 
 const DB_AVAILABLE = !!process.env.DATABASE_URL;
 
-test('jobFailureService — recordFailure persists to DB and is queryable', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async () => {
-  const { recordFailure, listRecentFailures } = require('../src/services/jobFailureService');
+async function ensureDbReachable(t) {
+  if (!DB_AVAILABLE) {
+    t.skip('DATABASE_URL not set');
+    return null;
+  }
   const { sequelize } = require('../src/models');
+  try {
+    await sequelize.authenticate();
+  } catch (err) {
+    t.skip('Database unreachable: ' + (err.message || err.code || 'unknown'));
+    return null;
+  }
+  return sequelize;
+}
+
+test('jobFailureService — recordFailure persists to DB and is queryable', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async (t) => {
+  const sequelize = await ensureDbReachable(t);
+  if (!sequelize) return;
+  const { recordFailure, listRecentFailures } = require('../src/services/jobFailureService');
 
   const testJobId = `test-record-${Date.now()}`;
   await recordFailure({
@@ -58,9 +74,10 @@ test('jobFailureService — recordFailure persists to DB and is queryable', { sk
   await sequelize.query(`DELETE FROM job_failures WHERE job_id = :jobId`, { replacements: { jobId: testJobId } });
 });
 
-test('jobFailureService — listRecentFailures returns newest first', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async () => {
+test('jobFailureService — listRecentFailures returns newest first', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async (t) => {
+  const sequelize = await ensureDbReachable(t);
+  if (!sequelize) return;
   const { recordFailure, listRecentFailures } = require('../src/services/jobFailureService');
-  const { sequelize } = require('../src/models');
 
   const id1 = `test-order-a-${Date.now()}`;
   const id2 = `test-order-b-${Date.now()}`;
@@ -77,9 +94,10 @@ test('jobFailureService — listRecentFailures returns newest first', { skip: !D
   await sequelize.query(`DELETE FROM job_failures WHERE job_name = 'sort_test'`);
 });
 
-test('jobFailureService — listRecentFailures filters by companyId and jobName', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async () => {
+test('jobFailureService — listRecentFailures filters by companyId and jobName', { skip: !DB_AVAILABLE && 'DATABASE_URL not set' }, async (t) => {
+  const sequelize = await ensureDbReachable(t);
+  if (!sequelize) return;
   const { recordFailure, listRecentFailures } = require('../src/services/jobFailureService');
-  const { sequelize } = require('../src/models');
 
   const cid = '00000000-0000-0000-0000-ffffffffffff';
   await recordFailure({ jobId: `filt-${Date.now()}`, jobName: 'filter_test', companyId: cid, attemptsMade: 5, maxAttempts: 5, isFinalAttempt: true, failedReason: 'x' });

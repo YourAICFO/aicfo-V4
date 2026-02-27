@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatVarianceAmount, formatVariancePct } from '../../lib/format';
 
 interface VarianceDisplayProps {
