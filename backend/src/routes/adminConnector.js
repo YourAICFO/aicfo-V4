@@ -38,7 +38,7 @@ router.get('/download-info', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.get('/devices', authenticate, async (req, res) => {
+router.get('/devices', authenticate, requireAdmin, async (req, res) => {
   try {
     const { companyId } = req.query || {};
     if (!companyId) {
@@ -81,7 +81,7 @@ router.get('/devices', authenticate, async (req, res) => {
 
 // Transitional admin endpoint for connector token lifecycle management.
 // Uses normal user JWT and company ownership checks.
-router.post('/revoke', authenticate, async (req, res) => {
+router.post('/revoke', authenticate, requireAdmin, async (req, res) => {
   try {
     const { deviceId, companyId } = req.body || {};
     if (!deviceId || !companyId) {
