@@ -78,6 +78,24 @@ const startScheduledEmailTicker = () => {
   setInterval(runTick, tickMs);
 };
 
+const HEARTBEAT_COMPANY_ID = '00000000-0000-0000-0000-000000000000';
+const HEARTBEAT_JOB_KEY = '__worker_heartbeat__';
+const HEARTBEAT_SCOPE_KEY = 'singleton';
+
+const writeHeartbeat = async () => {
+  try {
+    const Lock = require('../models').JobIdempotencyLock;
+    const now = new Date();
+    const [row, created] = await Lock.findOrCreate({
+      where: { companyId: HEARTBEAT_COMPANY_ID, jobKey: HEARTBEAT_JOB_KEY, scopeKey: HEARTBEAT_SCOPE_KEY },
+      defaults: { status: 'running', lockedAt: now, lastJobId: 'heartbeat' },
+    });
+    if (!created) {
+      await Lock.update({ lockedAt: now }, { where: { id: row.id } });
+    }
+  } catch (_) {}
+};
+
 const startQueueMonitor = () => {
   const monitoringEnabled = process.env.QUEUE_MONITORING_ENABLED !== 'false';
   if (!monitoringEnabled) return;
@@ -93,6 +111,7 @@ const startQueueMonitor = () => {
         logger.info({ event: 'queue_monitor_tick', failedLastHour: count, queueName }, 'Queue monitor tick');
       }
     } catch (_) {}
+    await writeHeartbeat();
   };
 
   tick().catch(() => {});

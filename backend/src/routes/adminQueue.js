@@ -46,6 +46,23 @@ router.get('/health', authenticate, requireAdmin, async (req, res) => {
     const failedLast24h = await getFailureCountSince(oneDayAgo);
     const topFailedJobs = await getTopFailedJobs(24, 10);
 
+    let lastWorkerHeartbeatAgeSec = null;
+    try {
+      const { JobIdempotencyLock } = require('../models');
+      const hb = await JobIdempotencyLock.findOne({
+        where: {
+          companyId: '00000000-0000-0000-0000-000000000000',
+          jobKey: '__worker_heartbeat__',
+          scopeKey: 'singleton',
+        },
+        attributes: ['lockedAt'],
+        raw: true,
+      });
+      if (hb && hb.lockedAt) {
+        lastWorkerHeartbeatAgeSec = Math.round((Date.now() - new Date(hb.lockedAt).getTime()) / 1000);
+      }
+    } catch (_) {}
+
     res.json({
       success: true,
       data: {
@@ -53,6 +70,7 @@ router.get('/health', authenticate, requireAdmin, async (req, res) => {
         resilientMode,
         counts,
         oldestWaitingAgeSec,
+        lastWorkerHeartbeatAgeSec,
         failedLastHour,
         topFailedJobs,
         dlq: {
