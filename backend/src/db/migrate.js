@@ -220,6 +220,44 @@ async function verify() {
   console.log('VERIFY OK — core tables exist');
 }
 
+const columnExists = async (table, column) => {
+  const rows = await sequelize.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = :table AND column_name = :column
+     ) AS "exists"`,
+    { replacements: { table, column }, type: QueryTypes.SELECT }
+  );
+  return Boolean(rows[0]?.exists);
+};
+
+const SCHEMA_CHECKS = [
+  ['users', 'id'], ['users', 'email'], ['users', 'password_hash'],
+  ['companies', 'id'], ['companies', 'owner_id'],
+  ['subscriptions', 'company_id'], ['subscriptions', 'plan_type'],
+  ['financial_transactions', 'company_id'], ['financial_transactions', 'amount'],
+  ['schema_migrations', 'filename'],
+  ['job_failures', 'job_id'], ['job_failures', 'is_final_attempt'],
+  ['job_idempotency_locks', 'company_id'], ['job_idempotency_locks', 'payload_hash'],
+];
+
+async function check() {
+  await sequelize.authenticate();
+  let ok = 0;
+  let fail = 0;
+  for (const [table, col] of SCHEMA_CHECKS) {
+    const exists = await columnExists(table, col);
+    if (exists) {
+      ok++;
+    } else {
+      fail++;
+      console.error(`  MISSING: ${table}.${col}`);
+    }
+  }
+  console.log(`Schema check: ${ok} OK, ${fail} MISSING out of ${SCHEMA_CHECKS.length} checks`);
+  if (fail > 0) process.exit(1);
+}
+
 async function main() {
   const arg = process.argv[2];
   try {
@@ -227,6 +265,8 @@ async function main() {
       await printStatus();
     } else if (arg === '--verify') {
       await verify();
+    } else if (arg === '--check') {
+      await check();
     } else {
       await runMigrations();
     }
