@@ -1,4 +1,7 @@
 require('dotenv').config();
+const { loadEnv } = require('./config/env');
+const env = loadEnv();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,7 +11,7 @@ const path = require('path');
 const { sequelize } = require('./models');
 const { logger, logError } = require('./utils/logger');
 const { requestContext } = require('./middleware/requestContext');
-const { authLimiter, connectorLimiter, aiLimiter } = require('./middleware/rateLimit');
+const { authLimiter, connectorLimiter, aiLimiter, billingLimiter, adminLimiter, jobsLimiter } = require('./middleware/rateLimit');
 const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./utils/sentry');
 
 // Import routes
@@ -36,6 +39,9 @@ const downloadRoutes = require('./routes/download');
 const connectorRoutes = require('./routes/connector');
 const { billingRouter, handleBillingWebhook } = require('./routes/billing');
 const settingsNotificationsRoutes = require('./routes/settingsNotifications');
+const adminQueueRoutes = require('./routes/adminQueue');
+const metricsRoutes = require('./routes/metrics');
+const { metricsMiddleware } = require('./middleware/metricsCollector');
 
 
 const app = express();
@@ -59,48 +65,36 @@ app.use(
 );
 
 /* ===============================
-   CORS — PRODUCTION-READY CONFIGURATION
+   CORS — environment-aware allowlist
+   Production: ONLY origins listed in ALLOWED_ORIGINS (comma-separated).
+   Development/test: localhost on common dev ports + any ALLOWED_ORIGINS.
 ================================ */
-const corsOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:5173', 'http://localhost:3000'];
+const isProdCors = env.NODE_ENV === 'production' || env.NODE_ENV === 'staging';
+const explicitOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const localhostPattern = /^https?:\/\/localhost(:\d+)?$/;
 
-// Add Vercel preview deployments pattern
-const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
-      
-      // Check if origin is in allowed list
-      if (corsOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      // Allow Vercel preview deployments
-      if (vercelPattern.test(origin)) {
-        return callback(null, true);
-      }
-      
-      // For development, allow localhost origins
-      if (origin.includes('localhost')) {
-        return callback(null, true);
-      }
-      
-      callback(new Error(`CORS policy violation: ${origin}`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With', 'Accept', 'Origin'],
-    exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
-    maxAge: 86400 // 24 hours
-  })
-);
+    if (explicitOrigins.includes(origin)) return callback(null, true);
 
-// Handle preflight OPTIONS requests explicitly
-app.options('*', cors());
+    if (!isProdCors && localhostPattern.test(origin)) return callback(null, true);
+
+    callback(new Error(`CORS policy violation: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 /* ===============================
    Request context + logging
@@ -117,6 +111,7 @@ app.use(
   })
 );
 app.use(sentryRequestHandler);
+app.use(metricsMiddleware);
 
 /* ===============================
    Body parsing
@@ -127,7 +122,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 /* ===============================
-   Health check (Railway)
+   Health check + metrics (Railway / Prometheus)
 ================================ */
 app.get('/health', (req, res) => {
   res.json({
@@ -136,6 +131,7 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
   });
 });
+app.use('/metrics', metricsRoutes);
 
 /* ===============================
    Connector discovery (no auth)
@@ -166,7 +162,7 @@ app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
-app.use('/api/jobs', jobRoutes);
+app.use('/api/jobs', jobsLimiter, jobRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/cfo', cfoQuestionRoutes);
@@ -175,15 +171,16 @@ app.use('/api/sync', syncStatusRoutes);
 app.use('/api/debtors', debtorsRoutes);
 app.use('/api/creditors', creditorsRoutes);
 app.use('/api/dev', devToolsRoutes);
-app.use('/api/admin/metrics', adminMetricsRoutes);
-app.use('/api/admin/connector', adminConnectorRoutes);
-app.use('/api/admin/ingestion', adminIngestionRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/admin', adminRoutes);
+app.use('/api/admin/metrics', adminLimiter, adminMetricsRoutes);
+app.use('/api/admin/connector', adminLimiter, adminConnectorRoutes);
+app.use('/api/admin/ingestion', adminLimiter, adminIngestionRoutes);
+app.use('/api/admin/queue', adminLimiter, adminQueueRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/admin', adminLimiter, adminRoutes);
 app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/connector', connectorLimiter, connectorRoutes);
-app.use('/api/billing', billingRouter);
+app.use('/api/billing', billingLimiter, billingRouter);
 app.use('/api/settings/notifications', settingsNotificationsRoutes);
 
 
@@ -270,6 +267,9 @@ app.use((req, res) => {
    Global error handler
 ================================ */
 app.use(sentryErrorHandler);
+
+const { record5xx } = require('./middleware/errorSpikeMonitor');
+
 app.use((err, req, res, next) => {
   const runId = req.run_id || null;
   if (req.log) {
@@ -283,6 +283,8 @@ app.use((err, req, res, next) => {
     event: 'api_unhandled_error',
     service: 'ai-cfo-api'
   }, 'Unhandled API error', err);
+
+  record5xx(req.originalUrl);
 
   res.status(500).json({
     success: false,
@@ -335,9 +337,11 @@ const startServer = async () => {
       }
     }
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (env.NODE_ENV === 'development' && env.ALLOW_SEQUELIZE_SYNC) {
       await sequelize.sync({ alter: false });
-      logger.info('Database models synchronized.');
+      logger.info('Database models synchronized (ALLOW_SEQUELIZE_SYNC=true).');
+    } else if (env.NODE_ENV === 'staging' || env.NODE_ENV === 'production') {
+      logger.info('sequelize.sync skipped — use db:migrate for schema changes.');
     }
 
     app.listen(PORT, '0.0.0.0', () => {

@@ -1,6 +1,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { authenticate } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/adminAuth');
 const {
   Company,
   ConnectorClient,
@@ -24,7 +25,7 @@ const toNumber = (value) => {
   return Number.isFinite(num) ? num : 0;
 };
 
-router.get('/health', authenticate, async (req, res) => {
+router.get('/health', authenticate, requireAdmin, async (req, res) => {
   try {
     const companyId = req.query?.companyId;
     if (!companyId) {

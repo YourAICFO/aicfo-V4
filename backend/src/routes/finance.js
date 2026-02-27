@@ -1,9 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const { Op, fn, col } = require('sequelize');
+const { z } = require('zod');
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
+const { validateBody } = require('../middleware/validateBody');
 const { debtorsService, creditorsService, adminUsageService, plPackService, alertsService, reportService, dataHealthService, planService, usageService } = require('../services');
+
+const monthBodySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+  forceRegenerate: z.boolean().optional(),
+});
+
+const alertSnoozeSchema = z.object({
+  ruleKey: z.string().min(1, 'ruleKey is required'),
+  days: z.number().int().refine((v) => v === 7 || v === 30, 'days must be 7 or 30'),
+});
+
+const alertRuleKeySchema = z.object({
+  ruleKey: z.string().min(1, 'ruleKey is required'),
+});
 const { CFOMetric, CurrentLoan, MonthlyTrialBalanceSummary } = require('../models');
 
 const getLatestMetricValue = async (companyId, metricKey) => {
@@ -141,7 +157,7 @@ router.post('/pl-remarks', authenticate, requireCompany, checkSubscriptionAccess
 const ENFORCE_USAGE_LIMITS = process.env.ENFORCE_USAGE_LIMITS === 'true';
 const currentMonthKey = () => new Date().toISOString().slice(0, 7);
 
-router.post('/pl-ai-explanation', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/pl-ai-explanation', authenticate, requireCompany, checkSubscriptionAccess, validateBody(monthBodySchema), async (req, res) => {
   try {
     const companyId = req.companyId;
     const monthKey = normalizeMonthQuery(req.body?.month);
@@ -238,7 +254,7 @@ router.get('/alerts', authenticate, requireCompany, checkSubscriptionAccess, asy
   }
 });
 
-router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertSnoozeSchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     const days = req.body?.days != null ? Number(req.body.days) : null;
@@ -256,7 +272,7 @@ router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAcc
   }
 });
 
-router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertRuleKeySchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     if (!ruleKey || typeof ruleKey !== 'string') {
@@ -270,7 +286,7 @@ router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAc
   }
 });
 
-router.post('/alerts/clear', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/alerts/clear', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertRuleKeySchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     if (!ruleKey || typeof ruleKey !== 'string') {

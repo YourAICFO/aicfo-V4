@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ─── Backend ───────────────────────────────────────────────────────
+  backend-check:
+    name: Backend — test & audit
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: aicfo
+          POSTGRES_PASSWORD: aicfo123
+          POSTGRES_DB: aicfo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aicfo -d aicfo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+          --health-start-period 10s
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://aicfo:aicfo123@localhost:5432/aicfo
+      NODE_ENV: test
+      JWT_SECRET: ci-test-jwt-secret-that-is-at-least-32-chars
+      QUEUE_RESILIENT_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Bootstrap database
+        run: npm run db:bootstrap
+      - name: Run tests
+        run: npm test
+      - name: Dependency audit (non-blocking)
+        run: npm audit --omit=dev || true
+        continue-on-error: true
+
+  # ─── Frontend ──────────────────────────────────────────────────────
+  frontend-check:
+    name: Frontend — typecheck & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  # ─── Migration sanity ─────────────────────────────────────────────
+  migration-sanity:
+    name: Migrations — from-scratch sanity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: aicfo
+          POSTGRES_PASSWORD: aicfo123
+          POSTGRES_DB: aicfo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aicfo -d aicfo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+          --health-start-period 10s
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://aicfo:aicfo123@localhost:5432/aicfo
+      NODE_ENV: test
+      JWT_SECRET: ci-migration-jwt-secret-that-is-at-least-32-chars
+      QUEUE_RESILIENT_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Run migrations from scratch
+        run: npm run db:bootstrap
+
+      - name: Verify core tables
+        run: npm run db:migrate:verify
+
+      - name: Schema sanity check
+        run: npm run db:check
+
+      - name: Smoke-test — start server briefly
+        run: |
+          timeout 15 node src/server.js &
+          SERVER_PID=$!
+          sleep 8
+          STATUS=$(curl -sf http://localhost:5000/health | node -e "
+            let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+              try{console.log(JSON.parse(d).status)}catch(e){console.log('parse_error')}
+            })
+          ")
+          echo "Health status: $STATUS"
+          kill $SERVER_PID 2>/dev/null || true
+          [ "$STATUS" = "ok" ] || (echo "FAIL: /health did not return ok" && exit 1)

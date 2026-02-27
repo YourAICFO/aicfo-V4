@@ -1,6 +1,8 @@
 require('dotenv').config();
+const { loadEnv } = require('../config/env');
+const env = loadEnv();
 
-if (process.env.DISABLE_WORKER === 'true') {
+if (env.DISABLE_WORKER) {
   console.log('WORKER_DISABLED=true; exiting 0');
   process.exit(0);
 }
@@ -15,6 +17,7 @@ const { batchRecalc } = require('./tasks/batchRecalc');
 const { sendNotifications } = require('./tasks/sendNotifications');
 const { generateMonthlySnapshots } = require('./tasks/generateMonthlySnapshots');
 const { processScheduledInsightEmails } = require('./tasks/processScheduledInsightEmails');
+const { withIdempotency } = require('../services/idempotencyService');
 const { testConnection, isQueueResilientMode } = require('../config/redis');
 
 const RESILIENT_MODE = isQueueResilientMode();
@@ -32,11 +35,27 @@ const handlers = {
     }, 'HEALTH_PING_OK');
     return { ok: true };
   },
-  generateAIInsights,
-  updateReports,
-  batchRecalc,
+  generateAIInsights: withIdempotency(
+    'ai_insights',
+    () => new Date().toISOString().slice(0, 10),
+    generateAIInsights
+  ),
+  updateReports: withIdempotency(
+    'monthly_report',
+    (d) => `${d.periodStart || 'all'}_${d.periodEnd || 'all'}`,
+    updateReports
+  ),
+  batchRecalc: withIdempotency(
+    'batch_recalc',
+    (d) => `${d.periodStart || 'all'}_${d.periodEnd || 'all'}`,
+    batchRecalc
+  ),
   sendNotifications,
-  generateMonthlySnapshots
+  generateMonthlySnapshots: withIdempotency(
+    'monthly_snapshot',
+    (d) => d.amendedMonth || 'full',
+    generateMonthlySnapshots
+  ),
 };
 
 const startScheduledEmailTicker = () => {
@@ -48,10 +67,55 @@ const startScheduledEmailTicker = () => {
     } catch (error) {
       logger.warn({ event: 'scheduled_insight_email_tick_failed', error: error.message }, 'Scheduled insight email tick failed');
     }
+
+    try {
+      const { pruneOldFailures } = require('../services/jobFailureService');
+      await pruneOldFailures();
+    } catch (_) {}
   };
 
   runTick().catch(() => {});
   setInterval(runTick, tickMs);
+};
+
+const HEARTBEAT_COMPANY_ID = '00000000-0000-0000-0000-000000000000';
+const HEARTBEAT_JOB_KEY = '__worker_heartbeat__';
+const HEARTBEAT_SCOPE_KEY = 'singleton';
+
+const writeHeartbeat = async () => {
+  try {
+    const Lock = require('../models').JobIdempotencyLock;
+    const now = new Date();
+    const [row, created] = await Lock.findOrCreate({
+      where: { companyId: HEARTBEAT_COMPANY_ID, jobKey: HEARTBEAT_JOB_KEY, scopeKey: HEARTBEAT_SCOPE_KEY },
+      defaults: { status: 'running', lockedAt: now, lastJobId: 'heartbeat' },
+    });
+    if (!created) {
+      await Lock.update({ lockedAt: now }, { where: { id: row.id } });
+    }
+  } catch (_) {}
+};
+
+const startQueueMonitor = () => {
+  const monitoringEnabled = process.env.QUEUE_MONITORING_ENABLED !== 'false';
+  if (!monitoringEnabled) return;
+
+  const MONITOR_INTERVAL_MS = 5 * 60 * 1000;
+  const queueName = process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs';
+
+  const tick = async () => {
+    try {
+      const { checkFailureSpike } = require('../services/jobFailureService');
+      const count = await checkFailureSpike(queueName);
+      if (count > 0) {
+        logger.info({ event: 'queue_monitor_tick', failedLastHour: count, queueName }, 'Queue monitor tick');
+      }
+    } catch (_) {}
+    await writeHeartbeat();
+  };
+
+  tick().catch(() => {});
+  setInterval(tick, MONITOR_INTERVAL_MS);
 };
 
 const startWorker = async () => {
@@ -110,6 +174,7 @@ const startWorker = async () => {
     global.processJobDirectly = processJobDirectly;
     logger.info({ event: 'worker_resilient_ready' }, 'Worker ready in resilient mode');
     startScheduledEmailTicker();
+    startQueueMonitor();
 
     process.on('SIGINT', () => {
       logger.info({ event: 'worker_shutdown' }, 'Worker shutting down gracefully');
@@ -184,13 +249,37 @@ const startWorker = async () => {
     }
   );
 
-  worker.on('failed', (job, err) => {
+  worker.on('failed', async (job, err) => {
+    const maxAttempts = job?.opts?.attempts || 5;
+    const isFinal = job ? job.attemptsMade >= maxAttempts : false;
+
     logger.error({
       jobId: job?.id,
       name: job?.name,
       error: err.message,
-      stack: err.stack
-    }, 'Job failed');
+      attemptsMade: job?.attemptsMade,
+      maxAttempts,
+      isFinalAttempt: isFinal,
+    }, isFinal ? 'Job failed (final attempt — persisted to DLQ)' : 'Job failed (will retry)');
+
+    if (job) {
+      const { recordFailure, checkFailureSpike } = require('../services/jobFailureService');
+      await recordFailure({
+        jobId: job.id,
+        jobName: job.name,
+        queueName: QUEUE_NAME,
+        companyId: job.data?.companyId || null,
+        payload: job.data,
+        attemptsMade: job.attemptsMade,
+        maxAttempts,
+        isFinalAttempt: isFinal,
+        failedReason: err.message,
+        stackTrace: err.stack,
+      });
+      if (isFinal) {
+        await checkFailureSpike(QUEUE_NAME);
+      }
+    }
   });
 
   worker.on('completed', (job) => {
@@ -198,6 +287,7 @@ const startWorker = async () => {
   });
 
   startScheduledEmailTicker();
+  startQueueMonitor();
 
   process.on('SIGINT', async () => {
     await worker.close();

@@ -19,7 +19,18 @@ const {
 } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
+const { requireAdmin } = require('../middleware/adminAuth');
+const { requireDevRouteEnabled } = require('../middleware/devGate');
+const { validateBody } = require('../middleware/validateBody');
+const { z } = require('zod');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
+
+const deviceLoginSchema = z.object({
+  email: z.string().email('valid email is required'),
+  password: z.string().min(1, 'password is required'),
+  deviceId: z.string().optional(),
+  deviceName: z.string().optional(),
+});
 
 const connectorLoginAttempts = new Map();
 let hasWarnedDataSyncStatusSchemaMissing = false;
@@ -240,12 +251,10 @@ router.get('/', (req, res) => {
 
 /* ===============================
    DEV-ONLY: GET /api/connector/dev/routes
-   Lists dev endpoints for diagnostics. Returns 404 when not in development.
+   Lists dev endpoints for diagnostics.
+   Requires: NODE_ENV=development + ENABLE_CONNECTOR_DEV_ROUTES=true + admin auth.
 ================================ */
-router.get('/dev/routes', (req, res) => {
-  if (!isDev) {
-    return res.status(404).json({ success: false, error: 'Not found' });
-  }
+router.get('/dev/routes', requireDevRouteEnabled, authenticate, requireAdmin, (req, res) => {
   return res.json({
     success: true,
     routes: [
@@ -398,15 +407,9 @@ router.post('/login', connectorLoginLimiter, async (req, res) => {
    POST /api/connector/device/login
    Purpose: device-first connector login (long-lived token)
 ================================ */
-router.post('/device/login', connectorLoginLimiter, async (req, res) => {
+router.post('/device/login', connectorLoginLimiter, validateBody(deviceLoginSchema), async (req, res) => {
   try {
-    const { email, password, deviceId, deviceName } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'email and password are required'
-      });
-    }
+    const { email, password, deviceId, deviceName } = req.validatedBody;
 
     const result = await authService.login(email, password);
     const tokenPayload = {
@@ -1211,10 +1214,7 @@ router.get('/status/v1', authenticate, async (req, res) => {
    Creates a ConnectorDevice with a raw token for E2E testing.
    Returns 404 when NODE_ENV !== 'development'.
 ================================ */
-router.post('/dev/create-device', async (req, res) => {
-  if (!isDev) {
-    return res.status(404).json({ success: false, error: 'Not found' });
-  }
+router.post('/dev/create-device', requireDevRouteEnabled, authenticate, requireAdmin, async (req, res) => {
   try {
     const [company] = await Company.findAll({
       where: { isDeleted: false, deletedAt: null },
@@ -1262,12 +1262,9 @@ router.post('/dev/create-device', async (req, res) => {
    DEV-ONLY: GET /api/connector/dev/devices
    Returns last 5 connector_devices for E2E evidence.
    Safe ordering: last_seen_at DESC, else created_at, else no order.
-   Returns 404 when NODE_ENV !== 'development'.
+   Requires: NODE_ENV=development + ENABLE_CONNECTOR_DEV_ROUTES=true + admin auth.
 ================================ */
-router.get('/dev/devices', async (req, res) => {
-  if (!isDev) {
-    return res.status(404).json({ success: false, error: 'Not found' });
-  }
+router.get('/dev/devices', requireDevRouteEnabled, authenticate, requireAdmin, async (req, res) => {
   try {
     const attrs = ['id', 'companyId', 'userId', 'deviceId', 'deviceName', 'status', 'lastSeenAt'];
     let order = [[sequelize.literal('last_seen_at DESC NULLS LAST')]];

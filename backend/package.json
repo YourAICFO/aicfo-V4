@@ -4,13 +4,18 @@
   "description": "AI CFO Platform Backend",
   "main": "src/server.js",
   "scripts": {
-    "prestart": "node migrations/run-sql.js",
+    "prestart": "node src/db/migrate.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "worker": "node src/worker/worker.js",
-    "test": "node --test",
+    "test": "node --test 'test/**/*.test.js'",
     "cron:lock-trials": "node src/cron/lockExpiredTrials.js",
     "migrate": "node migrations/run-sql.js",
+    "db:bootstrap": "node src/db/migrate.js",
+    "db:migrate": "node src/db/migrate.js",
+    "db:migrate:status": "node src/db/migrate.js --status",
+    "db:migrate:verify": "node src/db/migrate.js --verify",
+    "db:check": "node src/db/migrate.js --check",
     "doctor": "node src/doctor.js"
   },
   "engines": {
@@ -32,10 +37,11 @@
     "morgan": "^1.10.0",
     "openai": "^4.76.0",
     "pg": "^8.12.0",
-    "puppeteer": "^23.0.0",
     "pg-hstore": "^2.3.4",
     "pino": "^9.4.0",
     "pino-http": "^10.3.0",
+    "puppeteer": "^23.0.0",
+    "rate-limit-redis": "^4.3.1",
     "sequelize": "^6.37.3",
     "uuid": "^9.0.1",
     "zod": "^3.24.1"

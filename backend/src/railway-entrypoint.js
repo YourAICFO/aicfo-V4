@@ -4,6 +4,10 @@
  * Set RAILWAY_PROCESS=worker on the worker service; leave unset for web.
  * No reliance on railway.toml startCommand or shell.
  */
+require('dotenv').config();
+const { loadEnv } = require('./config/env');
+loadEnv();
+
 const { spawn } = require('child_process');
 const path = require('path');
 

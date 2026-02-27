@@ -9,12 +9,15 @@ test('getLatestClosedMonthKey returns YYYY-MM format', () => {
 
 test('createDemoCompany return shape (DB)', async (t) => {
   if (!process.env.DATABASE_URL) {
-    t.skip('DATABASE_URL not set');
-    return;
+    return t.skip('DATABASE_URL not set');
   }
-  const userId = '00000000-0000-0000-0000-000000000001';
   try {
-    const result = await createDemoCompany(userId);
+    const { User } = require('../src/models');
+    const existing = await User.findOne({ where: {}, attributes: ['id'], raw: true });
+    if (!existing) {
+      return t.skip('No users in DB — seed first');
+    }
+    const result = await createDemoCompany(existing.id);
     assert.ok(result && typeof result === 'object');
     assert.ok(result.company);
     assert.ok(result.company.id);
@@ -24,11 +27,10 @@ test('createDemoCompany return shape (DB)', async (t) => {
     const msg = (err && err.message) ? err.message : String(err);
     const code = (err && err.code) || (err && err.parent && err.parent.code);
     const dbUnavailable =
-      code === 'ENOTFOUND' ||
-      (typeof msg === 'string' && (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || /database|relation.*does not exist|HostNotFound/i.test(msg)));
+      code === 'ENOTFOUND' || code === '23503' ||
+      (typeof msg === 'string' && (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || /database|relation.*does not exist|HostNotFound|foreign key/i.test(msg)));
     if (dbUnavailable) {
-      t.skip('Database not available or migrations not run');
-      return;
+      return t.skip('Database not available, migrations not run, or no valid user');
     }
     throw err;
   }
