@@ -63,6 +63,12 @@ const startScheduledEmailTicker = () => {
     } catch (error) {
       logger.warn({ event: 'scheduled_insight_email_tick_failed', error: error.message }, 'Scheduled insight email tick failed');
     }
+
+    try {
+      const { checkFailureSpike, pruneOldFailures } = require('../services/jobFailureService');
+      await checkFailureSpike(process.env.WORKER_QUEUE_NAME || 'ai-cfo-jobs');
+      await pruneOldFailures();
+    } catch (_) {}
   };
 
   runTick().catch(() => {});
