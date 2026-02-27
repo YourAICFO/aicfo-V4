@@ -56,6 +56,8 @@ const { EmailDelivery } = require('./EmailDelivery');
 const { PLRemarks } = require('./PLRemarks');
 const { AlertState } = require('./AlertState');
 const { AiUsageDaily } = require('./AiUsageDaily');
+const { JobFailure } = require('./JobFailure');
+const { JobIdempotencyLock } = require('./JobIdempotencyLock');
 
 // User - Company (One-to-Many)
 User.hasMany(Company, { foreignKey: 'owner_id', as: 'companies' });
@@ -271,5 +273,7 @@ module.exports = {
   EmailDelivery,
   PLRemarks,
   AlertState,
-  AiUsageDaily
+  AiUsageDaily,
+  JobFailure,
+  JobIdempotencyLock
 };

@@ -186,13 +186,31 @@ const startWorker = async () => {
     }
   );
 
-  worker.on('failed', (job, err) => {
+  worker.on('failed', async (job, err) => {
     logger.error({
       jobId: job?.id,
       name: job?.name,
       error: err.message,
-      stack: err.stack
+      stack: err.stack,
+      attemptsMade: job?.attemptsMade,
+      maxAttempts: job?.opts?.attempts
     }, 'Job failed');
+
+    const maxAttempts = job?.opts?.attempts || 5;
+    if (job && job.attemptsMade >= maxAttempts) {
+      const { recordFailure, checkFailureSpike } = require('../services/jobFailureService');
+      await recordFailure({
+        jobId: job.id,
+        jobName: job.name,
+        queueName: QUEUE_NAME,
+        companyId: job.data?.companyId || null,
+        payload: job.data,
+        attempts: job.attemptsMade,
+        failedReason: err.message,
+        stackTrace: err.stack,
+      });
+      await checkFailureSpike(QUEUE_NAME);
+    }
   });
 
   worker.on('completed', (job) => {
