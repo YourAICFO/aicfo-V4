@@ -28,6 +28,7 @@ test('env validation — accepts valid config', () => {
     NODE_ENV: 'development',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    RATE_LIMIT_REDIS_ENABLED: 'false',
   });
   assert.equal(result.success, true);
   assert.equal(result.data.PORT, 5000);

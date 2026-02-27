@@ -7,6 +7,7 @@ test('block3 env — rate limit vars parse with defaults', () => {
     NODE_ENV: 'development',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    REDIS_URL: 'redis://localhost:6379',
   });
   assert.equal(result.success, true);
   assert.equal(result.data.RATE_LIMIT_ENABLED, true);
@@ -24,6 +25,7 @@ test('block3 env — monitoring vars parse with defaults', () => {
     NODE_ENV: 'development',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
+    REDIS_URL: 'redis://localhost:6379',
   });
   assert.equal(result.success, true);
   assert.equal(result.data.API_5XX_SPIKE_THRESHOLD, 20);
