@@ -40,6 +40,8 @@ const connectorRoutes = require('./routes/connector');
 const { billingRouter, handleBillingWebhook } = require('./routes/billing');
 const settingsNotificationsRoutes = require('./routes/settingsNotifications');
 const adminQueueRoutes = require('./routes/adminQueue');
+const metricsRoutes = require('./routes/metrics');
+const { metricsMiddleware } = require('./middleware/metricsCollector');
 
 
 const app = express();
@@ -109,6 +111,7 @@ app.use(
   })
 );
 app.use(sentryRequestHandler);
+app.use(metricsMiddleware);
 
 /* ===============================
    Body parsing
@@ -119,7 +122,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 /* ===============================
-   Health check (Railway)
+   Health check + metrics (Railway / Prometheus)
 ================================ */
 app.get('/health', (req, res) => {
   res.json({
@@ -128,6 +131,7 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
   });
 });
+app.use('/metrics', metricsRoutes);
 
 /* ===============================
    Connector discovery (no auth)
