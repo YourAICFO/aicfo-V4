@@ -17,6 +17,7 @@ const { batchRecalc } = require('./tasks/batchRecalc');
 const { sendNotifications } = require('./tasks/sendNotifications');
 const { generateMonthlySnapshots } = require('./tasks/generateMonthlySnapshots');
 const { processScheduledInsightEmails } = require('./tasks/processScheduledInsightEmails');
+const { withIdempotency } = require('../services/idempotencyService');
 const { testConnection, isQueueResilientMode } = require('../config/redis');
 
 const RESILIENT_MODE = isQueueResilientMode();
@@ -34,11 +35,23 @@ const handlers = {
     }, 'HEALTH_PING_OK');
     return { ok: true };
   },
-  generateAIInsights,
-  updateReports,
+  generateAIInsights: withIdempotency(
+    'ai_insights',
+    () => new Date().toISOString().slice(0, 10),
+    generateAIInsights
+  ),
+  updateReports: withIdempotency(
+    'update_reports',
+    (d) => `${d.periodStart || 'all'}_${d.periodEnd || 'all'}`,
+    updateReports
+  ),
   batchRecalc,
   sendNotifications,
-  generateMonthlySnapshots
+  generateMonthlySnapshots: withIdempotency(
+    'monthly_snapshot',
+    (d) => d.amendedMonth || 'full',
+    generateMonthlySnapshots
+  ),
 };
 
 const startScheduledEmailTicker = () => {
