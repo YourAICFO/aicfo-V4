@@ -1,9 +1,9 @@
 'use strict';
 
-const { Op } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const { logger } = require('../utils/logger');
 
-const DLQ_RETENTION_DAYS = parseInt(process.env.JOB_DLQ_RETENTION_DAYS || '30', 10);
+const DLQ_RETENTION_DAYS = parseInt(process.env.JOB_DLQ_RETENTION_DAYS || '14', 10);
 const FAILURE_SPIKE_THRESHOLD = parseInt(process.env.JOB_FAILURE_SPIKE_THRESHOLD || '10', 10);
 
 let _JobFailure;
@@ -12,19 +12,28 @@ function getModel() {
   return _JobFailure;
 }
 
+const SENSITIVE_PATTERNS = ['password', 'token', 'secret', 'key', 'authorization'];
+
 function redactPayload(data) {
   if (!data || typeof data !== 'object') return data;
   const redacted = { ...data };
-  const sensitiveKeys = ['password', 'token', 'secret', 'key', 'authorization'];
-  for (const key of Object.keys(redacted)) {
-    if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {
-      redacted[key] = '[REDACTED]';
+  for (const k of Object.keys(redacted)) {
+    if (SENSITIVE_PATTERNS.some((s) => k.toLowerCase().includes(s))) {
+      redacted[k] = '[REDACTED]';
     }
   }
   return redacted;
 }
 
-async function recordFailure({ jobId, jobName, queueName, companyId, payload, attempts, failedReason, stackTrace }) {
+/**
+ * Record a job failure (every attempt, not just final).
+ * Called from worker 'failed' event.
+ */
+async function recordFailure({
+  jobId, jobName, queueName, companyId,
+  payload, attemptsMade, maxAttempts,
+  failedReason, stackTrace, isFinalAttempt,
+}) {
   try {
     const JobFailure = getModel();
     await JobFailure.create({
@@ -33,7 +42,9 @@ async function recordFailure({ jobId, jobName, queueName, companyId, payload, at
       queueName: queueName || 'ai-cfo-jobs',
       companyId: companyId || null,
       payload: redactPayload(payload),
-      attempts: attempts || 0,
+      attempts: attemptsMade || 0,
+      maxAttempts: maxAttempts || 5,
+      isFinalAttempt: !!isFinalAttempt,
       failedReason: failedReason ? String(failedReason).slice(0, 2000) : null,
       stackTrace: stackTrace ? String(stackTrace).slice(0, 4000) : null,
       firstFailedAt: new Date(),
@@ -44,9 +55,17 @@ async function recordFailure({ jobId, jobName, queueName, companyId, payload, at
   }
 }
 
-async function getRecentFailures({ limit = 50, offset = 0 } = {}) {
+/**
+ * List recent failures with optional filters.
+ */
+async function listRecentFailures({ limit = 50, offset = 0, companyId, jobName } = {}) {
   const JobFailure = getModel();
+  const where = {};
+  if (companyId) where.companyId = companyId;
+  if (jobName) where.jobName = jobName;
+
   return JobFailure.findAndCountAll({
+    where,
     order: [['created_at', 'DESC']],
     limit: Math.min(limit, 200),
     offset,
@@ -57,6 +76,31 @@ async function getRecentFailures({ limit = 50, offset = 0 } = {}) {
 async function getFailureCountSince(since) {
   const JobFailure = getModel();
   return JobFailure.count({ where: { created_at: { [Op.gte]: since } } });
+}
+
+/**
+ * Top failed job names in the last 24h.
+ */
+async function getTopFailedJobs(hours = 24, topN = 10) {
+  const JobFailure = getModel();
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  try {
+    const rows = await JobFailure.findAll({
+      where: { created_at: { [Op.gte]: since } },
+      attributes: [
+        'jobName',
+        [fn('COUNT', col('id')), 'count'],
+      ],
+      group: ['jobName'],
+      order: [[literal('"count" DESC')]],
+      limit: topN,
+      raw: true,
+    });
+    return rows.map((r) => ({ jobName: r.jobName || r.job_name, count: parseInt(r.count, 10) }));
+  } catch (err) {
+    logger.warn({ event: 'top_failed_jobs_error', error: err.message }, 'getTopFailedJobs query failed');
+    return [];
+  }
 }
 
 async function markResolved(id) {
@@ -94,8 +138,10 @@ async function checkFailureSpike(queueName) {
 
 module.exports = {
   recordFailure,
-  getRecentFailures,
+  listRecentFailures,
+  getRecentFailures: listRecentFailures,
   getFailureCountSince,
+  getTopFailedJobs,
   markResolved,
   pruneOldFailures,
   checkFailureSpike,

@@ -11,6 +11,8 @@ const JobFailure = sequelize.define('JobFailure', {
   companyId: { type: DataTypes.UUID, field: 'company_id' },
   payload: { type: DataTypes.JSONB, defaultValue: {} },
   attempts: { type: DataTypes.INTEGER, defaultValue: 0 },
+  maxAttempts: { type: DataTypes.INTEGER, defaultValue: 5, field: 'max_attempts' },
+  isFinalAttempt: { type: DataTypes.BOOLEAN, defaultValue: false, field: 'is_final_attempt' },
   failedReason: { type: DataTypes.TEXT, field: 'failed_reason' },
   stackTrace: { type: DataTypes.TEXT, field: 'stack_trace' },
   firstFailedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW, field: 'first_failed_at' },

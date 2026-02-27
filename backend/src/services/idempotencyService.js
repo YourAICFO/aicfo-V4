@@ -1,6 +1,6 @@
 'use strict';
 
-const { Op } = require('sequelize');
+const crypto = require('crypto');
 const { logger } = require('../utils/logger');
 
 const LOCK_STALE_MINUTES = parseInt(process.env.JOB_LOCK_STALE_MINUTES || '30', 10);
@@ -12,19 +12,33 @@ function getModel() {
 }
 
 /**
+ * Deterministic hash of payload for content-aware dedup.
+ * Strips sensitive keys before hashing.
+ */
+function computePayloadHash(data) {
+  if (!data || typeof data !== 'object') return 'empty';
+  const clean = {};
+  for (const [k, v] of Object.entries(data)) {
+    const lower = k.toLowerCase();
+    if (['password', 'token', 'secret', 'key', 'authorization'].some((s) => lower.includes(s))) continue;
+    clean[k] = v;
+  }
+  const stable = JSON.stringify(clean, Object.keys(clean).sort());
+  return crypto.createHash('sha256').update(stable).digest('hex').slice(0, 16);
+}
+
+/**
  * Attempt to acquire an idempotency lock.
  *
- * Returns { acquired: true } if the caller should proceed, or
- * { acquired: false, reason } if the job should be skipped.
- *
  * Lock semantics:
- * - INSERT ON CONFLICT UPDATE: race-safe via unique (company_id, job_key, scope_key).
- * - If status='running' and locked recently (< LOCK_STALE_MINUTES), skip.
- * - If status='running' and stale, take over (previous run likely crashed).
- * - If status='completed', skip (already done).
- * - If status='failed', allow retry (re-acquire).
+ * - INSERT on first encounter, race-safe via unique (company_id, job_key, scope_key).
+ * - status=running + recent (< LOCK_STALE_MINUTES) => skip.
+ * - status=running + stale => take over (previous run crashed).
+ * - status=completed + same payloadHash => skip (content unchanged).
+ * - status=completed + different payloadHash => allow (data changed).
+ * - status=failed => allow retry.
  */
-async function acquireLock({ companyId, jobKey, scopeKey, jobId }) {
+async function acquireLock({ companyId, jobKey, scopeKey, jobId, payloadHash }) {
   const Lock = getModel();
   const now = new Date();
   const staleCutoff = new Date(now.getTime() - LOCK_STALE_MINUTES * 60 * 1000);
@@ -39,6 +53,7 @@ async function acquireLock({ companyId, jobKey, scopeKey, jobId }) {
         companyId,
         jobKey,
         scopeKey,
+        payloadHash: payloadHash || null,
         status: 'running',
         lockedAt: now,
         lastJobId: jobId || null,
@@ -47,32 +62,40 @@ async function acquireLock({ companyId, jobKey, scopeKey, jobId }) {
     }
 
     if (existing.status === 'completed') {
-      logger.info({
-        event: 'idempotency_skip_completed',
-        companyId, jobKey, scopeKey,
-        completedAt: existing.completedAt
-      }, 'Skipping — already completed');
-      return { acquired: false, reason: 'already_completed' };
+      if (payloadHash && existing.payloadHash === payloadHash) {
+        logger.info({
+          event: 'idempotency_skip_completed',
+          companyId, jobKey, scopeKey, payloadHash,
+        }, 'Skipping — already completed with same payload');
+        return { acquired: false, reason: 'already_completed' };
+      }
+      // payload changed — allow re-run
+      await Lock.update(
+        { status: 'running', lockedAt: now, lastJobId: jobId || null, lastError: null, completedAt: null, payloadHash: payloadHash || null },
+        { where: { id: existing.id } }
+      );
+      return { acquired: true };
     }
 
     if (existing.status === 'running' && existing.lockedAt > staleCutoff) {
       logger.warn({
         event: 'idempotency_skip_running',
         companyId, jobKey, scopeKey,
-        lockedAt: existing.lockedAt
+        lockedAt: existing.lockedAt,
       }, 'Skipping — another run is in progress');
       return { acquired: false, reason: 'already_running' };
     }
 
+    // stale running lock or failed — take over
     await Lock.update(
-      { status: 'running', lockedAt: now, lastJobId: jobId || null, lastError: null, completedAt: null },
+      { status: 'running', lockedAt: now, lastJobId: jobId || null, lastError: null, completedAt: null, payloadHash: payloadHash || null },
       { where: { id: existing.id } }
     );
     if (existing.status === 'running') {
       logger.warn({
         event: 'idempotency_takeover_stale',
         companyId, jobKey, scopeKey,
-        previousLockedAt: existing.lockedAt
+        previousLockedAt: existing.lockedAt,
       }, 'Taking over stale lock');
     }
     return { acquired: true };
@@ -80,7 +103,7 @@ async function acquireLock({ companyId, jobKey, scopeKey, jobId }) {
     if (err.name === 'SequelizeUniqueConstraintError') {
       return { acquired: false, reason: 'race_conflict' };
     }
-    logger.error({ event: 'idempotency_lock_error', error: err.message }, 'Lock acquisition failed');
+    logger.error({ event: 'idempotency_lock_error', error: err.message }, 'Lock acquisition failed — proceeding anyway');
     return { acquired: true };
   }
 }
@@ -105,7 +128,7 @@ async function releaseLock({ companyId, jobKey, scopeKey, success, error }) {
 /**
  * Wraps a job handler with idempotency guard.
  * @param {string} jobKey - e.g. 'monthly_snapshot'
- * @param {Function} scopeKeyFn - (data) => scopeKey string
+ * @param {Function} scopeKeyFn - (data) => scope string (will be prefixed with companyId)
  * @param {Function} handler - original (data, context) => result
  */
 function withIdempotency(jobKey, scopeKeyFn, handler) {
@@ -113,12 +136,15 @@ function withIdempotency(jobKey, scopeKeyFn, handler) {
     const companyId = data?.companyId;
     if (!companyId) return handler(data, context);
 
-    const scopeKey = scopeKeyFn(data);
+    const rawScope = scopeKeyFn(data);
+    const scopeKey = `${companyId}:${rawScope}`;
+    const payloadHash = computePayloadHash(data);
     const { acquired, reason } = await acquireLock({
       companyId,
       jobKey,
       scopeKey,
       jobId: context.jobId || context.runId || null,
+      payloadHash,
     });
 
     if (!acquired) {
@@ -137,4 +163,4 @@ function withIdempotency(jobKey, scopeKeyFn, handler) {
   };
 }
 
-module.exports = { acquireLock, releaseLock, withIdempotency, LOCK_STALE_MINUTES };
+module.exports = { acquireLock, releaseLock, withIdempotency, computePayloadHash, LOCK_STALE_MINUTES };

@@ -1,74 +1,99 @@
 # Queue Reliability
 
-## Overview
+## Current Queue Topology
 
-The AI CFO platform uses BullMQ (Redis-backed) for async job processing.
-In development, `QUEUE_RESILIENT_MODE=true` processes jobs synchronously
-without Redis.
+| Property | Value |
+|----------|-------|
+| Queue library | BullMQ |
+| Queue name | `ai-cfo-jobs` (configurable via `WORKER_QUEUE_NAME`) |
+| Default attempts | 5 |
+| Backoff | Exponential, 1 s base |
+| `removeOnComplete` | 1000 (BullMQ keeps last 1000 in Redis) |
+| `removeOnFail` | 1000 (BullMQ keeps last 1000 in Redis) |
+| Concurrency | 4 (configurable via `WORKER_CONCURRENCY`) |
+| Resilient mode | `QUEUE_RESILIENT_MODE=true` → synchronous processing without Redis |
+
+### Job Types
+
+| Job name | Critical | Idempotency-guarded |
+|----------|----------|---------------------|
+| `generateMonthlySnapshots` | **Yes** | `monthly_snapshot` |
+| `updateReports` | **Yes** | `monthly_report` |
+| `batchRecalc` | **Yes** | `batch_recalc` |
+| `generateAIInsights` | Medium | `ai_insights` |
+| `sendNotifications` | Low | No |
+| `healthPing` | Diagnostic | No |
 
 ## DLQ (Dead Letter Queue)
 
-### Behavior
+### What happens on failure
 
-When a job exhausts all retries (default 5, exponential backoff from 1s),
-it is persisted to the `job_failures` PostgreSQL table with:
+1. **Every attempt**: recorded to `job_failures` PostgreSQL table with `is_final_attempt=false`.
+2. **Final attempt** (attempt 5 of 5): recorded with `is_final_attempt=true` and triggers spike check.
+3. BullMQ also keeps the last 1000 failed jobs in Redis (`removeOnFail: 1000`).
+4. The DB record is the durable truth — survives Redis restarts.
 
-| Column | Description |
-|--------|-------------|
-| `job_id` | BullMQ job identifier |
-| `job_name` | Handler name (e.g. `generateMonthlySnapshots`) |
-| `queue_name` | Queue name (default `ai-cfo-jobs`) |
-| `company_id` | Associated company, if present in payload |
-| `payload` | Job data (sensitive fields redacted) |
-| `attempts` | Total attempts made |
-| `failed_reason` | Error message (truncated to 2000 chars) |
-| `stack_trace` | Stack trace (truncated to 4000 chars) |
-| `first_failed_at` | Timestamp of first failure |
-| `resolved_at` | Set when admin retries the job |
+### Table schema: `job_failures`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `job_id` | TEXT | BullMQ job identifier |
+| `job_name` | TEXT | Handler name |
+| `queue_name` | TEXT | Default `ai-cfo-jobs` |
+| `company_id` | UUID | From job payload (nullable) |
+| `payload` | JSONB | Redacted job data |
+| `attempts` | INT | Attempt number when failure occurred |
+| `max_attempts` | INT | Total configured attempts |
+| `is_final_attempt` | BOOL | True when all retries exhausted |
+| `failed_reason` | TEXT | Error message (≤2000 chars) |
+| `stack_trace` | TEXT | Stack trace (≤4000 chars) |
+| `first_failed_at` | TIMESTAMPTZ | When failure occurred |
+| `resolved_at` | TIMESTAMPTZ | Set when admin retries the job |
 
 ### Retention
 
-- Default: 30 days (`JOB_DLQ_RETENTION_DAYS` env var).
-- Auto-pruned on each worker ticker cycle (hourly by default).
-- Manual prune: `POST /api/admin/queue/prune`.
+- Default **14 days** (`JOB_DLQ_RETENTION_DAYS`).
+- Auto-pruned every worker ticker cycle (hourly).
+- Manual: `POST /api/admin/queue/prune`.
 
 ### Payload Redaction
 
-Before persisting, payloads are scanned for sensitive keys (password,
-token, secret, key, authorization) and replaced with `[REDACTED]`.
+Keys containing `password`, `token`, `secret`, `key`, or `authorization` are replaced with `[REDACTED]` before DB persistence and before returning in admin API responses.
 
 ## Idempotency Locks
 
-### Behavior
+### Scope Rules
 
-Critical jobs are wrapped with idempotency guards using the
-`job_idempotency_locks` table with a unique constraint on
-`(company_id, job_key, scope_key)`.
+| Job | `job_key` | `scope_key` format |
+|-----|-----------|-------------------|
+| `generateMonthlySnapshots` | `monthly_snapshot` | `<companyId>:<amendedMonth\|"full">` |
+| `updateReports` | `monthly_report` | `<companyId>:<periodStart>_<periodEnd>` |
+| `batchRecalc` | `batch_recalc` | `<companyId>:<periodStart>_<periodEnd>` |
+| `generateAIInsights` | `ai_insights` | `<companyId>:<YYYY-MM-DD>` |
 
-### Protected Jobs
+### Lock Semantics (DB-enforced)
 
-| Job | job_key | scope_key |
-|-----|---------|-----------|
-| `generateMonthlySnapshots` | `monthly_snapshot` | `amendedMonth` or `"full"` |
-| `generateAIInsights` | `ai_insights` | current date (YYYY-MM-DD) |
-| `updateReports` | `update_reports` | `{periodStart}_{periodEnd}` |
+```
+UNIQUE (company_id, job_key, scope_key)
+```
 
-### Lock Semantics
+| Current state | Same payloadHash? | Action |
+|---------------|-------------------|--------|
+| No row exists | — | INSERT `running` → **proceed** |
+| `running` + recent (< 30 min) | — | **skip** (`already_running`) |
+| `running` + stale (> 30 min) | — | UPDATE → **take over** (crashed worker) |
+| `completed` | Yes | **skip** (`already_completed`) |
+| `completed` | No (data changed) | UPDATE → **re-run** |
+| `failed` | — | UPDATE → **retry** |
 
-1. **First call**: INSERT lock row with `status=running` → proceed.
-2. **Duplicate while running**: If `status=running` and `locked_at` is
-   recent (within `JOB_LOCK_STALE_MINUTES`, default 30) → **skip**.
-3. **Stale running lock**: If `status=running` but older than threshold →
-   **take over** (previous worker likely crashed).
-4. **Completed**: If `status=completed` → **skip** (already done).
-5. **Failed**: If `status=failed` → **allow retry** (re-acquire lock).
+### Payload Hash
 
-### Race Safety
+A deterministic SHA-256 hash (truncated to 16 hex chars) of the job payload is stored alongside the lock. Sensitive keys are stripped before hashing so they don't influence dedup.
 
-- Unique constraint prevents duplicate INSERT at DB level.
-- `SequelizeUniqueConstraintError` caught and treated as "skip".
-- On failure to acquire for any reason, the job proceeds anyway to
-  prevent false negatives from blocking work.
+### Fail-open Design
+
+If the lock system itself fails (DB error, constraint race), the job **proceeds anyway** to avoid false negatives blocking critical work.
 
 ## Admin Endpoints
 
@@ -76,69 +101,77 @@ All require `authenticate` + `requireAdmin`.
 
 ### GET /api/admin/queue/health
 
-Returns queue status and DLQ stats.
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:5000/api/admin/queue/health
+```
 
+Response:
 ```json
 {
   "success": true,
   "data": {
     "queueName": "ai-cfo-jobs",
     "resilientMode": false,
-    "counts": { "waiting": 0, "active": 0, "delayed": 0, "failed": 0, "completed": 12 },
+    "counts": { "waiting": 0, "active": 1, "delayed": 0, "failed": 2, "completed": 150 },
     "oldestWaitingAgeSec": null,
-    "dlq": { "failedLastHour": 0, "failedLast24h": 2, "retentionDays": 30 }
+    "failedLastHour": 1,
+    "topFailedJobs": [{ "jobName": "generateAIInsights", "count": 3 }],
+    "dlq": { "failedLastHour": 1, "failedLast24h": 5, "retentionDays": 14 }
   }
 }
 ```
 
-### GET /api/admin/queue/failed?limit=50&offset=0
+### GET /api/admin/queue/failures?limit=50&companyId=...&jobName=...
 
-Returns paginated DLQ entries.
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:5000/api/admin/queue/failures?limit=10&jobName=generateMonthlySnapshots"
+```
 
 ### POST /api/admin/queue/retry
 
-Re-enqueues a failed job. Body: `{ "failureId": "<uuid>" }`.
-Marks the DLQ entry as resolved.
+```bash
+curl -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"failureId":"<uuid>"}' \
+  http://localhost:5000/api/admin/queue/retry
+```
 
 ### POST /api/admin/queue/prune
 
-Manually triggers DLQ retention cleanup.
+Triggers manual DLQ cleanup (entries older than retention).
 
 ## Alerting
 
-### Failure Spike Detection
-
-When the number of DLQ entries in the last hour reaches the threshold
-(default `JOB_FAILURE_SPIKE_THRESHOLD=10`), a structured ERROR log is
-emitted:
+When `job_failures` count in the last hour reaches `JOB_FAILURE_SPIKE_THRESHOLD` (default 10), a structured ERROR log is emitted:
 
 ```json
-{
-  "type": "QUEUE_FAILURE_SPIKE",
-  "failedLastHour": 12,
-  "threshold": 10,
-  "queueName": "ai-cfo-jobs"
-}
+{ "type": "QUEUE_FAILURE_SPIKE", "failedLastHour": 12, "threshold": 10, "queueName": "ai-cfo-jobs" }
 ```
 
-This is checked:
-- On every final job failure (after retries exhausted).
-- On each worker ticker cycle (hourly).
-
-Wire this to Sentry, Datadog, or PagerDuty by matching on `type: "QUEUE_FAILURE_SPIKE"`.
+Checked on every final failure event and every worker ticker cycle.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JOB_DLQ_RETENTION_DAYS` | `30` | Days to keep DLQ entries |
+| `JOB_DLQ_RETENTION_DAYS` | `14` | Days to keep DLQ entries |
 | `JOB_FAILURE_SPIKE_THRESHOLD` | `10` | Failures/hour before alert |
-| `JOB_LOCK_STALE_MINUTES` | `30` | Lock considered stale after N minutes |
+| `JOB_LOCK_STALE_MINUTES` | `30` | Lock considered stale after N min |
 
 ## Smoke Checklist
 
-1. Run migration: `npm run db:migrate`
-2. Verify tables: `SELECT count(*) FROM job_failures; SELECT count(*) FROM job_idempotency_locks;`
-3. Start backend: `npm run dev:backend`
-4. Health endpoint: `curl http://localhost:5000/api/admin/queue/health` (requires admin auth)
-5. Tests: `node --test test/idempotencyService.test.js test/jobFailureService.test.js`
+```bash
+# 1. Run migration
+npm run db:migrate
+
+# 2. Verify tables exist
+psql $DATABASE_URL -c "SELECT count(*) FROM job_failures; SELECT count(*) FROM job_idempotency_locks;"
+
+# 3. Run tests
+node --test test/idempotencyService.test.js test/jobFailureService.test.js
+
+# 4. Start backend and check health (requires admin auth)
+npm run dev:backend
+curl -H "Authorization: Bearer <admin-token>" http://localhost:5000/api/admin/queue/health
+```

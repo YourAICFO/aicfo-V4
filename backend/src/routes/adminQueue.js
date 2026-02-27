@@ -7,11 +7,11 @@ const { requireAdmin } = require('../middleware/adminAuth');
 const { queue, QUEUE_NAME } = require('../worker/queue');
 const { isQueueResilientMode } = require('../config/redis');
 const {
-  getRecentFailures,
+  listRecentFailures,
   getFailureCountSince,
+  getTopFailedJobs,
   markResolved,
   pruneOldFailures,
-  checkFailureSpike,
   DLQ_RETENTION_DAYS,
 } = require('../services/jobFailureService');
 const { enqueueJob } = require('../worker/queue');
@@ -38,6 +38,7 @@ router.get('/health', authenticate, requireAdmin, async (req, res) => {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const failedLastHour = await getFailureCountSince(oneHourAgo);
     const failedLast24h = await getFailureCountSince(oneDayAgo);
+    const topFailedJobs = await getTopFailedJobs(24, 10);
 
     res.json({
       success: true,
@@ -46,6 +47,8 @@ router.get('/health', authenticate, requireAdmin, async (req, res) => {
         resilientMode,
         counts,
         oldestWaitingAgeSec,
+        failedLastHour,
+        topFailedJobs,
         dlq: {
           failedLastHour,
           failedLast24h,
@@ -59,11 +62,26 @@ router.get('/health', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+router.get('/failures', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+    const offset = parseInt(req.query.offset || '0', 10);
+    const companyId = req.query.companyId || undefined;
+    const jobName = req.query.jobName || undefined;
+    const { count, rows } = await listRecentFailures({ limit, offset, companyId, jobName });
+    res.json({ success: true, data: { total: count, items: rows } });
+  } catch (error) {
+    logger.error({ event: 'admin_queue_failures_error', error: error.message }, 'Admin queue failures list error');
+    res.status(500).json({ success: false, error: 'Failed to fetch DLQ entries' });
+  }
+});
+
+// Keep /failed as alias for backward compat
 router.get('/failed', authenticate, requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
     const offset = parseInt(req.query.offset || '0', 10);
-    const { count, rows } = await getRecentFailures({ limit, offset });
+    const { count, rows } = await listRecentFailures({ limit, offset });
     res.json({ success: true, data: { total: count, items: rows } });
   } catch (error) {
     logger.error({ event: 'admin_queue_failed_error', error: error.message }, 'Admin queue failed list error');

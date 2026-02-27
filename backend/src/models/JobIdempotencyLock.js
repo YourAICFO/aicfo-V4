@@ -8,6 +8,7 @@ const JobIdempotencyLock = sequelize.define('JobIdempotencyLock', {
   companyId: { type: DataTypes.UUID, allowNull: false, field: 'company_id' },
   jobKey: { type: DataTypes.STRING, allowNull: false, field: 'job_key' },
   scopeKey: { type: DataTypes.STRING, allowNull: false, field: 'scope_key' },
+  payloadHash: { type: DataTypes.STRING, field: 'payload_hash' },
   status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'running' },
   lockedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW, field: 'locked_at' },
   completedAt: { type: DataTypes.DATE, field: 'completed_at' },

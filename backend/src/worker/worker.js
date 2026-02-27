@@ -41,11 +41,15 @@ const handlers = {
     generateAIInsights
   ),
   updateReports: withIdempotency(
-    'update_reports',
+    'monthly_report',
     (d) => `${d.periodStart || 'all'}_${d.periodEnd || 'all'}`,
     updateReports
   ),
-  batchRecalc,
+  batchRecalc: withIdempotency(
+    'batch_recalc',
+    (d) => `${d.periodStart || 'all'}_${d.periodEnd || 'all'}`,
+    batchRecalc
+  ),
   sendNotifications,
   generateMonthlySnapshots: withIdempotency(
     'monthly_snapshot',
@@ -206,17 +210,19 @@ const startWorker = async () => {
   );
 
   worker.on('failed', async (job, err) => {
+    const maxAttempts = job?.opts?.attempts || 5;
+    const isFinal = job ? job.attemptsMade >= maxAttempts : false;
+
     logger.error({
       jobId: job?.id,
       name: job?.name,
       error: err.message,
-      stack: err.stack,
       attemptsMade: job?.attemptsMade,
-      maxAttempts: job?.opts?.attempts
-    }, 'Job failed');
+      maxAttempts,
+      isFinalAttempt: isFinal,
+    }, isFinal ? 'Job failed (final attempt — persisted to DLQ)' : 'Job failed (will retry)');
 
-    const maxAttempts = job?.opts?.attempts || 5;
-    if (job && job.attemptsMade >= maxAttempts) {
+    if (job) {
       const { recordFailure, checkFailureSpike } = require('../services/jobFailureService');
       await recordFailure({
         jobId: job.id,
@@ -224,11 +230,15 @@ const startWorker = async () => {
         queueName: QUEUE_NAME,
         companyId: job.data?.companyId || null,
         payload: job.data,
-        attempts: job.attemptsMade,
+        attemptsMade: job.attemptsMade,
+        maxAttempts,
+        isFinalAttempt: isFinal,
         failedReason: err.message,
         stackTrace: err.stack,
       });
-      await checkFailureSpike(QUEUE_NAME);
+      if (isFinal) {
+        await checkFailureSpike(QUEUE_NAME);
+      }
     }
   });
 
