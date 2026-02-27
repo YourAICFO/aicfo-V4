@@ -4,9 +4,17 @@ const { AIInsight } = require('../../models');
 const dashboardService = require('../../services/dashboardService');
 const { assertTrialOrActive } = require('../../services/subscriptionService');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+let _openai = null;
+function getOpenAI() {
+  if (!_openai) {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key || String(key).trim() === '') {
+      throw new Error('OPENAI_API_KEY is required for AI insights');
+    }
+    _openai = new OpenAI({ apiKey: key });
+  }
+  return _openai;
+}
 
 const buildPrompt = (context) => {
   return `
@@ -31,7 +39,7 @@ const generateAIInsights = async ({ companyId }) => {
     expenses: expenses.summary
   };
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     messages: [
       { role: 'system', content: 'You are a conservative CFO.' },
