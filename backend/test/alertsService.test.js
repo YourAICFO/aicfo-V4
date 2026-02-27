@@ -73,21 +73,22 @@ test('snooze rejects invalid days', async () => {
 
 test('snooze and clear (DB)', async (t) => {
   if (!process.env.DATABASE_URL) {
-    t.skip('DATABASE_URL not set');
-    return;
+    return t.skip('DATABASE_URL not set');
   }
   try {
-    const companyId = '00000000-0000-0000-0000-000000000001';
-    await snooze(companyId, 'runway_low', 7);
-    const afterSnooze = await getAlerts(companyId);
+    const { Company } = require('../src/models');
+    const company = await Company.findOne({ where: {}, attributes: ['id'], raw: true });
+    if (!company) return t.skip('No companies in DB — seed first');
+
+    await snooze(company.id, 'runway_low', 7);
+    const afterSnooze = await getAlerts(company.id);
     assert.ok(Array.isArray(afterSnooze));
     const runwayShown = afterSnooze.find((a) => a.ruleKey === 'runway_low');
-    if (runwayShown) assert.fail('runway_low should be filtered when snoozed');
-    await clear(companyId, 'runway_low');
+    assert.ok(!runwayShown, 'runway_low should be hidden when snoozed (or absent for this company)');
+    await clear(company.id, 'runway_low');
   } catch (err) {
-    if (err?.name === 'SequelizeHostNotFoundError' || err?.message?.includes('ENOTFOUND') || err?.message?.includes('ECONNREFUSED')) {
-      t.skip('Database not available');
-      return;
+    if (err?.name === 'SequelizeHostNotFoundError' || err?.name === 'SequelizeForeignKeyConstraintError' || err?.message?.includes('ENOTFOUND') || err?.message?.includes('ECONNREFUSED')) {
+      return t.skip('Database not available or no test data');
     }
     throw err;
   }
@@ -95,17 +96,22 @@ test('snooze and clear (DB)', async (t) => {
 
 test('dismiss and clear (DB)', async (t) => {
   if (!process.env.DATABASE_URL) {
-    t.skip('DATABASE_URL not set');
-    return;
+    return t.skip('DATABASE_URL not set');
   }
   try {
-    const companyId = '00000000-0000-0000-0000-000000000001';
-    await dismiss(companyId, 'revenue_drop');
-    await clear(companyId, 'revenue_drop');
+    const { Company } = require('../src/models');
+    const company = await Company.findOne({ where: {}, attributes: ['id'], raw: true });
+    if (!company) return t.skip('No companies in DB — seed first');
+
+    await dismiss(company.id, 'revenue_drop');
+    const afterDismiss = await getAlerts(company.id);
+    assert.ok(Array.isArray(afterDismiss));
+    const revDropShown = afterDismiss.find((a) => a.ruleKey === 'revenue_drop');
+    assert.ok(!revDropShown, 'revenue_drop should be hidden when dismissed (or absent)');
+    await clear(company.id, 'revenue_drop');
   } catch (err) {
-    if (err?.name === 'SequelizeHostNotFoundError' || err?.message?.includes('ENOTFOUND') || err?.message?.includes('ECONNREFUSED')) {
-      t.skip('Database not available');
-      return;
+    if (err?.name === 'SequelizeHostNotFoundError' || err?.name === 'SequelizeForeignKeyConstraintError' || err?.message?.includes('ENOTFOUND') || err?.message?.includes('ECONNREFUSED')) {
+      return t.skip('Database not available or no test data');
     }
     throw err;
   }

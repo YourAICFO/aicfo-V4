@@ -375,7 +375,7 @@ const getPlMonths = async (companyId) => {
 const getRemarks = async (companyId, monthKey) => {
   const row = await PLRemarks.findOne({
     where: { companyId, month: monthKey },
-    attributes: ['text', 'aiDraftText', 'aiDraftUpdatedAt', 'updatedBy', 'updatedAt'],
+    attributes: ['text', 'ai_draft_text', 'ai_draft_updated_at', 'updated_by', 'updated_at'],
     raw: true
   });
   if (!row) {
@@ -383,10 +383,10 @@ const getRemarks = async (companyId, monthKey) => {
   }
   return {
     text: row.text ?? null,
-    aiDraftText: row.aiDraftText ?? null,
-    updatedAt: row.updatedAt ?? null,
-    updatedBy: row.updatedBy ?? null,
-    aiDraftUpdatedAt: row.aiDraftUpdatedAt ?? null
+    aiDraftText: row.ai_draft_text ?? row.aiDraftText ?? null,
+    updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    updatedBy: row.updated_by ?? row.updatedBy ?? null,
+    aiDraftUpdatedAt: row.ai_draft_updated_at ?? row.aiDraftUpdatedAt ?? null
   };
 };
 
