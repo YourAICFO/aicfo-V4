@@ -21,7 +21,16 @@ const { authenticate } = require('../middleware/auth');
 const { authenticateConnectorOrLegacy, hashToken } = require('../middleware/connectorAuth');
 const { requireAdmin } = require('../middleware/adminAuth');
 const { requireDevRouteEnabled } = require('../middleware/devGate');
+const { validateBody } = require('../middleware/validateBody');
+const { z } = require('zod');
 const { validateChartOfAccountsPayload } = require('../services/coaPayloadValidator');
+
+const deviceLoginSchema = z.object({
+  email: z.string().email('valid email is required'),
+  password: z.string().min(1, 'password is required'),
+  deviceId: z.string().optional(),
+  deviceName: z.string().optional(),
+});
 
 const connectorLoginAttempts = new Map();
 let hasWarnedDataSyncStatusSchemaMissing = false;
@@ -398,15 +407,9 @@ router.post('/login', connectorLoginLimiter, async (req, res) => {
    POST /api/connector/device/login
    Purpose: device-first connector login (long-lived token)
 ================================ */
-router.post('/device/login', connectorLoginLimiter, async (req, res) => {
+router.post('/device/login', connectorLoginLimiter, validateBody(deviceLoginSchema), async (req, res) => {
   try {
-    const { email, password, deviceId, deviceName } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'email and password are required'
-      });
-    }
+    const { email, password, deviceId, deviceName } = req.validatedBody;
 
     const result = await authService.login(email, password);
     const tokenPayload = {

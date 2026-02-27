@@ -12,9 +12,13 @@ const monthBodySchema = z.object({
   forceRegenerate: z.boolean().optional(),
 });
 
-const alertActionSchema = z.object({
+const alertSnoozeSchema = z.object({
   ruleKey: z.string().min(1, 'ruleKey is required'),
-  days: z.number().int().refine((v) => v === 7 || v === 30, 'days must be 7 or 30').optional(),
+  days: z.number().int().refine((v) => v === 7 || v === 30, 'days must be 7 or 30'),
+});
+
+const alertRuleKeySchema = z.object({
+  ruleKey: z.string().min(1, 'ruleKey is required'),
 });
 const { CFOMetric, CurrentLoan, MonthlyTrialBalanceSummary } = require('../models');
 
@@ -250,7 +254,7 @@ router.get('/alerts', authenticate, requireCompany, checkSubscriptionAccess, asy
   }
 });
 
-router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertActionSchema), async (req, res) => {
+router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertSnoozeSchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     const days = req.body?.days != null ? Number(req.body.days) : null;
@@ -268,7 +272,7 @@ router.post('/alerts/snooze', authenticate, requireCompany, checkSubscriptionAcc
   }
 });
 
-router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertRuleKeySchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     if (!ruleKey || typeof ruleKey !== 'string') {
@@ -282,7 +286,7 @@ router.post('/alerts/dismiss', authenticate, requireCompany, checkSubscriptionAc
   }
 });
 
-router.post('/alerts/clear', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/alerts/clear', authenticate, requireCompany, checkSubscriptionAccess, validateBody(alertRuleKeySchema), async (req, res) => {
   try {
     const ruleKey = req.body?.ruleKey;
     if (!ruleKey || typeof ruleKey !== 'string') {

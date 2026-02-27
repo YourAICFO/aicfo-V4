@@ -57,9 +57,16 @@ All 28 admin routes now enforce either `authenticate+requireAdmin` or `requireAd
 
 | Endpoint | Schema |
 |----------|--------|
-| `POST /api/ai/chat` | `{ message: string(1..4000), threadId?: uuid }` |
-| `POST /api/finance/pl-ai-explanation` | `{ month: YYYY-MM, forceRegenerate?: bool }` |
-| `POST /api/finance/alerts/snooze` | `{ ruleKey: string, days?: 7\|30 }` |
+| `POST /api/auth/register` | express-validator: email, password(8+), names |
+| `POST /api/auth/login` | express-validator: email, password |
+| `POST /api/ai/chat` | zod: `{ message: string(1..4000), threadId?: uuid }` |
+| `POST /api/connector/device/login` | zod: `{ email: email, password: string, deviceId?: string, deviceName?: string }` |
+| `POST /api/finance/pl-ai-explanation` | zod: `{ month: YYYY-MM, forceRegenerate?: bool }` |
+| `POST /api/finance/alerts/snooze` | zod: `{ ruleKey: string, days: 7\|30 }` |
+| `POST /api/finance/alerts/dismiss` | zod: `{ ruleKey: string }` |
+| `POST /api/finance/alerts/clear` | zod: `{ ruleKey: string }` |
+| `POST /api/admin/queue/retry` | zod: `{ failureId: uuid }` |
+| `POST /api/companies` | express-validator: name, industry, currency |
 
 ## Smoke Checklist (Railway)
 

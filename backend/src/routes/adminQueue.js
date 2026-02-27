@@ -1,11 +1,17 @@
 'use strict';
 
 const express = require('express');
+const { z } = require('zod');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/adminAuth');
+const { validateBody } = require('../middleware/validateBody');
 const { queue, QUEUE_NAME } = require('../worker/queue');
 const { isQueueResilientMode } = require('../config/redis');
+
+const retrySchema = z.object({
+  failureId: z.string().uuid('failureId must be a valid UUID'),
+});
 const {
   listRecentFailures,
   getFailureCountSince,
@@ -89,12 +95,9 @@ router.get('/failed', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/retry', authenticate, requireAdmin, async (req, res) => {
+router.post('/retry', authenticate, requireAdmin, validateBody(retrySchema), async (req, res) => {
   try {
-    const { failureId } = req.body || {};
-    if (!failureId) {
-      return res.status(400).json({ success: false, error: 'failureId is required' });
-    }
+    const { failureId } = req.validatedBody;
 
     const { JobFailure } = require('../models');
     const failure = await JobFailure.findByPk(failureId);
