@@ -1,8 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const { z } = require('zod');
 const { authenticate, requireCompany } = require('../middleware/auth');
 const { checkSubscriptionAccess } = require('../middleware/checkSubscriptionAccess');
+const { validateBody } = require('../middleware/validateBody');
 const { aiService, adminUsageService, planService, usageService } = require('../services');
+
+const chatSchema = z.object({
+  message: z.string().min(1, 'message is required').max(4000),
+  threadId: z.string().uuid().optional().nullable(),
+});
 const { AIChatThread, AIChatMessage } = require('../models');
 
 const buildThreadTitle = (text) => {
@@ -78,15 +85,9 @@ const ENFORCE_USAGE_LIMITS = process.env.ENFORCE_USAGE_LIMITS === 'true';
 const currentMonthKey = () => new Date().toISOString().slice(0, 7);
 
 // POST /api/ai/chat
-router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, async (req, res) => {
+router.post('/chat', authenticate, requireCompany, checkSubscriptionAccess, validateBody(chatSchema), async (req, res) => {
   try {
-    const { message, threadId } = req.body;
-    if (!message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Message is required'
-      });
-    }
+    const { message, threadId } = req.validatedBody;
 
     const companyId = req.companyId;
     const { caps } = await planService.getCompanyPlan(companyId);
