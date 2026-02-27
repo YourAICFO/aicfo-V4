@@ -39,6 +39,7 @@ const downloadRoutes = require('./routes/download');
 const connectorRoutes = require('./routes/connector');
 const { billingRouter, handleBillingWebhook } = require('./routes/billing');
 const settingsNotificationsRoutes = require('./routes/settingsNotifications');
+const adminQueueRoutes = require('./routes/adminQueue');
 
 
 const app = express();
@@ -169,6 +170,7 @@ app.use('/api/dev', devToolsRoutes);
 app.use('/api/admin/metrics', adminMetricsRoutes);
 app.use('/api/admin/connector', adminConnectorRoutes);
 app.use('/api/admin/ingestion', adminIngestionRoutes);
+app.use('/api/admin/queue', adminQueueRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/admin', adminRoutes);
 app.use('/download', downloadRoutes);
