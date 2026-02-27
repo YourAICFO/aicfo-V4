@@ -102,7 +102,18 @@ router.post('/retry', authenticate, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'DLQ entry not found' });
     }
 
-    const job = await enqueueJob(failure.jobName, failure.payload || {});
+    let job;
+    try {
+      job = await enqueueJob(failure.jobName, failure.payload || {});
+    } catch (enqueueErr) {
+      if (isQueueResilientMode() && !global.processJobDirectly) {
+        return res.status(503).json({
+          success: false,
+          error: 'Retry unavailable: queue is in resilient mode and the worker process is not running in this instance. Retry from the worker process or disable resilient mode.',
+        });
+      }
+      throw enqueueErr;
+    }
     await markResolved(failureId);
 
     logger.info({
