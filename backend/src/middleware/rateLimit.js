@@ -22,7 +22,9 @@ if (env.RATE_LIMIT_ENABLED && env.RATE_LIMIT_REDIS_ENABLED && process.env.REDIS_
       enableReadyCheck: false,
       connectTimeout: 5000,
       lazyConnect: true,
+      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 500, 2000)),
     });
+    client.on('error', () => {});
     client.connect().catch(() => {});
     redisStore = new RedisStore({ sendCommand: (...args) => client.call(...args) });
   } catch (_) {
