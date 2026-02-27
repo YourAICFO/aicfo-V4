@@ -147,7 +147,8 @@ function loadEnv() {
   const isProdLike = data.NODE_ENV === 'staging' || data.NODE_ENV === 'production';
   if (isProdLike && !data.ALLOWED_ORIGINS) {
     data.ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:3000';
-    if (!process.env.AICFO_ENV_WARNINGS_PRINTED) {
+    const isWorker = String(process.env.RAILWAY_PROCESS || '').toLowerCase() === 'worker';
+    if (!process.env.AICFO_ENV_WARNINGS_PRINTED && !isWorker) {
       console.warn('');
       console.warn('⚠  ALLOWED_ORIGINS was not set in staging/production; defaulting to:', data.ALLOWED_ORIGINS);
       console.warn('   Set ALLOWED_ORIGINS in your environment for production CORS.');
