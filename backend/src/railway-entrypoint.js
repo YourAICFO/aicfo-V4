@@ -7,6 +7,8 @@
 require('dotenv').config();
 const { loadEnv } = require('./config/env');
 loadEnv();
+// So the child process (server/worker) does not print the same env warnings again
+process.env.AICFO_ENV_WARNINGS_PRINTED = '1';
 
 const { spawn } = require('child_process');
 const path = require('path');

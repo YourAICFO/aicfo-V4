@@ -139,15 +139,17 @@ function loadEnv() {
   const isProdLike = data.NODE_ENV === 'staging' || data.NODE_ENV === 'production';
   if (isProdLike && !data.ALLOWED_ORIGINS) {
     data.ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:3000';
-    console.warn('');
-    console.warn('⚠  ALLOWED_ORIGINS was not set in staging/production; defaulting to:', data.ALLOWED_ORIGINS);
-    console.warn('   Set ALLOWED_ORIGINS in your environment for production CORS.');
-    console.warn('');
+    if (!process.env.AICFO_ENV_WARNINGS_PRINTED) {
+      console.warn('');
+      console.warn('⚠  ALLOWED_ORIGINS was not set in staging/production; defaulting to:', data.ALLOWED_ORIGINS);
+      console.warn('   Set ALLOWED_ORIGINS in your environment for production CORS.');
+      console.warn('');
+    }
   }
   _env = Object.freeze(data);
 
-  // Runtime warnings for optional-but-important vars in production
-  if (isProdLike) {
+  // Runtime warnings for optional-but-important vars in production (once per process tree)
+  if (isProdLike && !process.env.AICFO_ENV_WARNINGS_PRINTED) {
     const warnings = [];
     if (!_env.SENTRY_DSN) warnings.push('SENTRY_DSN not set — error tracking disabled');
     if (!_env.OPENAI_API_KEY) warnings.push('OPENAI_API_KEY not set — AI features will degrade');
