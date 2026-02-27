@@ -105,13 +105,9 @@ const schema = z
       });
     }
 
+    // ALLOWED_ORIGINS: required in prod in principle, but we apply a safe default so containers can start
     if (isProdLike && !data.ALLOWED_ORIGINS) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['ALLOWED_ORIGINS'],
-        message:
-          'ALLOWED_ORIGINS should be set in staging/production (comma-separated list of allowed CORS origins)',
-      });
+      // Don't abort; default will be applied in loadEnv() and a warning logged
     }
   });
 
@@ -139,10 +135,18 @@ function loadEnv() {
     process.exit(1);
   }
 
-  _env = Object.freeze(result.data);
+  let data = { ...result.data };
+  const isProdLike = data.NODE_ENV === 'staging' || data.NODE_ENV === 'production';
+  if (isProdLike && !data.ALLOWED_ORIGINS) {
+    data.ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:3000';
+    console.warn('');
+    console.warn('⚠  ALLOWED_ORIGINS was not set in staging/production; defaulting to:', data.ALLOWED_ORIGINS);
+    console.warn('   Set ALLOWED_ORIGINS in your environment for production CORS.');
+    console.warn('');
+  }
+  _env = Object.freeze(data);
 
   // Runtime warnings for optional-but-important vars in production
-  const isProdLike = _env.NODE_ENV === 'staging' || _env.NODE_ENV === 'production';
   if (isProdLike) {
     const warnings = [];
     if (!_env.SENTRY_DSN) warnings.push('SENTRY_DSN not set — error tracking disabled');

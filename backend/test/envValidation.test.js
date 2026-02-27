@@ -67,16 +67,15 @@ test('env validation — requires REDIS_URL in prod without resilient mode', () 
   assert.ok(msgs.some((m) => m.includes('REDIS_URL')));
 });
 
-test('env validation — requires ALLOWED_ORIGINS in production', () => {
+test('env validation — production accepts missing ALLOWED_ORIGINS (default applied in loadEnv)', () => {
   const result = envSchema.safeParse({
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
     REDIS_URL: 'redis://localhost:6379',
   });
-  assert.equal(result.success, false);
-  const msgs = result.error.issues.map((i) => i.message);
-  assert.ok(msgs.some((m) => m.includes('ALLOWED_ORIGINS')));
+  assert.equal(result.success, true);
+  assert.equal(result.data.ALLOWED_ORIGINS, undefined);
 });
 
 test('env validation — parses boolean env vars correctly', () => {

@@ -50,14 +50,12 @@ test('block3 env — rate limit vars accept overrides', () => {
   assert.equal(result.data.RATE_LIMIT_ENABLED, false);
 });
 
-test('block3 env — ALLOWED_ORIGINS still required in prod', () => {
+test('block3 env — production parses without ALLOWED_ORIGINS (loadEnv applies default)', () => {
   const result = envSchema.safeParse({
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://x:x@localhost/db',
     JWT_SECRET: 'a-valid-secret-that-is-at-least-32-characters-long',
     REDIS_URL: 'redis://localhost:6379',
   });
-  assert.equal(result.success, false);
-  const paths = result.error.issues.map((i) => i.path.join('.'));
-  assert.ok(paths.includes('ALLOWED_ORIGINS'));
+  assert.equal(result.success, true);
 });
