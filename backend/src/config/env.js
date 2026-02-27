@@ -65,6 +65,22 @@ const schema = z
     // ── Connector ──
     CONNECTOR_DOWNLOAD_URL: z.string().optional(),
 
+    // ── Rate Limiting ──
+    RATE_LIMIT_ENABLED: boolStr.default('true'),
+    RATE_LIMIT_REDIS_ENABLED: boolStr.default('true'),
+    RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(20),
+    RATE_LIMIT_AI_PER_MIN: z.coerce.number().int().positive().default(30),
+    RATE_LIMIT_ADMIN_PER_MIN: z.coerce.number().int().positive().default(60),
+    RATE_LIMIT_CONNECTOR_PER_MIN: z.coerce.number().int().positive().default(30),
+    RATE_LIMIT_BILLING_PER_MIN: z.coerce.number().int().positive().default(20),
+    RATE_LIMIT_JOBS_PER_MIN: z.coerce.number().int().positive().default(30),
+    RATE_LIMIT_GLOBAL_PER_MIN: z.coerce.number().int().positive().default(300),
+
+    // ── Monitoring ──
+    API_5XX_SPIKE_THRESHOLD: z.coerce.number().int().positive().default(20),
+    QUEUE_FAIL_SPIKE_THRESHOLD: z.coerce.number().int().positive().default(10),
+    QUEUE_MONITORING_ENABLED: boolStr.default('true'),
+
     // ── Deprecated / unused (kept for .env.example compat) ──
     FRONTEND_URL: z.string().optional(),
     CORS_ORIGIN: z.string().optional(),

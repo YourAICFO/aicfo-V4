@@ -11,7 +11,7 @@ const path = require('path');
 const { sequelize } = require('./models');
 const { logger, logError } = require('./utils/logger');
 const { requestContext } = require('./middleware/requestContext');
-const { authLimiter, connectorLimiter, aiLimiter } = require('./middleware/rateLimit');
+const { authLimiter, connectorLimiter, aiLimiter, billingLimiter, adminLimiter, jobsLimiter } = require('./middleware/rateLimit');
 const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./utils/sentry');
 
 // Import routes
@@ -158,7 +158,7 @@ app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/cash-balance', cashBalanceRoutes);
 app.use('/api/integrations', integrationRoutes);
-app.use('/api/jobs', jobRoutes);
+app.use('/api/jobs', jobsLimiter, jobRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/cfo', cfoQuestionRoutes);
@@ -167,16 +167,16 @@ app.use('/api/sync', syncStatusRoutes);
 app.use('/api/debtors', debtorsRoutes);
 app.use('/api/creditors', creditorsRoutes);
 app.use('/api/dev', devToolsRoutes);
-app.use('/api/admin/metrics', adminMetricsRoutes);
-app.use('/api/admin/connector', adminConnectorRoutes);
-app.use('/api/admin/ingestion', adminIngestionRoutes);
-app.use('/api/admin/queue', adminQueueRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/admin', adminRoutes);
+app.use('/api/admin/metrics', adminLimiter, adminMetricsRoutes);
+app.use('/api/admin/connector', adminLimiter, adminConnectorRoutes);
+app.use('/api/admin/ingestion', adminLimiter, adminIngestionRoutes);
+app.use('/api/admin/queue', adminLimiter, adminQueueRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/admin', adminLimiter, adminRoutes);
 app.use('/download', downloadRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/connector', connectorLimiter, connectorRoutes);
-app.use('/api/billing', billingRouter);
+app.use('/api/billing', billingLimiter, billingRouter);
 app.use('/api/settings/notifications', settingsNotificationsRoutes);
 
 
