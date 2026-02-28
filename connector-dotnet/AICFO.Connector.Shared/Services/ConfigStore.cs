@@ -57,6 +57,12 @@ public sealed class ConfigStore : IConfigStore
             return ConnectorConfig.Default();
         }
 
+        if (bytes[0] == 0x00)
+        {
+            RenameCorrupt(path, onCorrupt, "File begins with null byte (corrupt or binary)");
+            return ConnectorConfig.Default();
+        }
+
         int i = 0;
         while (i < bytes.Length && (bytes[i] == 0x20 || bytes[i] == 0x09 || bytes[i] == 0x0A || bytes[i] == 0x0D || bytes[i] == 0x00))
             i++;
