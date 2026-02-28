@@ -58,13 +58,14 @@ public sealed class ConfigStore : IConfigStore
         }
 
         int i = 0;
-        while (i < bytes.Length && (bytes[i] == 0x20 || bytes[i] == 0x09 || bytes[i] == 0x0A || bytes[i] == 0x0D))
+        while (i < bytes.Length && (bytes[i] == 0x20 || bytes[i] == 0x09 || bytes[i] == 0x0A || bytes[i] == 0x0D || bytes[i] == 0x00))
             i++;
-        if (i < bytes.Length && bytes[i] == 0x00)
+        if (i >= bytes.Length)
         {
-            RenameCorrupt(path, onCorrupt, "Leading null byte before first non-whitespace");
+            RenameCorrupt(path, onCorrupt, "File is empty or only whitespace/null");
             return ConnectorConfig.Default();
         }
+        bytes = bytes.AsSpan(i).ToArray();
 
         int nullCount = 0;
         foreach (var b in bytes)
@@ -151,7 +152,8 @@ public sealed class ConfigStore : IConfigStore
         try
         {
             var json = JsonSerializer.Serialize(config, JsonOptions);
-            File.WriteAllText(tmpPath, json, Utf8NoBom);
+            var bytes = Utf8NoBom.GetBytes(json);
+            File.WriteAllBytes(tmpPath, bytes);
 
             if (File.Exists(path))
                 File.Delete(path);

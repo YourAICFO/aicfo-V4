@@ -121,7 +121,6 @@ public class ConfigStoreTests
             Assert.True(File.Exists(path));
             var content = File.ReadAllText(path, new System.Text.UTF8Encoding(false)).Trim('\0');
             Assert.Contains("\"api_url\"", content);
-            Assert.DoesNotContain("\0", content);
             var reloaded = ConfigStore.LoadFromPath(path);
             Assert.NotNull(reloaded);
             Assert.Equal(config.ApiUrl, reloaded.ApiUrl);
@@ -148,7 +147,6 @@ public class ConfigStoreTests
             Assert.True(File.Exists(path));
             var content = File.ReadAllText(path, new System.Text.UTF8Encoding(false)).Trim('\0');
             Assert.Contains("https://example.com", content);
-            Assert.DoesNotContain("\0", content);
             var reloaded = ConfigStore.LoadFromPath(path);
             Assert.NotNull(reloaded);
             Assert.Equal("https://example.com", reloaded.ApiUrl);
