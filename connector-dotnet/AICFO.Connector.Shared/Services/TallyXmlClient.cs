@@ -12,7 +12,7 @@ public interface ITallyXmlClient
     Task<bool> TestConnectionAsync(ConnectorConfig config, CancellationToken cancellationToken);
     Task<bool> TestConnectionAsync(string host, int port, CancellationToken cancellationToken);
     /// <summary>Rich reachability check: GET / first (TallyPrime Server is Running = reachable); if unreachable returns reason (timeout/refused). If reachable but POST fails, ApiRequestFailure is set.</summary>
-    Task<TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken);
+    Task<AICFO.Connector.Shared.Models.TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken);
     Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, string? tallyCompanyName, CancellationToken cancellationToken);
 }
@@ -31,7 +31,7 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
     }
 
     /// <summary>Lightweight GET / first; if response contains "TallyPrime Server is Running" or valid Tally XML, server is reachable. Then optionally validate POST; if POST fails, still reachable but ApiRequestFailure set.</summary>
-    public async Task<TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken)
+    public async Task<AICFO.Connector.Shared.Models.TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken)
     {
         var baseUrl = $"http://{host}:{port}";
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -48,7 +48,7 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("Tally GET / returned {StatusCode} host={Host} port={Port}", response.StatusCode, host, port);
-                return new TallyReachabilityResult(
+                return new AICFO.Connector.Shared.Models.TallyReachabilityResult(
                     IsReachable: false,
                     UnreachableReason: $"HTTP {(int)response.StatusCode}",
                     ApiRequestFailure: null);
@@ -70,10 +70,10 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
                     logger.LogWarning(ex, "[INF] Tally POST List of Companies => Exception {Type}: {Message}", ex.GetType().Name, ex.Message);
                 }
 
-                return new TallyReachabilityResult(IsReachable: true, UnreachableReason: null, ApiRequestFailure: apiFailure);
+                return new AICFO.Connector.Shared.Models.TallyReachabilityResult(IsReachable: true, UnreachableReason: null, ApiRequestFailure: apiFailure);
             }
 
-            return new TallyReachabilityResult(
+            return new AICFO.Connector.Shared.Models.TallyReachabilityResult(
                 IsReachable: false,
                 UnreachableReason: "Unexpected response (not Tally server).",
                 ApiRequestFailure: null);
@@ -81,26 +81,26 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning("Tally health check timed out host={Host} port={Port}", host, port);
-            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
+            return new AICFO.Connector.Shared.Models.TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
         }
         catch (HttpRequestException ex)
         {
             var reason = ex.InnerException?.Message ?? ex.Message;
             var refused = reason.Contains("refused", StringComparison.OrdinalIgnoreCase) || reason.Contains("actively refused", StringComparison.OrdinalIgnoreCase);
             logger.LogWarning(ex, "Tally request failed host={Host} port={Port}", host, port);
-            return new TallyReachabilityResult(
+            return new AICFO.Connector.Shared.Models.TallyReachabilityResult(
                 IsReachable: false,
                 UnreachableReason: refused ? "Connection refused" : reason,
                 ApiRequestFailure: null);
         }
         catch (TaskCanceledException)
         {
-            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
+            return new AICFO.Connector.Shared.Models.TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Tally reachability check failed host={Host} port={Port}", host, port);
-            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: ex.Message, ApiRequestFailure: null);
+            return new AICFO.Connector.Shared.Models.TallyReachabilityResult(IsReachable: false, UnreachableReason: ex.Message, ApiRequestFailure: null);
         }
     }
 
