@@ -119,7 +119,7 @@ public class ConfigStoreTests
             var config = ConnectorConfig.Default();
             store.Save(config);
             Assert.True(File.Exists(path));
-            var content = File.ReadAllText(path);
+            var content = File.ReadAllText(path, new System.Text.UTF8Encoding(false));
             Assert.Contains("\"api_url\"", content);
             Assert.DoesNotContain("\0", content);
             var reloaded = ConfigStore.LoadFromPath(path);
@@ -146,7 +146,7 @@ public class ConfigStoreTests
             config.ApiUrl = "https://example.com";
             store.Save(config);
             Assert.True(File.Exists(path));
-            var content = File.ReadAllText(path);
+            var content = File.ReadAllText(path, new System.Text.UTF8Encoding(false));
             Assert.Contains("https://example.com", content);
             Assert.DoesNotContain("\0", content);
             var reloaded = ConfigStore.LoadFromPath(path);

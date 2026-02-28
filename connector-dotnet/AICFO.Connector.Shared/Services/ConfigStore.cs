@@ -151,8 +151,7 @@ public sealed class ConfigStore : IConfigStore
         try
         {
             var json = JsonSerializer.Serialize(config, JsonOptions);
-            var bytes = Utf8NoBom.GetBytes(json);
-            File.WriteAllBytes(tmpPath, bytes);
+            File.WriteAllText(tmpPath, json, Utf8NoBom);
 
             if (File.Exists(path))
             {
