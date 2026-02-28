@@ -9,7 +9,7 @@ namespace AICFO.Connector.Shared.Tests;
 
 public class TallyReachabilityTests
 {
-    /// <summary>GET / returns Running => IsReachable true even when POST fails (ApiRequestFailure set).</summary>
+    /// <summary>GET returns Running, POST returns empty envelope => IsReachable true; empty envelope is valid so ApiRequestFailure is null.</summary>
     [Fact]
     public async Task GetReachabilityAsync_GetReturnsRunning_ReturnsReachable()
     {
@@ -19,7 +19,7 @@ public class TallyReachabilityTests
         var result = await client.GetReachabilityAsync("127.0.0.1", 9000, CancellationToken.None);
         Assert.True(result.IsReachable);
         Assert.Null(result.UnreachableReason);
-        Assert.NotNull(result.ApiRequestFailure);
+        Assert.Null(result.ApiRequestFailure); // empty but well-formed ENVELOPE is valid (no companies loaded)
     }
 
     [Fact]
@@ -157,10 +157,11 @@ public class TallyReachabilityTests
     }
 
     [Fact]
-    public void IsTallyServerRunningResponse_XmlWithResponseElement_ReturnsTrue()
+    public void IsTallyServerRunningResponse_XmlWithResponseElementOnlyOk_ReturnsFalse()
     {
+        // Generic <RESPONSE>OK</RESPONSE> must NOT be treated as running (same as ResponseElementWithoutRunning).
         var body = "<?xml version=\"1.0\"?><RESPONSE>OK</RESPONSE>";
-        Assert.True(TallyXmlClient.IsTallyServerRunningResponse(body));
+        Assert.False(TallyXmlClient.IsTallyServerRunningResponse(body));
     }
 
     [Fact]
