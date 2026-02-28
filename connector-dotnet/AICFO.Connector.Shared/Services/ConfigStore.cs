@@ -152,12 +152,7 @@ public sealed class ConfigStore : IConfigStore
         {
             var json = JsonSerializer.Serialize(config, JsonOptions);
             var bytes = Utf8NoBom.GetBytes(json);
-
-            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, FileOptions.None))
-            {
-                fs.Write(bytes, 0, bytes.Length);
-                fs.Flush(true);
-            }
+            File.WriteAllBytes(tmpPath, bytes);
 
             if (File.Exists(path))
             {
