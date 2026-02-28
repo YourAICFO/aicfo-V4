@@ -42,6 +42,10 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Build and test connector (Shared.Tests)
+        shell: pwsh
+        run: dotnet test ./connector-dotnet/AICFO.Connector.Shared.Tests/AICFO.Connector.Shared.Tests.csproj -c Release --verbosity normal
+
       - name: Build Tray (Release)
         shell: pwsh
         run: |
@@ -167,11 +171,10 @@ jobs:
           name: AICFOConnectorSetup.msi
           path: connector-dotnet/out/AICFOConnectorSetup.msi
 
-  # Attach raw .msi to GitHub Release so /releases/latest/download/AICFOConnectorSetup.msi works.
-  # Runs on: release (published) OR workflow_dispatch with tag_name (attach to existing release).
+  # Attach MSI + portable ZIP to GitHub Release. Runs on: release (published) OR workflow_dispatch with tag_name.
   upload-msi-to-release:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
-    needs: build-msi
+    needs: [validate, build-msi]
     runs-on: windows-latest
     permissions:
       contents: write   # required to update release and upload assets
@@ -181,7 +184,11 @@ jobs:
         with:
           name: AICFOConnectorSetup.msi
 
-      # download-artifact may put the file at root or in a subfolder; ensure it is at workspace root for gh-release.
+      - name: Download portable ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AICFO-Connector-Portable-win-x64
+
       - name: Place MSI at workspace root
         shell: pwsh
         run: |
@@ -193,10 +200,39 @@ jobs:
           }
           if (-not (Test-Path $dest)) { throw "MSI not at workspace root" }
 
-      - name: Attach MSI to Release
+      - name: Place portable ZIP at workspace root
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Recurse -Filter "AICFO-Connector-Portable-win-x64.zip" -File | Select-Object -First 1
+          if (-not $zip) { throw "Portable ZIP not found in artifact" }
+          $dest = Join-Path $env:GITHUB_WORKSPACE "AICFO-Connector-Portable-win-x64.zip"
+          if (-not [string]::Equals($zip.FullName, $dest, [StringComparison]::OrdinalIgnoreCase)) {
+            Copy-Item -LiteralPath $zip.FullName -Destination $dest -Force
+          }
+          if (-not (Test-Path $dest)) { throw "Portable ZIP not at workspace root" }
+
+      - name: Verify release assets exist
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $msi = Join-Path $env:GITHUB_WORKSPACE "AICFOConnectorSetup.msi"
+          $zip = Join-Path $env:GITHUB_WORKSPACE "AICFO-Connector-Portable-win-x64.zip"
+          if (-not (Test-Path -LiteralPath $msi -PathType Leaf)) {
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse | Format-Table FullName
+            throw "Missing release asset: AICFOConnectorSetup.msi"
+          }
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse | Format-Table FullName
+            throw "Missing release asset: AICFO-Connector-Portable-win-x64.zip"
+          }
+          Write-Host "Both release assets present at workspace root."
+
+      - name: Attach MSI and portable ZIP to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: AICFOConnectorSetup.msi
+          files: |
+            AICFOConnectorSetup.msi
+            AICFO-Connector-Portable-win-x64.zip
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

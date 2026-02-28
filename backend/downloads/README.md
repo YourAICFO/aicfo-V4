@@ -33,6 +33,14 @@ This copies the MSI from the connector build output into `backend/downloads/AICF
    - From: `connector-dotnet\out\release\AICFOConnectorSetup.msi` or `connector-dotnet\out\AICFOConnectorSetup.msi` or `connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi`
    - To: **`backend/downloads/AICFOConnectorSetup.msi`**
 
+### Where to find the installable MSI after a build
+
+| Location | Use |
+|----------|-----|
+| `connector-dotnet\out\AICFOConnectorSetup.msi` | Primary build output |
+| `connector-dotnet\installer\bin\Release\AICFOConnectorSetup.msi` | WiX installer output |
+| `backend\downloads\AICFOConnectorSetup.msi` | Served by backend at `/download/connector` (installable) |
+
 ## Git
 
 - **`backend/downloads/*.msi`** is in `.gitignore`; do not commit MSI files.
