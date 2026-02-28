@@ -43,7 +43,22 @@ Open **AI CFO Connector** from desktop/start menu/tray icon.
 Tabs:
 - **Status**
   - Shows backend reachability, Tally reachability, last heartbeat, last sync, last result, last error.
-  - Actions: `Test Backend`, `Detect Tally`, `Test Tally`, `Sync Now`, `Sync All`, `Open Logs`.
+  - Actions: `Test Backend`, `Detect Tally`, `Test Tally`, `Sync Now`, `Sync All`, `Diagnostics / Connectivity Test`, `Copy Diagnostics`, `Open Logs`.
+
+### Diagnostics / Connectivity Test (for support)
+1. Open **AI CFO Connector** from the system tray (double‑click the tray icon or right‑click → Open Connector Control Panel).
+2. Go to the **Status** tab.
+3. Click **Diagnostics / Connectivity Test**.
+4. Wait a few seconds. The report is copied to the clipboard and written to the log file.
+5. Paste the report (Ctrl+V) into an email or support ticket. Tokens and passwords are redacted.
+
+The report shows PASS/FAIL for: Discovery, Backend health (GET /health), Tally reachability (GET then POST), Companies (if logged in), and Sync pipe.
+
+### Tally reachability
+- **Reachable:** The connector did GET http://host:port/ and the response contained "TallyPrime Server is Running" (or similar). Sync can proceed; if company list fails, the UI shows "Reachable (company list failed)".
+- **Unreachable (Timeout):** No response within 5 seconds. Check firewall, Tally port (default 9000), and that Tally/TallyPrime is running.
+- **Unreachable (Connection refused):** Nothing is listening on the port. Start Tally and ensure Tally.NET / XML is enabled.
+- **Sync trigger failed (access denied):** The tray and the connector service are running under different accounts. Restart the connector from the tray or run as Administrator; or restart the AICFO Connector Service from `services.msc`.
 - **Company Mapping**
   - Detect Tally companies from configured host/port.
   - Link mapping by pasting:

@@ -11,27 +11,109 @@ public interface ITallyXmlClient
 {
     Task<bool> TestConnectionAsync(ConnectorConfig config, CancellationToken cancellationToken);
     Task<bool> TestConnectionAsync(string host, int port, CancellationToken cancellationToken);
+    /// <summary>Rich reachability check: GET / first (TallyPrime Server is Running = reachable); if unreachable returns reason (timeout/refused). If reachable but POST fails, ApiRequestFailure is set.</summary>
+    Task<TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken);
     Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, string? tallyCompanyName, CancellationToken cancellationToken);
 }
 
 public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient> logger) : ITallyXmlClient
 {
+    private const int HealthCheckTimeoutSeconds = 5;
+
     public async Task<bool> TestConnectionAsync(ConnectorConfig config, CancellationToken cancellationToken)
         => await TestConnectionAsync(config.TallyHost, config.TallyPort, cancellationToken);
 
     public async Task<bool> TestConnectionAsync(string host, int port, CancellationToken cancellationToken)
     {
+        var result = await GetReachabilityAsync(host, port, cancellationToken);
+        return result.IsReachable;
+    }
+
+    /// <summary>Lightweight GET / first; if response contains "TallyPrime Server is Running" or valid Tally XML, server is reachable. Then optionally validate POST; if POST fails, still reachable but ApiRequestFailure set.</summary>
+    public async Task<TallyReachabilityResult> GetReachabilityAsync(string host, int port, CancellationToken cancellationToken)
+    {
+        var baseUrl = $"http://{host}:{port}";
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(HealthCheckTimeoutSeconds));
+
         try
         {
-            var response = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
-            return response.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase);
+            var getUrl = baseUrl + "/";
+            using var request = new HttpRequestMessage(HttpMethod.Get, getUrl);
+            using var response = await httpClient.SendAsync(request, timeoutCts.Token);
+            var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            logger.LogInformation("[INF] Tally GET {Url} => {StatusCode}", getUrl, (int)response.StatusCode);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Tally GET / returned {StatusCode} host={Host} port={Port}", response.StatusCode, host, port);
+                return new TallyReachabilityResult(
+                    IsReachable: false,
+                    UnreachableReason: $"HTTP {(int)response.StatusCode}",
+                    ApiRequestFailure: null);
+            }
+
+            if (IsTallyServerRunningResponse(body))
+            {
+                var apiFailure = (string?)null;
+                try
+                {
+                    var postResponse = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
+                    if (!postResponse.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase))
+                        apiFailure = "Company list request returned unexpected format.";
+                    logger.LogInformation("[INF] Tally POST List of Companies => {Result}", apiFailure is null ? "OK" : apiFailure);
+                }
+                catch (Exception ex)
+                {
+                    apiFailure = ex.Message;
+                    logger.LogWarning(ex, "[INF] Tally POST List of Companies => Exception {Type}: {Message}", ex.GetType().Name, ex.Message);
+                }
+
+                return new TallyReachabilityResult(IsReachable: true, UnreachableReason: null, ApiRequestFailure: apiFailure);
+            }
+
+            return new TallyReachabilityResult(
+                IsReachable: false,
+                UnreachableReason: "Unexpected response (not Tally server).",
+                ApiRequestFailure: null);
+        }
+        catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("Tally health check timed out host={Host} port={Port}", host, port);
+            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
+        }
+        catch (HttpRequestException ex)
+        {
+            var reason = ex.InnerException?.Message ?? ex.Message;
+            var refused = reason.Contains("refused", StringComparison.OrdinalIgnoreCase) || reason.Contains("actively refused", StringComparison.OrdinalIgnoreCase);
+            logger.LogWarning(ex, "Tally request failed host={Host} port={Port}", host, port);
+            return new TallyReachabilityResult(
+                IsReachable: false,
+                UnreachableReason: refused ? "Connection refused" : reason,
+                ApiRequestFailure: null);
+        }
+        catch (TaskCanceledException)
+        {
+            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: "Timeout", ApiRequestFailure: null);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Tally connection test failed host={Host} port={Port}", host, port);
-            return false;
+            logger.LogWarning(ex, "Tally reachability check failed host={Host} port={Port}", host, port);
+            return new TallyReachabilityResult(IsReachable: false, UnreachableReason: ex.Message, ApiRequestFailure: null);
         }
+    }
+
+    /// <summary>Public for testing. Returns true if the response body indicates Tally/TallyPrime server is running.</summary>
+    public static bool IsTallyServerRunningResponse(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return false;
+        var b = body.Trim();
+        if (b.Contains("TallyPrime Server is Running", StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Contains("Tally Server is Running", StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Contains("Tally", StringComparison.OrdinalIgnoreCase) && b.Contains("Running", StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.TrimStart().StartsWith("<", StringComparison.Ordinal) && b.Contains("<RESPONSE>", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     public async Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken)

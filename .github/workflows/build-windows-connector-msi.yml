@@ -51,6 +51,11 @@ jobs:
         run: |
           dotnet build ./connector-dotnet/AICFO.Connector.Tray/AICFO.Connector.Tray.csproj -c Release
 
+      - name: Build Service (Release)
+        shell: pwsh
+        run: |
+          dotnet build ./connector-dotnet/AICFO.Connector.Service/AICFO.Connector.Service.csproj -c Release
+
       - name: Publish Tray (win-x64, self-contained)
         shell: pwsh
         run: |

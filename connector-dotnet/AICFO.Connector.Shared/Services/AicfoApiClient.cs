@@ -108,14 +108,24 @@ public sealed class AicfoApiClient(HttpClient httpClient, ILogger<AicfoApiClient
     public async Task<List<WebCompany>> GetCompaniesAsync(string baseUrl, string authToken, bool useDeviceRoute, CancellationToken cancellationToken)
     {
         var route = useDeviceRoute ? "/api/connector/device/companies" : "/api/connector/companies";
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri(baseUrl, route));
+        var fullUrl = BuildApiUri(baseUrl, route);
+        using var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
         request.Headers.Authorization = new("Bearer", authToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var envelope = ParseEnvelope<JsonElement>(body);
+        logger.LogInformation("[INF] GetCompanies {Route} => {StatusCode}", route, (int)response.StatusCode);
+        var envelope = ParseEnvelope<JsonElement>(body ?? "");
         if (!response.IsSuccessStatusCode || !envelope.success)
         {
-            throw new InvalidOperationException(envelope.error ?? "Failed to fetch companies.");
+            var msg = envelope.error ?? "Failed to fetch companies.";
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                throw new UnauthorizedAccessException("Session expired. Please login again.");
+            if ((int)response.StatusCode >= 500)
+            {
+                var snippet = string.IsNullOrEmpty(body) ? "" : (body.Length <= 300 ? body : body.Substring(0, 300) + "...");
+                throw new InvalidOperationException($"{msg} Response: {LogRedaction.RedactSecrets(snippet)}");
+            }
+            throw new InvalidOperationException(msg);
         }
         var companiesData = envelope.data;
         if (companiesData.ValueKind != JsonValueKind.Array)

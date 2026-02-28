@@ -32,6 +32,9 @@ public sealed class DiscoveryService : IDiscoveryService
     /// <summary>Optional callback for safe diagnostics (e.g. set by Tray to log to Serilog). No secrets.</summary>
     public static Action<string>? LogWarning { get; set; }
 
+    /// <summary>Optional callback for HTTP request logging (method, URL, status, duration). Set by Tray for [INF] logs.</summary>
+    public static Action<string, int, long>? LogHttp { get; set; }
+
     private static string ConnectorVersion => typeof(DiscoveryService).Assembly.GetName().Version?.ToString(3) ?? "1.0";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -67,8 +70,12 @@ public sealed class DiscoveryService : IDiscoveryService
             };
             client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"AICFOConnector/{ConnectorVersion}");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var response = await client.GetAsync(url, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
             var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            LogHttp?.Invoke(url, (int)response.StatusCode, sw.ElapsedMilliseconds);
+
             var safeSnippet = TruncateForLog(json, 300);
 
             if (!response.IsSuccessStatusCode)

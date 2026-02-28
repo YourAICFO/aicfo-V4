@@ -6,7 +6,7 @@ using System.Linq;
 using Microsoft.Win32;
 using AICFO.Connector.Shared.Models;
 using AICFO.Connector.Shared.Services;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Serilog;
 
 namespace AICFO.Connector.Tray;
@@ -17,6 +17,19 @@ internal static class Program
     private static void Main()
     {
         WriteBootstrapLog("Tray starting at " + DateTime.UtcNow.ToString("O"));
+
+        Application.ThreadException += (_, e) =>
+        {
+            WriteBootstrapLog("UI thread exception: " + e.Exception);
+            try { Log.Error(e.Exception, "Unhandled UI thread exception"); } catch { }
+            e.Exception?.ToString();
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            WriteBootstrapLog("Unobserved task exception: " + e.Exception);
+            try { Log.Error(e.Exception, "Unobserved task exception"); } catch { }
+            e.SetObserved();
+        };
 
         try
         {
@@ -39,6 +52,7 @@ internal static class Program
 
             ConfigStore.LogWarning = msg => Log.Warning(msg);
             DiscoveryService.LogWarning = msg => Log.Warning(msg);
+            DiscoveryService.LogHttp = (url, statusCode, durationMs) => Log.Information("[INF] HTTP GET {Url} => {StatusCode} {Duration}ms", url, statusCode, durationMs);
 
             try
             {
@@ -50,12 +64,18 @@ internal static class Program
             }
 
             ApplicationConfiguration.Initialize();
+            var loggerFactory = LoggerFactory.Create(builder => builder.AddSerilog(Log.Logger, dispose: false));
+            var httpLogger = loggerFactory.CreateLogger("AICFO.Connector.Http");
+            var httpClient = new HttpClient(new LoggingHttpMessageHandler(new HttpClientHandler(), httpLogger))
+            {
+                Timeout = TimeSpan.FromSeconds(15)
+            };
             Application.Run(new TrayApplicationContext(
                 new ConfigStore(),
                 new CredentialStore(),
                 new SyncNowTriggerClient(),
-                new AicfoApiClient(new HttpClient(), NullLogger<AicfoApiClient>.Instance),
-                new TallyXmlClient(new HttpClient(), NullLogger<TallyXmlClient>.Instance),
+                new AicfoApiClient(httpClient, loggerFactory.CreateLogger<AicfoApiClient>()),
+                new TallyXmlClient(httpClient, loggerFactory.CreateLogger<TallyXmlClient>()),
                 new DiscoveryService()));
         }
         catch (Exception ex)
@@ -479,7 +499,7 @@ internal sealed class ConnectorControlPanel : Form
         var backendStatusRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
         backendStatusRow.Controls.Add(_backendStatus);
         var copyDiagnosticsBtn = new Button { Text = "Copy Diagnostics", Width = 120 };
-        copyDiagnosticsBtn.Click += (_, _) => CopyBackendDiagnostics();
+        copyDiagnosticsBtn.Click += (_, _) => { Log.Information("[INF] Action: Copy Backend Diagnostics"); CopyBackendDiagnostics(); };
         backendStatusRow.Controls.Add(copyDiagnosticsBtn);
         panel.Controls.Add(backendStatusRow, 1, 5);
         panel.Controls.Add(new Label { Text = "Tally", AutoSize = true }, 2, 5);
@@ -514,24 +534,26 @@ internal sealed class ConnectorControlPanel : Form
 
         var buttonBar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         var testBackend = new Button { Text = "Test Backend", Width = 120 };
-        testBackend.Click += async (_, _) => await TestBackendAsync();
+        testBackend.Click += async (_, _) => { Log.Information("[INF] Action: Test Backend"); await TestBackendAsync(); };
         var detectTally = new Button { Text = "Detect Tally", Width = 120 };
-        detectTally.Click += async (_, _) => await DetectTallyAsync();
+        detectTally.Click += async (_, _) => { Log.Information("[INF] Action: Detect Tally"); await DetectTallyAsync(); };
         var testTally = new Button { Text = "Test Tally", Width = 120 };
-        testTally.Click += async (_, _) => await TestTallyAsync();
+        testTally.Click += async (_, _) => { Log.Information("[INF] Action: Test Tally"); await TestTallyAsync(); };
         var syncNow = new Button { Text = "Sync Now", Width = 120 };
-        syncNow.Click += async (_, _) => await TriggerSelectedSyncAsync();
+        syncNow.Click += async (_, _) => { Log.Information("[INF] Action: Sync Now"); await TriggerSelectedSyncAsync(); };
         var syncAll = new Button { Text = "Sync All", Width = 120 };
-        syncAll.Click += async (_, _) => await TriggerSyncAllAsync();
+        syncAll.Click += async (_, _) => { Log.Information("[INF] Action: Sync All"); await TriggerSyncAllAsync(); };
         _checkForUpdatesButton = new Button { Text = "Check for updates", Width = 130 };
-        _checkForUpdatesButton.Click += async (_, _) => await RunDiscoveryAndApplyAsync(manualUpdateCheck: true);
+        _checkForUpdatesButton.Click += async (_, _) => { Log.Information("[INF] Action: Check for updates"); await RunDiscoveryAndApplyAsync(manualUpdateCheck: true); };
         var openLogs = new Button { Text = "Open Logs", Width = 120 };
-        openLogs.Click += (_, _) => OpenLogs();
+        openLogs.Click += (_, _) => { Log.Information("[INF] Action: Open Logs"); OpenLogs(); };
         var refreshStatus = new Button { Text = "Refresh Status", Width = 120 };
-        refreshStatus.Click += async (_, _) => await RefreshStatusGridAsync();
+        refreshStatus.Click += async (_, _) => { Log.Information("[INF] Action: Refresh Status"); await RefreshStatusGridAsync(); };
         var copyDiagnostics = new Button { Text = "Copy Diagnostics", Width = 130 };
-        copyDiagnostics.Click += (_, _) => CopySelectedDiagnostics();
-        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, _checkForUpdatesButton, refreshStatus, copyDiagnostics, openLogs]);
+        copyDiagnostics.Click += (_, _) => { Log.Information("[INF] Action: Copy Diagnostics"); CopySelectedDiagnostics(); };
+        var runDiagnostics = new Button { Text = "Diagnostics / Connectivity Test", Width = 200 };
+        runDiagnostics.Click += async (_, _) => { Log.Information("[INF] Action: Diagnostics / Connectivity Test"); await RunDiagnosticsAndCopyAsync(); };
+        buttonBar.Controls.AddRange([testBackend, detectTally, testTally, syncNow, syncAll, _checkForUpdatesButton, refreshStatus, copyDiagnostics, runDiagnostics, openLogs]);
         panel.Controls.Add(buttonBar, 0, 11);
         panel.SetColumnSpan(buttonBar, 4);
 
@@ -647,7 +669,7 @@ internal sealed class ConnectorControlPanel : Form
     private async Task RunDiscoveryAndApplyAsync(bool manualUpdateCheck)
     {
         var discoveryUrl = string.IsNullOrWhiteSpace(_config.DiscoveryUrl) ? _discoveryService.DefaultDiscoveryUrl : _config.DiscoveryUrl.Trim();
-        var (config, error) = await _discoveryService.FetchAsync(discoveryUrl, CancellationToken.None).ConfigureAwait(true);
+        var (config, error) = await _discoveryService.FetchAsync(discoveryUrl, CancellationToken.None).ConfigureAwait(false);
 
         if (config is not null)
         {
@@ -789,9 +811,9 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(_rememberMe, 1, 3);
 
         var loginButton = new Button { Text = "Login", Width = 120 };
-        loginButton.Click += async (_, _) => await LoginRecommendedAsync();
+        loginButton.Click += async (_, _) => { Log.Information("[INF] Action: Login"); await LoginRecommendedAsync(); };
         var copyLoginDiagnosticsButton = new Button { Text = "Copy Login Diagnostics", Width = 170 };
-        copyLoginDiagnosticsButton.Click += (_, _) => CopyLoginDiagnostics();
+        copyLoginDiagnosticsButton.Click += (_, _) => { Log.Information("[INF] Action: Copy Login Diagnostics"); CopyLoginDiagnostics(); };
         var loginButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         loginButtons.Controls.Add(loginButton);
         loginButtons.Controls.Add(copyLoginDiagnosticsButton);
@@ -800,13 +822,13 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(new Label { Text = "Web Company", AutoSize = true }, 0, 5);
         panel.Controls.Add(_webCompanyCombo, 1, 5);
         var refreshCompaniesButton = new Button { Text = "Refresh companies", Width = 140 };
-        refreshCompaniesButton.Click += async (_, _) => await RefreshDeviceLinkDataAsync();
+        refreshCompaniesButton.Click += async (_, _) => { Log.Information("[INF] Action: Refresh companies"); await RefreshDeviceLinkDataAsync(); };
         panel.Controls.Add(refreshCompaniesButton, 1, 6);
         panel.Controls.Add(_webCompaniesEmptyState, 1, 7);
         panel.Controls.Add(new Label { Text = "Tally Company", AutoSize = true }, 0, 6);
         panel.Controls.Add(_tallyCompanyCombo, 1, 8);
         var rescanTallyButton = new Button { Text = "Rescan Tally companies", Width = 170 };
-        rescanTallyButton.Click += async (_, _) => await DetectTallyAsync();
+        rescanTallyButton.Click += async (_, _) => { Log.Information("[INF] Action: Rescan Tally companies"); await DetectTallyAsync(); };
         panel.Controls.Add(rescanTallyButton, 1, 9);
         panel.Controls.Add(_tallyCompaniesEmptyState, 1, 10);
         panel.Controls.Add(new Label { Text = "Device ID", AutoSize = true }, 0, 11);
@@ -815,7 +837,7 @@ internal sealed class ConnectorControlPanel : Form
         panel.Controls.Add(_deviceName, 1, 12);
 
         _linkButton = new Button { Text = "LINK", Width = 120 };
-        _linkButton.Click += async (_, _) => await RegisterAndSaveMappingAsync();
+        _linkButton.Click += async (_, _) => { Log.Information("[INF] Action: Link"); await RegisterAndSaveMappingAsync(); };
         panel.Controls.Add(_linkButton, 1, 13);
         panel.Controls.Add(_mappingWarning, 1, 14);
 
@@ -823,11 +845,11 @@ internal sealed class ConnectorControlPanel : Form
         var detectButton = new Button { Text = "Detect Tally Companies", Width = 170 };
         detectButton.Click += async (_, _) => await DetectTallyAsync();
         var removeButton = new Button { Text = "Unlink Mapping", Width = 120 };
-        removeButton.Click += (_, _) => RemoveSelectedMapping();
+        removeButton.Click += async (_, _) => await RemoveSelectedMappingAsync();
         var reRegisterButton = new Button { Text = "Re-login", Width = 120 };
         reRegisterButton.Click += async (_, _) => await ReRegisterSelectedMappingAsync();
         var refreshLinksButton = new Button { Text = "Refresh links", Width = 120 };
-        refreshLinksButton.Click += async (_, _) => await RefreshDeviceLinkDataAsync();
+        refreshLinksButton.Click += async (_, _) => { Log.Information("[INF] Action: Refresh links"); await RefreshDeviceLinkDataAsync(); };
         _syncSelectedButton = new Button { Text = "Sync Selected", Width = 120 };
         _syncSelectedButton.Click += async (_, _) => await TriggerSelectedSyncAsync();
         mappingButtons.Controls.AddRange([detectButton, refreshLinksButton, removeButton, reRegisterButton, _syncSelectedButton]);
@@ -912,7 +934,13 @@ internal sealed class ConnectorControlPanel : Form
         var mapping = GetSelectedMapping();
         if (mapping is null)
         {
-            await _syncNowTriggerClient.TriggerAllAsync(CancellationToken.None);
+            var allResult = await _syncNowTriggerClient.TryTriggerAllAsync(CancellationToken.None);
+            if (!allResult.Success)
+            {
+                SetActionBanner(allResult.ErrorMessage ?? "Sync trigger failed.", Color.Firebrick);
+                AddRecentAction("Sync trigger failed");
+                return;
+            }
             SetActionBanner("No mapping selected. Triggered sync for all mappings.", Color.DarkGoldenrod);
             return;
         }
@@ -929,7 +957,13 @@ internal sealed class ConnectorControlPanel : Form
 
         try
         {
-            await _syncNowTriggerClient.TriggerMappingAsync(mapping.Id, CancellationToken.None);
+            var triggerResult = await _syncNowTriggerClient.TryTriggerMappingAsync(mapping.Id, CancellationToken.None);
+            if (!triggerResult.Success)
+            {
+                SetActionBanner(triggerResult.ErrorMessage ?? "Sync trigger failed.", Color.Firebrick);
+                AddRecentAction("Sync trigger failed");
+                return;
+            }
             var completed = await WaitForSyncCompletionAsync(mapping.Id, previousSyncAt, TimeSpan.FromMinutes(5));
             if (completed is null)
             {
@@ -948,9 +982,9 @@ internal sealed class ConnectorControlPanel : Form
                 AddRecentAction($"Sync OK at {FormatDate(completed.LastSyncAt, "now")}");
             }
         }
-        catch
+        catch (Exception ex)
         {
-            SetActionBanner("Sync failed. Please retry.", Color.Firebrick);
+            SetActionBanner(Truncate(ex.Message, 120), Color.Firebrick);
             AddRecentAction("Sync trigger failed");
         }
         finally
@@ -973,7 +1007,8 @@ internal sealed class ConnectorControlPanel : Form
     private async Task TestBackendAsync()
     {
         SaveGlobalSettings();
-        var backendOk = await _apiClient.TestBackendReachableAsync(_config.ApiUrl, CancellationToken.None);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var backendOk = await _apiClient.TestBackendReachableAsync(_config.ApiUrl, cts.Token);
         _backendStatus.Text = backendOk ? "Reachable" : "Unreachable";
 
         var mapping = GetSelectedMapping();
@@ -1303,7 +1338,7 @@ internal sealed class ConnectorControlPanel : Form
             SetLinkFlowEnabled(_webCompanyCombo.Items.Count > 0 && _tallyCompanyCombo.Items.Count > 0);
             if (_webCompanyCombo.Items.Count == 0)
             {
-                SetActionBanner("No companies found. Create one in AICFO web portal, then click Refresh companies.", Color.DarkGoldenrod);
+                SetActionBanner("No companies found; create a company in web app, then click Refresh companies.", Color.DarkGoldenrod);
             }
             else if (_tallyCompanyCombo.Items.Count == 0)
             {
@@ -1314,9 +1349,25 @@ internal sealed class ConnectorControlPanel : Form
                 SetActionBanner("No companies linked yet. Select both companies and click Link.", Color.DimGray);
             }
         }
-        catch
+        catch (UnauthorizedAccessException)
         {
-            SetActionBanner("Unable to refresh companies right now. Please retry.", Color.Firebrick);
+            _deviceAuthToken = null;
+            _credentialStore.DeleteDeviceAuthToken();
+            _webCompanyCombo.Items.Clear();
+            _webCompanyCombo.Enabled = false;
+            _deviceLinks.Clear();
+            SetLinkFlowEnabled(false);
+            SetActionBanner("Session expired. Please login again.", Color.Firebrick);
+            Log.Warning("Refresh companies: Session expired (401)");
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("Response:", StringComparison.Ordinal))
+                Log.Warning(ex, "Refresh companies failed (e.g. 500). Response snippet in message.");
+            else
+                Log.Warning(ex, "Refresh companies failed");
+            SetActionBanner("Could not fetch companies: " + TruncateForUi(msg, 120), Color.Firebrick);
         }
     }
 
@@ -1367,20 +1418,27 @@ internal sealed class ConnectorControlPanel : Form
         SaveGlobalSettings();
         var host = string.IsNullOrWhiteSpace(_config.TallyHost) ? "127.0.0.1" : _config.TallyHost.Trim();
         var port = _config.TallyPort;
-        var ok = await _tallyClient.TestConnectionAsync(host, port, CancellationToken.None);
-        if (!ok)
+        var result = await _tallyClient.GetReachabilityAsync(host, port, CancellationToken.None);
+        if (result.IsReachable)
         {
-            _tallyStatus.Text = "Unreachable";
-            return;
+            if (!string.IsNullOrWhiteSpace(result.ApiRequestFailure))
+                _tallyStatus.Text = "Reachable (API request failed: " + result.ApiRequestFailure + ")";
+            else
+            {
+                try
+                {
+                    var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
+                    _tallyStatus.Text = $"Reachable ({names.Count} companies)";
+                }
+                catch (Exception ex)
+                {
+                    _tallyStatus.Text = "Reachable (API request failed: " + ex.Message + ")";
+                }
+            }
         }
-        try
+        else
         {
-            var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
-            _tallyStatus.Text = $"Connected ({names.Count} companies)";
-        }
-        catch
-        {
-            _tallyStatus.Text = "Reachable (company list failed)";
+            _tallyStatus.Text = string.IsNullOrWhiteSpace(result.UnreachableReason) ? "Unreachable" : $"Unreachable ({result.UnreachableReason})";
         }
     }
 
@@ -1392,34 +1450,34 @@ internal sealed class ConnectorControlPanel : Form
 
         foreach (var port in candidates)
         {
+            var reachability = await _tallyClient.GetReachabilityAsync(host, port, CancellationToken.None);
+            if (!reachability.IsReachable)
+                continue;
             try
             {
                 var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
-                if (names.Count > 0)
-                {
-                    _config.TallyHost = host;
-                    _config.TallyPort = port;
-                    _tallyHost.Text = host;
-                    _tallyPort.Value = Math.Clamp(port, 1, 65535);
-                    _tallyCompanyCombo.Items.Clear();
-                    foreach (var name in names) _tallyCompanyCombo.Items.Add(name);
-                    if (_tallyCompanyCombo.Items.Count > 0) _tallyCompanyCombo.SelectedIndex = 0;
-                    _tallyStatus.Text = $"Detected ({host}:{port}, {names.Count} companies)";
-                    SafeSaveConfig();
-                    await RefreshDeviceLinkDataAsync();
-                    _tallyCompaniesEmptyState.Visible = false;
-                    return;
-                }
+                _config.TallyHost = host;
+                _config.TallyPort = port;
+                _tallyHost.Text = host;
+                _tallyPort.Value = Math.Clamp(port, 1, 65535);
+                _tallyCompanyCombo.Items.Clear();
+                foreach (var name in names) _tallyCompanyCombo.Items.Add(name);
+                if (_tallyCompanyCombo.Items.Count > 0) _tallyCompanyCombo.SelectedIndex = 0;
+                _tallyStatus.Text = names.Count > 0 ? $"Detected ({host}:{port}, {names.Count} companies)" : $"Reachable ({host}:{port}; no companies in list)";
+                SafeSaveConfig();
+                await RefreshDeviceLinkDataAsync();
+                _tallyCompaniesEmptyState.Visible = _tallyCompanyCombo.Items.Count == 0;
+                return;
             }
-            catch
+            catch (Exception ex)
             {
-                // Try next candidate.
+                Log.Warning(ex, "Tally company list failed at {Host}:{Port}", host, port);
             }
         }
 
         _tallyStatus.Text = "Detection failed";
         _tallyCompaniesEmptyState.Visible = true;
-        MessageBox.Show("Could not detect Tally. Verify host/port and ensure Tally company is open.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show("Could not detect Tally. Ensure Tally/TallyPrime is running and port (e.g. 9000) is correct. In Tally, enable Tally.NET or allow XML requests.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void SaveGlobalSettings()
@@ -1474,7 +1532,7 @@ internal sealed class ConnectorControlPanel : Form
         MessageBox.Show("Legacy manual linking is disabled in this build.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
-    private void RemoveSelectedMapping()
+    private async Task RemoveSelectedMappingAsync()
     {
         if (_mappingsList.SelectedItems.Count == 0) return;
         var mappingId = _mappingsList.SelectedItems[0].Tag?.ToString();
@@ -1495,7 +1553,7 @@ internal sealed class ConnectorControlPanel : Form
         {
             if (!string.IsNullOrWhiteSpace(_deviceAuthToken) && !string.IsNullOrWhiteSpace(mapping.LinkId))
             {
-                _apiClient.UnlinkDeviceLinkAsync(_config.ApiUrl, _deviceAuthToken, mapping.LinkId, CancellationToken.None).GetAwaiter().GetResult();
+                await _apiClient.UnlinkDeviceLinkAsync(_config.ApiUrl, _deviceAuthToken, mapping.LinkId, CancellationToken.None);
             }
         }
         catch
@@ -1507,9 +1565,9 @@ internal sealed class ConnectorControlPanel : Form
         _credentialStore.DeleteMappingToken(mapping.Id);
         SafeSaveConfig();
         AddRecentAction($"Unlinked: {mapping.WebCompanyName ?? "Web"} ↔ {mapping.TallyCompanyName}");
-        _ = RefreshDeviceLinkDataAsync();
+        await RefreshDeviceLinkDataAsync();
         LoadConfig();
-        _ = RefreshStatusGridAsync();
+        await RefreshStatusGridAsync();
     }
 
     private async Task ReRegisterSelectedMappingAsync()
@@ -1798,6 +1856,119 @@ internal sealed class ConnectorControlPanel : Form
 
         Clipboard.SetText(diagnostics);
         MessageBox.Show("Diagnostics copied to clipboard.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private async Task RunDiagnosticsAndCopyAsync()
+    {
+        SaveGlobalSettings();
+        var report = await BuildFullDiagnosticsReportAsync();
+        Log.Information("Diagnostics report:\n{Report}", report);
+        try
+        {
+            Clipboard.SetText(report);
+            MessageBox.Show("Diagnostics report copied to clipboard and written to log. You can paste it for support.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Clipboard copy failed");
+            MessageBox.Show($"Report generated but clipboard failed: {ex.Message}\n\nSave the following to a file:\n\n{Truncate(report, 2000)}...", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task<string> BuildFullDiagnosticsReportAsync()
+    {
+        var lines = new List<string>
+        {
+            "=== AI CFO Connector Diagnostics ===",
+            $"Generated: {DateTime.UtcNow:O} (UTC)",
+            $"Machine: {Environment.MachineName}",
+            ""
+        };
+
+        var apiUrl = (_config.ApiUrl ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(apiUrl)) apiUrl = "(none)";
+        lines.Add($"[Backend] ApiUrl: {apiUrl}");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        if (!string.IsNullOrWhiteSpace(_config.ApiUrl))
+        {
+            try
+            {
+                var backendOk = await _apiClient.TestBackendReachableAsync(_config.ApiUrl, cts.Token);
+                lines.Add($"[Backend Health] GET /health: {(backendOk ? "PASS" : "FAIL")}");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"[Backend Health] FAIL: {Redact(ex.ToString())}");
+            }
+        }
+        else
+        {
+            lines.Add("[Backend Health] SKIP (no ApiUrl)");
+        }
+
+        try
+        {
+            var (discConfig, discError) = await _discoveryService.FetchAsync(null, cts.Token);
+            lines.Add(discConfig is not null ? "[Discovery] PASS" : $"[Discovery] FAIL: {Redact(discError ?? "unknown")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"[Discovery] FAIL: {Redact(ex.ToString())}");
+        }
+
+        var tallyHost = string.IsNullOrWhiteSpace(_config.TallyHost) ? "127.0.0.1" : _config.TallyHost.Trim();
+        var tallyPort = _config.TallyPort;
+        lines.Add($"[Tally] Host: {tallyHost} Port: {tallyPort}");
+        try
+        {
+            var tallyResult = await _tallyClient.GetReachabilityAsync(tallyHost, tallyPort, cts.Token);
+            if (tallyResult.IsReachable)
+                lines.Add($"[Tally Reachability] PASS (ApiRequestFailure: {tallyResult.ApiRequestFailure ?? "none"})");
+            else
+                lines.Add($"[Tally Reachability] FAIL: {tallyResult.UnreachableReason ?? "unreachable"}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"[Tally Reachability] FAIL: {Redact(ex.ToString())}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_deviceAuthToken) && !string.IsNullOrWhiteSpace(_config.ApiUrl))
+        {
+            lines.Add("[Companies] Token present, fetching...");
+            try
+            {
+                var companies = await _apiClient.GetCompaniesAsync(_config.ApiUrl, _deviceAuthToken, true, cts.Token);
+                lines.Add($"[Companies] PASS (count={companies.Count})");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                lines.Add("[Companies] FAIL: Session expired (401)");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"[Companies] FAIL: {Redact(ex.Message)}");
+            }
+        }
+        else
+        {
+            lines.Add("[Companies] SKIP (not logged in)");
+        }
+
+        var pipeResult = await _syncNowTriggerClient.TryTriggerAllAsync(CancellationToken.None);
+        lines.Add(pipeResult.Success ? "[Sync Pipe] PASS" : $"[Sync Pipe] FAIL: {Redact(pipeResult.ErrorMessage ?? "unknown")}");
+        if (pipeResult.IsPermissionMismatch)
+            lines.Add("[Sync Pipe] Hint: Worker may be running with different privileges. Restart connector or run as Admin.");
+
+        lines.Add("");
+        lines.Add("=== End Diagnostics ===");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string Redact(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return LogRedaction.RedactSecrets(value);
     }
 
     private static string FormatDate(DateTimeOffset? value, string fallback = "-") => value?.ToLocalTime().ToString("g") ?? fallback;
