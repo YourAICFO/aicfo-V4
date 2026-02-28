@@ -154,28 +154,8 @@ public sealed class ConfigStore : IConfigStore
             File.WriteAllText(tmpPath, json, Utf8NoBom);
 
             if (File.Exists(path))
-            {
-                try
-                {
-                    File.Replace(tmpPath, path, destinationBackupFileName: null);
-                }
-                catch (IOException)
-                {
-                    try
-                    {
-                        File.Delete(path);
-                        File.Move(tmpPath, path);
-                    }
-                    catch
-                    {
-                        throw;
-                    }
-                }
-            }
-            else
-            {
-                File.Move(tmpPath, path);
-            }
+                File.Delete(path);
+            File.Move(tmpPath, path);
         }
         finally
         {
