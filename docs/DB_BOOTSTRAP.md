@@ -34,12 +34,15 @@ npm run db:bootstrap    # same as db:migrate — creates from scratch
 
 ## Railway
 
-- `prestart` hook runs `db:migrate` automatically on every deploy.
-- For first deploy, the blank-DB bootstrap handles everything.
-- To re-run manually: Railway console → `npm run db:bootstrap`.
+- **DATABASE_URL** must be set on the Backend service (Postgres public URL from Railway Postgres → Connect).
+- **Deploy**: `prestart` runs `npm run db:migrate` (i.e. `node src/db/migrate.js`) on every deploy, so pending SQL migrations are applied automatically.
+- For first deploy, blank-DB bootstrap creates core tables; thereafter only new `.sql` migrations run.
+- **One-off migrate** (e.g. after adding a migration): Redeploy the backend, or in Railway shell run `npm run db:migrate`.
+- To re-run full bootstrap on blank DB: Railway shell → `npm run db:bootstrap`.
 
 ## Troubleshooting
 
 - **"relation X does not exist"**: Run `npm run db:bootstrap` (full bootstrap).
+- **"column Company.createdAt does not exist"**: Migration `2026-02-28-companies-timestamps.sql` adds `created_at`/`updated_at` to `companies`. Ensure `db:migrate` has run (deploy or `npm run db:migrate`).
 - **"UUID default missing"**: The migration runner patches these automatically.
 - **Check schema**: `npm run db:check` verifies critical columns exist.
