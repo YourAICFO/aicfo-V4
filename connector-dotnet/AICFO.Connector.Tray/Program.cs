@@ -1422,7 +1422,7 @@ internal sealed class ConnectorControlPanel : Form
         if (result.IsReachable)
         {
             if (!string.IsNullOrWhiteSpace(result.ApiRequestFailure))
-                _tallyStatus.Text = "Reachable (API request failed: " + result.ApiRequestFailure + ")";
+                _tallyStatus.Text = $"Server running on port {port} but XML API not enabled: {result.ApiRequestFailure}";
             else
             {
                 try
@@ -1432,7 +1432,7 @@ internal sealed class ConnectorControlPanel : Form
                 }
                 catch (Exception ex)
                 {
-                    _tallyStatus.Text = "Reachable (API request failed: " + ex.Message + ")";
+                    _tallyStatus.Text = $"Server running on port {port} but XML API not enabled: {ex.Message}";
                 }
             }
         }
@@ -1447,12 +1447,22 @@ internal sealed class ConnectorControlPanel : Form
         SaveGlobalSettings();
         var host = string.IsNullOrWhiteSpace(_config.TallyHost) ? "127.0.0.1" : _config.TallyHost.Trim();
         var candidates = new[] { 9000, _config.TallyPort, 9001, 9002 }.Distinct().ToList();
+        var xmlDisabledPorts = new List<int>();
 
         foreach (var port in candidates)
         {
             var reachability = await _tallyClient.GetReachabilityAsync(host, port, CancellationToken.None);
             if (!reachability.IsReachable)
                 continue;
+
+            // Port responds to GET (server is running) but POST says XML API not enabled — skip.
+            if (!string.IsNullOrWhiteSpace(reachability.ApiRequestFailure))
+            {
+                xmlDisabledPorts.Add(port);
+                Log.Warning("Tally port {Port} is reachable but XML API is not enabled: {Reason}", port, reachability.ApiRequestFailure);
+                continue;
+            }
+
             try
             {
                 var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
@@ -1475,9 +1485,26 @@ internal sealed class ConnectorControlPanel : Form
             }
         }
 
-        _tallyStatus.Text = "Detection failed";
+        // Detection failed — give a useful hint when XML-disabled ports were found.
         _tallyCompaniesEmptyState.Visible = true;
-        MessageBox.Show("Could not detect Tally. Ensure Tally/TallyPrime is running and port (e.g. 9000) is correct. In Tally, enable Tally.NET or allow XML requests.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        if (xmlDisabledPorts.Count > 0)
+        {
+            var portList = string.Join(", ", xmlDisabledPorts);
+            _tallyStatus.Text = $"Server running on port(s) {portList} but XML API not enabled";
+            MessageBox.Show(
+                $"Tally is running on port(s) {portList} but the XML API is not enabled.\n\n" +
+                "In TallyPrime, go to:\n" +
+                "  Gateway of Tally → F12: Configure → Advanced Config → Enable XML (TSS) or Tally.NET connector.\n\n" +
+                "After enabling, click Detect Tally again.",
+                "AI CFO Connector — XML API not enabled",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        else
+        {
+            _tallyStatus.Text = "Detection failed";
+            MessageBox.Show("Could not detect Tally. Ensure Tally/TallyPrime is running and port (e.g. 9000) is correct. In Tally, enable Tally.NET or allow XML requests.", "AI CFO Connector", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void SaveGlobalSettings()
@@ -1935,23 +1962,27 @@ internal sealed class ConnectorControlPanel : Form
 
         if (!string.IsNullOrWhiteSpace(_deviceAuthToken) && !string.IsNullOrWhiteSpace(_config.ApiUrl))
         {
-            lines.Add("[Companies] Token present, fetching...");
+            lines.Add("[Login] Token present — verifying...");
             try
             {
                 var companies = await _apiClient.GetCompaniesAsync(_config.ApiUrl, _deviceAuthToken, true, cts.Token);
+                lines.Add($"[Login] PASS (session valid)");
                 lines.Add($"[Companies] PASS (count={companies.Count})");
             }
             catch (UnauthorizedAccessException)
             {
-                lines.Add("[Companies] FAIL: Session expired (401)");
+                lines.Add("[Login] FAIL: Session expired (401) — re-login required");
+                lines.Add("[Companies] SKIP (not authenticated)");
             }
             catch (Exception ex)
             {
+                lines.Add($"[Login] PASS (token present)");
                 lines.Add($"[Companies] FAIL: {Redact(ex.Message)}");
             }
         }
         else
         {
+            lines.Add("[Login] SKIP (not logged in)");
             lines.Add("[Companies] SKIP (not logged in)");
         }
 

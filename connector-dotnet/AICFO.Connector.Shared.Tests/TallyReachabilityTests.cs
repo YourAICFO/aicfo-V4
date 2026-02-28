@@ -56,6 +56,85 @@ public class TallyReachabilityTests
         }
     }
 
+    // ── ClassifyPostResponse unit tests ─────────────────────────────────────────
+
+    /// <summary>POST returns "Unknown Request" => ApiRequestFailure contains "Unknown Request".</summary>
+    [Fact]
+    public async Task GetReachabilityAsync_PostReturnsUnknownRequest_SetsApiRequestFailure()
+    {
+        var getResponse = "<RESPONSE>TallyPrime Server is Running</RESPONSE>";
+        var postResponse = "<RESPONSE>Unknown Request, cannot be processed</RESPONSE>";
+        var handler = new TallyMockHandler(getResponse, postResponse);
+        var client = new TallyXmlClient(new HttpClient(handler), NullLogger<TallyXmlClient>.Instance);
+        var result = await client.GetReachabilityAsync("127.0.0.1", 9000, CancellationToken.None);
+        Assert.True(result.IsReachable, "Server should be reachable (GET passed)");
+        Assert.NotNull(result.ApiRequestFailure);
+        Assert.Contains("Unknown Request", result.ApiRequestFailure, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>POST returns a LINEERROR element => ApiRequestFailure contains the extracted error text.</summary>
+    [Fact]
+    public async Task GetReachabilityAsync_PostReturnsLineError_SetsApiRequestFailureWithErrorText()
+    {
+        var getResponse = "<RESPONSE>TallyPrime Server is Running</RESPONSE>";
+        var postResponse = "<ENVELOPE><BODY><LINEERROR>Access denied to company data</LINEERROR></BODY></ENVELOPE>";
+        var handler = new TallyMockHandler(getResponse, postResponse);
+        var client = new TallyXmlClient(new HttpClient(handler), NullLogger<TallyXmlClient>.Instance);
+        var result = await client.GetReachabilityAsync("127.0.0.1", 9000, CancellationToken.None);
+        Assert.True(result.IsReachable, "Server should be reachable (GET passed)");
+        Assert.NotNull(result.ApiRequestFailure);
+        Assert.Contains("Access denied to company data", result.ApiRequestFailure, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── ClassifyPostResponse direct tests ───────────────────────────────────────
+
+    [Fact]
+    public void ClassifyPostResponse_UnknownRequest_ReturnsFailureMessage()
+    {
+        var response = "<RESPONSE>Unknown Request, cannot be processed</RESPONSE>";
+        var result = TallyXmlClient.ClassifyPostResponse(response);
+        Assert.NotNull(result);
+        Assert.Contains("Unknown Request", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ClassifyPostResponse_LineError_ReturnsExtractedText()
+    {
+        var response = "<ENVELOPE><LINEERROR>Invalid company license</LINEERROR></ENVELOPE>";
+        var result = TallyXmlClient.ClassifyPostResponse(response);
+        Assert.NotNull(result);
+        Assert.Contains("Invalid company license", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ClassifyPostResponse_ValidEnvelope_ReturnsNull()
+    {
+        var response = "<ENVELOPE><BODY><COMPANYNAME>Test Co</COMPANYNAME></BODY></ENVELOPE>";
+        var result = TallyXmlClient.ClassifyPostResponse(response);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ClassifyPostResponse_EmptyEnvelope_ReturnsNull()
+    {
+        // An empty but well-formed ENVELOPE is a valid response (no companies loaded).
+        var response = "<ENVELOPE></ENVELOPE>";
+        var result = TallyXmlClient.ClassifyPostResponse(response);
+        Assert.Null(result);
+    }
+
+    // ── Regression: <RESPONSE>OK</RESPONSE> must NOT be treated as running server ─
+
+    [Fact]
+    public void IsTallyServerRunningResponse_ResponseElementWithoutRunning_ReturnsFalse()
+    {
+        // Before the fix, the <RESPONSE> catch-all returned true for this — causing
+        // gateway/license pages to be treated as a live Tally server.
+        var body = "<RESPONSE>OK</RESPONSE>";
+        Assert.False(TallyXmlClient.IsTallyServerRunningResponse(body),
+            "Generic <RESPONSE>OK</RESPONSE> must NOT be treated as a running Tally server");
+    }
+
     [Fact]
     public void IsTallyServerRunningResponse_TallyPrimeServerIsRunning_ReturnsTrue()
     {

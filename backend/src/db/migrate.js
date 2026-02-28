@@ -234,6 +234,7 @@ const columnExists = async (table, column) => {
 const SCHEMA_CHECKS = [
   ['users', 'id'], ['users', 'email'], ['users', 'password_hash'],
   ['companies', 'id'], ['companies', 'owner_id'],
+  ['companies', 'created_at'], ['companies', 'updated_at'],
   ['subscriptions', 'company_id'], ['subscriptions', 'plan_type'],
   ['financial_transactions', 'company_id'], ['financial_transactions', 'amount'],
   ['schema_migrations', 'filename'],

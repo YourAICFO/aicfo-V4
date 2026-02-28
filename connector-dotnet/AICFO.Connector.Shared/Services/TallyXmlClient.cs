@@ -60,8 +60,7 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
                 try
                 {
                     var postResponse = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
-                    if (!postResponse.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase))
-                        apiFailure = "Company list request returned unexpected format.";
+                    apiFailure = ClassifyPostResponse(postResponse);
                     logger.LogInformation("[INF] Tally POST List of Companies => {Result}", apiFailure is null ? "OK" : apiFailure);
                 }
                 catch (Exception ex)
@@ -111,9 +110,45 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         var b = body.Trim();
         if (b.Contains("TallyPrime Server is Running", StringComparison.OrdinalIgnoreCase)) return true;
         if (b.Contains("Tally Server is Running", StringComparison.OrdinalIgnoreCase)) return true;
+        // Require both "Tally" and "Running" for generic matches — do NOT match <RESPONSE> alone,
+        // as license pages / gateways may wrap arbitrary content in a <RESPONSE> element.
         if (b.Contains("Tally", StringComparison.OrdinalIgnoreCase) && b.Contains("Running", StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.TrimStart().StartsWith("<", StringComparison.Ordinal) && b.Contains("<RESPONSE>", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    /// <summary>
+    /// Classifies a Tally POST response body. Returns null when the response is valid (contains company data),
+    /// or a human-readable ApiRequestFailure string for known error patterns.
+    /// Public for testing.
+    /// </summary>
+    public static string? ClassifyPostResponse(string? postResponse)
+    {
+        if (string.IsNullOrWhiteSpace(postResponse))
+            return "Empty response from Tally XML API.";
+
+        // "Unknown Request" — port is a gateway/license server, not an XML export endpoint.
+        if (postResponse.Contains("Unknown Request", StringComparison.OrdinalIgnoreCase))
+            return "Tally XML API is not enabled on this port (Unknown Request). " +
+                   "Enable XML import/export in Tally Gateway settings.";
+
+        // <LINEERROR> — Tally returned a structured error.
+        var lineErrorStart = postResponse.IndexOf("<LINEERROR>", StringComparison.OrdinalIgnoreCase);
+        if (lineErrorStart >= 0)
+        {
+            var valueStart = lineErrorStart + "<LINEERROR>".Length;
+            var lineErrorEnd = postResponse.IndexOf("</LINEERROR>", valueStart, StringComparison.OrdinalIgnoreCase);
+            var errorText = lineErrorEnd > valueStart
+                ? postResponse.Substring(valueStart, lineErrorEnd - valueStart).Trim()
+                : "(see Tally logs)";
+            return $"Tally returned LINEERROR: {errorText}";
+        }
+
+        // Valid XML export — must contain at least one company entry OR an empty but well-formed envelope.
+        if (postResponse.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase) ||
+            postResponse.Contains("<ENVELOPE>", StringComparison.OrdinalIgnoreCase))
+            return null; // OK
+
+        return "Tally XML API returned an unexpected response format.";
     }
 
     public async Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken)
