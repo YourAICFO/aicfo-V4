@@ -37,6 +37,7 @@ try
 
             services.AddSingleton<IConfigStore, ConfigStore>();
             services.AddSingleton<ICredentialStore, CredentialStore>();
+            services.AddSingleton<ITokenFileStore, TokenFileStore>();
             services.AddSingleton<ITallyPayloadBuilder, TallyPayloadBuilder>();
             services.AddSingleton<SyncNowSignal>();
             services.AddHostedService<SyncNowPipeListener>();

@@ -73,6 +73,7 @@ internal static class Program
             Application.Run(new TrayApplicationContext(
                 new ConfigStore(),
                 new CredentialStore(),
+                new TokenFileStore(),
                 new SyncNowTriggerClient(),
                 new AicfoApiClient(httpClient, loggerFactory.CreateLogger<AicfoApiClient>()),
                 new TallyXmlClient(httpClient, loggerFactory.CreateLogger<TallyXmlClient>()),
@@ -109,6 +110,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     public TrayApplicationContext(
         IConfigStore configStore,
         ICredentialStore credentialStore,
+        ITokenFileStore tokenFileStore,
         ISyncNowTriggerClient syncNowTriggerClient,
         IAicfoApiClient apiClient,
         ITallyXmlClient tallyClient,
@@ -117,7 +119,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         ConnectorControlPanel? panel = null;
         try
         {
-            panel = new ConnectorControlPanel(configStore, credentialStore, syncNowTriggerClient, apiClient, tallyClient, discoveryService);
+            panel = new ConnectorControlPanel(configStore, credentialStore, tokenFileStore, syncNowTriggerClient, apiClient, tallyClient, discoveryService);
         }
         catch (Exception ex)
         {
@@ -234,6 +236,7 @@ internal sealed class ConnectorControlPanel : Form
 {
     private readonly IConfigStore _configStore;
     private readonly ICredentialStore _credentialStore;
+    private readonly ITokenFileStore _tokenFileStore;
     private readonly ISyncNowTriggerClient _syncNowTriggerClient;
     private readonly IAicfoApiClient _apiClient;
     private readonly ITallyXmlClient _tallyClient;
@@ -382,6 +385,7 @@ internal sealed class ConnectorControlPanel : Form
     public ConnectorControlPanel(
         IConfigStore configStore,
         ICredentialStore credentialStore,
+        ITokenFileStore tokenFileStore,
         ISyncNowTriggerClient syncNowTriggerClient,
         IAicfoApiClient apiClient,
         ITallyXmlClient tallyClient,
@@ -389,6 +393,7 @@ internal sealed class ConnectorControlPanel : Form
     {
         _configStore = configStore;
         _credentialStore = credentialStore;
+        _tokenFileStore = tokenFileStore;
         _syncNowTriggerClient = syncNowTriggerClient;
         _apiClient = apiClient;
         _tallyClient = tallyClient;
@@ -978,8 +983,19 @@ internal sealed class ConnectorControlPanel : Form
             var completed = await WaitForSyncCompletionAsync(mapping.Id, previousSyncAt, TimeSpan.FromMinutes(5));
             if (completed is null)
             {
-                SetActionBanner($"Sync started for {webName}. Refresh status in a moment.", Color.DarkGreen);
-                AddRecentAction("Sync triggered (pending)");
+                var latest = _configStore.Load();
+                var m = latest?.Mappings.FirstOrDefault(x => string.Equals(x.Id, mapping.Id, StringComparison.OrdinalIgnoreCase));
+                var lastErr = m?.LastError;
+                if (!string.IsNullOrWhiteSpace(lastErr))
+                {
+                    SetActionBanner($"Sync did not complete. Last error: {Truncate(lastErr, 120)}", Color.Firebrick);
+                    AddRecentAction("Sync pending but service reported error");
+                }
+                else
+                {
+                    SetActionBanner($"Sync started for {webName}. Refresh status in a moment.", Color.DarkGreen);
+                    AddRecentAction("Sync triggered (pending)");
+                }
             }
             else if (string.Equals(completed.LastSyncResult, "Failed", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(completed.LastSyncResult, "failed", StringComparison.OrdinalIgnoreCase))
@@ -1205,6 +1221,7 @@ internal sealed class ConnectorControlPanel : Form
             existing.LinkId = link.Id;
 
             _credentialStore.SaveMappingToken(existing.Id, _deviceAuthToken);
+            _tokenFileStore.WriteMappingToken(existing.Id, _deviceAuthToken);
             SafeSaveConfig();
             await RefreshDeviceLinkDataAsync();
             LoadConfig();
@@ -1291,6 +1308,7 @@ internal sealed class ConnectorControlPanel : Form
                 if (!string.IsNullOrWhiteSpace(_deviceAuthToken))
                 {
                     _credentialStore.SaveMappingToken(mapping.Id, _deviceAuthToken);
+                    _tokenFileStore.WriteMappingToken(mapping.Id, _deviceAuthToken);
                 }
             }
             SafeSaveConfig();

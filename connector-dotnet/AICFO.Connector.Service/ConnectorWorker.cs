@@ -8,6 +8,7 @@ public sealed class ConnectorWorker(
     ILogger<ConnectorWorker> logger,
     IConfigStore configStore,
     ICredentialStore credentialStore,
+    ITokenFileStore tokenFileStore,
     ITallyXmlClient tallyClient,
     ITallyPayloadBuilder payloadBuilder,
     IAicfoApiClient apiClient,
@@ -90,12 +91,30 @@ public sealed class ConnectorWorker(
         while (!cancellationToken.IsCancellationRequested)
         {
             var mappingId = await syncNowSignal.WaitAsync(cancellationToken);
+            logger.LogInformation("[SYNC] Manual sync signal received mappingId={MappingId} (null=all)", mappingId ?? "(all)");
+
             var (config, mappings) = LoadReadyMappings();
-            if (config is null) continue;
+            if (config is null)
+            {
+                logger.LogWarning("[SYNC] Config missing or invalid at {Path}; skipping manual sync", ConnectorPaths.ConfigFile);
+                continue;
+            }
+
+            logger.LogInformation("[SYNC] Config loaded path={Path} mappingsCount={Count}", ConnectorPaths.ConfigFile, mappings.Count);
+            foreach (var m in mappings)
+            {
+                logger.LogDebug("[SYNC] Mapping Id={Id} LinkId={LinkId} CompanyId={CompanyId} Tally={Tally}",
+                    m.Id, m.LinkId ?? "(null)", m.CompanyId ?? "(null)", m.TallyCompanyName ?? "(null)");
+            }
 
             var targetMappings = string.IsNullOrWhiteSpace(mappingId)
                 ? mappings
                 : mappings.Where(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (targetMappings.Count == 0)
+            {
+                logger.LogWarning("[SYNC] No target mappings for mappingId={MappingId}; available count={Count}", mappingId ?? "(all)", mappings.Count);
+            }
 
             foreach (var mapping in targetMappings)
             {
@@ -130,7 +149,14 @@ public sealed class ConnectorWorker(
                         $"Tally is not reachable at {config.TallyHost}:{config.TallyPort}. Ensure Tally is running and XML over HTTP is enabled.");
                 }
 
+                if (string.IsNullOrWhiteSpace(mapping.LinkId))
+                {
+                    throw new InvalidOperationException($"Mapping {mapping.Id} has no LinkId. Refresh links from the Tray after linking.");
+                }
+
+                logger.LogInformation("[SYNC] Calling backend sync/start linkId={LinkId} mappingId={MappingId}", mapping.LinkId, mapping.Id);
                 var runId = await apiClient.StartSyncRunAsync(config, mapping, token, cancellationToken);
+                logger.LogInformation("[SYNC] Backend sync/start returned runId={RunId}", runId ?? "(null)");
                 try
                 {
                     var snapshot = await tallyClient.FetchSnapshotAsync(config, mapping.TallyCompanyName, cancellationToken);
@@ -250,6 +276,14 @@ public sealed class ConnectorWorker(
             return legacyToken;
         }
 
+        var fileToken = tokenFileStore.ReadMappingToken(mapping.Id);
+        if (!string.IsNullOrWhiteSpace(fileToken))
+        {
+            logger.LogInformation("[SYNC] Token for mapping {MappingId} loaded from file store (Service can sync)", mapping.Id);
+            return fileToken;
+        }
+
+        logger.LogWarning("[SYNC] No token for mapping Id={MappingId} LinkId={LinkId}; Credential Manager and file store both empty. Ensure Tray has logged in and linked.", mapping.Id, mapping.LinkId ?? "(null)");
         return null;
     }
 
