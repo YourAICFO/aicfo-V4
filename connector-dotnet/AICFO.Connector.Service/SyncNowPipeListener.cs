@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text;
+using System.Text.Json;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using AICFO.Connector.Shared.Services;
@@ -40,6 +41,20 @@ public sealed class SyncNowPipeListener(ILogger<SyncNowPipeListener> logger, Syn
                 var bytesRead = await server.ReadAsync(buffer, stoppingToken);
                 var message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
                 logger.LogInformation("[SYNC] Pipe message received: {Message}", string.IsNullOrEmpty(message) ? "(empty)" : message);
+
+                try
+                {
+                    var dir = ConnectorPaths.StateDirectory;
+                    if (!Directory.Exists(dir))
+                        Directory.CreateDirectory(dir);
+                    var ack = new { receivedAtUtc = DateTime.UtcNow.ToString("O"), message };
+                    var path = ConnectorPaths.LastPipeMessageFile;
+                    await File.WriteAllTextAsync(path, JsonSerializer.Serialize(ack), CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "Could not write pipe ack file");
+                }
 
                 if (string.Equals(message, "sync-now", StringComparison.OrdinalIgnoreCase))
                 {

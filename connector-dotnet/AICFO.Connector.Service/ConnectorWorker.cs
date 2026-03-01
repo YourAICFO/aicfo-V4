@@ -116,6 +116,7 @@ public sealed class ConnectorWorker(
 
             if (targetMappings.Count == 0)
             {
+                logger.LogInformation("[SYNC] Manual sync: no ready mappings");
                 logger.LogWarning("[SYNC] No target mappings for mappingId={MappingId}; available count={Count}", mappingId ?? "(all)", mappings.Count);
             }
 
