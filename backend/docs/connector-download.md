@@ -28,3 +28,14 @@ If you do not set this variable, upload local fallback file:
 - **latestConnectorVersion**, **minConnectorVersion**, **downloadUrl**, **timestamp**.
 
 Set `API_BASE_URL` (or `BACKEND_URL`) in production if your backend URL differs from the default.
+
+## Endpoint verification (connector device API)
+
+To verify the connector device companies endpoint returns all companies for the logged-in user:
+
+```bash
+# Replace BASE_URL and DEVICE_TOKEN with your backend URL and a valid device (connector login) token.
+curl -s -w "\n%{http_code}" -H "Authorization: Bearer DEVICE_TOKEN" "BASE_URL/api/connector/device/companies"
+```
+
+Expected: HTTP 200 and JSON body `{ "success": true, "data": [ { "id": "...", "name": "..." }, ... ] }`. The `data` array must list **all** companies owned by the user associated with the device token (user-scoped, not company-scoped).

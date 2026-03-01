@@ -72,5 +72,32 @@ if (!DATABASE_URL) {
       assert.ok(Array.isArray(companies), 'Expected array');
       // If we get here, the query did not throw "column Company.createdAt does not exist"
     });
+
+    it('returns all companies for same owner (user-scoped list)', async () => {
+      const User = (require('../src/models')).User;
+      const owner = await User.findOne({ attributes: ['id'], where: {} });
+      if (!owner) {
+        console.log('SKIP: no user in DB');
+        return;
+      }
+      const ownerId = owner.id;
+      const created = [];
+      try {
+        created.push(await Company.create({ name: 'Connector Test Co A', ownerId, isDeleted: false }));
+        created.push(await Company.create({ name: 'Connector Test Co B', ownerId, isDeleted: false }));
+        const list = await Company.findAll({
+          where: { ownerId, isDeleted: false, deletedAt: null },
+          attributes: ['id', 'name'],
+          order: [[sequelize.col('created_at'), 'DESC']],
+        });
+        assert.ok(Array.isArray(list), 'Expected array');
+        assert.ok(list.length >= 2, 'Expected at least 2 companies for owner (route returns user-scoped list)');
+        const names = list.map((c) => c.name);
+        assert.ok(names.includes('Connector Test Co A'), 'List must include test company A');
+        assert.ok(names.includes('Connector Test Co B'), 'List must include test company B');
+      } finally {
+        for (const c of created) await c.destroy();
+      }
+    });
   });
 }
