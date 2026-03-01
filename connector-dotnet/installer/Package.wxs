@@ -4,7 +4,7 @@
   <!-- Scope="perMachine": requires admin elevation and installs to Program Files + installs Windows Service. (WiX 4 uses Scope, not InstallScope.) -->
   <Package Name="AI CFO Connector"
            Manufacturer="AI CFO"
-           Version="1.0.0"
+           Version="1.0.1"
            UpgradeCode="f72aaf9d-f8cf-49de-b380-89df3af861bf"
            Language="1033"
            Scope="perMachine">
