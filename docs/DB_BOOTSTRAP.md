@@ -35,7 +35,7 @@ npm run db:bootstrap    # same as db:migrate — creates from scratch
 ## Railway
 
 - **DATABASE_URL** must be set on the Backend service (Postgres public URL from Railway Postgres → Connect).
-- **Deploy**: `prestart` runs `npm run db:migrate` (i.e. `node src/db/migrate.js`) on every deploy, so pending SQL migrations are applied automatically.
+- **Deploy**: Migrations run automatically from `railway-entrypoint.js` before the server starts: when `DATABASE_URL` is set, it runs `node src/db/migrate.js` then `node src/db/migrate.js --check`. No need to change the Railway start command (locked by `railway.toml`).
 - For first deploy, blank-DB bootstrap creates core tables; thereafter only new `.sql` migrations run.
 - **One-off migrate** (e.g. after adding a migration): Redeploy the backend, or in Railway shell run `npm run db:migrate`.
 - To re-run full bootstrap on blank DB: Railway shell → `npm run db:bootstrap`.
