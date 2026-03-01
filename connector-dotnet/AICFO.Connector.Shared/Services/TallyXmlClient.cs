@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using System.Globalization;
 using AICFO.Connector.Shared.Models;
+using AICFO.Connector.Shared.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace AICFO.Connector.Shared.Services;
@@ -201,9 +203,10 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
     public static List<string> ExtractCompanyNamesFromXml(string? xml)
     {
         if (string.IsNullOrWhiteSpace(xml)) return [];
+        var (sanitized, _) = XmlSanitizer.Sanitize(xml);
         try
         {
-            var doc = XDocument.Parse(xml);
+            var doc = XDocument.Parse(sanitized);
             var names = new List<string>();
             foreach (var element in doc.Descendants())
             {
@@ -303,8 +306,19 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         var groupsResponse = await PostXmlAsync(config.TallyHost, config.TallyPort, BuildGroupRequest(tallyCompanyName), cancellationToken);
         var ledgersResponse = await PostXmlAsync(config.TallyHost, config.TallyPort, BuildLedgerRequest(tallyCompanyName), cancellationToken);
 
-        var groups = ParseGroups(groupsResponse);
-        var ledgers = ParseLedgers(ledgersResponse);
+        var (groupsXml, groupsRemoved) = XmlSanitizer.Sanitize(groupsResponse);
+        if (groupsRemoved > 0)
+            logger.LogWarning("[TALLY] Sanitized invalid XML chars removedCount={N} lengthBefore={A} lengthAfter={B}", groupsRemoved, groupsResponse.Length, groupsXml.Length);
+        List<TallyGroup> groups;
+        try { groups = ParseGroups(groupsXml); }
+        catch (XmlException ex) { LogXmlException(ex, groupsXml, "ParseGroups"); throw; }
+
+        var (ledgersXml, ledgersRemoved) = XmlSanitizer.Sanitize(ledgersResponse);
+        if (ledgersRemoved > 0)
+            logger.LogWarning("[TALLY] Sanitized invalid XML chars removedCount={N} lengthBefore={A} lengthAfter={B}", ledgersRemoved, ledgersResponse.Length, ledgersXml.Length);
+        List<TallyLedger> ledgers;
+        try { ledgers = ParseLedgers(ledgersXml); }
+        catch (XmlException ex) { LogXmlException(ex, ledgersXml, "ParseLedgers"); throw; }
         if (ledgers.Count > config.MaxLedgerCountWarning)
         {
             logger.LogWarning(
@@ -336,7 +350,12 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
                     cancellationToken,
                     config);
 
-                var monthLedgers = ParseLedgers(monthlyLedgerResponse);
+                var (monthLedgersXml, monthRemoved) = XmlSanitizer.Sanitize(monthlyLedgerResponse);
+                if (monthRemoved > 0)
+                    logger.LogWarning("[TALLY] Sanitized invalid XML chars removedCount={N} lengthBefore={A} lengthAfter={B}", monthRemoved, monthlyLedgerResponse.Length, monthLedgersXml.Length);
+                List<TallyLedger> monthLedgers;
+                try { monthLedgers = ParseLedgers(monthLedgersXml); }
+                catch (XmlException ex) { LogXmlException(ex, monthLedgersXml, "ParseLedgers(monthly)"); throw; }
                 var monthItems = monthLedgers
                     .Where(ledger => knownLedgerGuids.Contains(ledger.Guid))
                     .Select(ledger => new TallyBalanceItem(ledger.Guid, ledger.ClosingBalance))
@@ -597,5 +616,29 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(hash).Substring(0, 32).ToLowerInvariant();
+    }
+
+    private void LogXmlException(XmlException ex, string xml, string context)
+    {
+        const int snippetLen = 300;
+        var snippet = GetSnippetAroundPosition(xml, ex.LineNumber, ex.LinePosition, snippetLen);
+        logger.LogWarning(ex, "[TALLY] XmlException in {Context}: {Message}. Snippet (~{Len} chars): {Snippet}", context, ex.Message, snippet?.Length ?? 0, snippet ?? "(null)");
+    }
+
+    private static string? GetSnippetAroundPosition(string xml, int lineNumber, int linePosition, int totalChars)
+    {
+        if (string.IsNullOrEmpty(xml) || lineNumber < 1 || linePosition < 1) return null;
+        var line = 1;
+        var col = 1;
+        var pos = 0;
+        for (; pos < xml.Length && line < lineNumber; pos++)
+        {
+            if (xml[pos] == '\n') line++;
+        }
+        for (; pos < xml.Length && col < linePosition; pos++, col++) { }
+        var half = totalChars / 2;
+        var start = Math.Max(0, pos - half);
+        var len = Math.Min(totalChars, xml.Length - start);
+        return len <= 0 ? null : xml.Substring(start, len);
     }
 }
