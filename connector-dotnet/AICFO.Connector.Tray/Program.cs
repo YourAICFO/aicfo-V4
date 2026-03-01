@@ -375,6 +375,7 @@ internal sealed class ConnectorControlPanel : Form
     private LoginDiagnostics? _lastLoginDiagnostics;
     private bool _suppressAutostartEvent;
     private bool _suppressBackendModeEvent;
+    private bool _suppressWebCompanySelectionChange;
     private Button? _linkButton;
     private Button? _syncSelectedButton;
 
@@ -821,6 +822,16 @@ internal sealed class ConnectorControlPanel : Form
 
         panel.Controls.Add(new Label { Text = "Web Company", AutoSize = true }, 0, 5);
         panel.Controls.Add(_webCompanyCombo, 1, 5);
+        _webCompanyCombo.SelectedIndexChanged += (_, _) =>
+        {
+            if (_suppressWebCompanySelectionChange) return;
+            if (_webCompanyCombo.SelectedItem is WebCompanyComboItem item)
+            {
+                _config.SelectedWebCompanyId = item.Company.Id;
+                SafeSaveConfig();
+                Log.Information("[INF] Web company selection changed to: {Name} ({Id})", item.Company.Name, item.Company.Id);
+            }
+        };
         var refreshCompaniesButton = new Button { Text = "Refresh companies", Width = 140 };
         refreshCompaniesButton.Click += async (_, _) => { Log.Information("[INF] Action: Refresh companies"); await RefreshDeviceLinkDataAsync(); };
         panel.Controls.Add(refreshCompaniesButton, 1, 6);
@@ -1242,7 +1253,9 @@ internal sealed class ConnectorControlPanel : Form
                 return;
             }
 
-            var selectedWebCompanyId = (_webCompanyCombo.SelectedItem as WebCompanyComboItem)?.Company.Id;
+            // Prefer current combo selection; on first load or after clear, use persisted selection from config.
+            var selectedWebCompanyId = (_webCompanyCombo.SelectedItem as WebCompanyComboItem)?.Company.Id
+                ?? _config.SelectedWebCompanyId;
             var companies = await _apiClient.GetCompaniesAsync(_config.ApiUrl, _deviceAuthToken, true, CancellationToken.None);
             var links = await _apiClient.GetDeviceLinksAsync(_config.ApiUrl, _deviceAuthToken, CancellationToken.None);
 
@@ -1303,20 +1316,21 @@ internal sealed class ConnectorControlPanel : Form
             }
             if (_webCompanyCombo.Enabled)
             {
-                var selectedIndex = -1;
-                if (!string.IsNullOrWhiteSpace(selectedWebCompanyId))
+                var selectedIndex = WebCompanySelectionHelper.GetPreferredCompanyIndex(companies, selectedWebCompanyId);
+                _suppressWebCompanySelectionChange = true;
+                try
                 {
-                    for (var i = 0; i < _webCompanyCombo.Items.Count; i++)
+                    _webCompanyCombo.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+                    if (_webCompanyCombo.SelectedItem is WebCompanyComboItem selected)
                     {
-                        if (_webCompanyCombo.Items[i] is WebCompanyComboItem item &&
-                            string.Equals(item.Company.Id, selectedWebCompanyId, StringComparison.OrdinalIgnoreCase))
-                        {
-                            selectedIndex = i;
-                            break;
-                        }
+                        _config.SelectedWebCompanyId = selected.Company.Id;
+                        SafeSaveConfig();
                     }
                 }
-                _webCompanyCombo.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+                finally
+                {
+                    _suppressWebCompanySelectionChange = false;
+                }
             }
             _webCompaniesEmptyState.Visible = _webCompanyCombo.Items.Count == 0;
 
