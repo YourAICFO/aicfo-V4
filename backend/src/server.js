@@ -152,7 +152,7 @@ app.get('/.well-known/aicfo-connector.json', (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
   res.status(200).json({
     apiBaseUrl: discoveryApiBaseUrl.replace(/\/$/, ''),
-    latestConnectorVersion: '1.0.1',
+    latestConnectorVersion: '1.0.2',
     minConnectorVersion: '1.0.0',
     downloadUrl: process.env.CONNECTOR_DOWNLOAD_URL || `${discoveryApiBaseUrl}/download/connector`,
     releaseNotesUrl: '',
