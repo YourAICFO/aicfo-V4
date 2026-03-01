@@ -26,6 +26,14 @@ export default function ConnectorOnboarding() {
     }
   }, [selectedCompanyId]);
 
+  useEffect(() => {
+    const onFocus = () => {
+      if (selectedCompanyId) loadConnectorStatus();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [selectedCompanyId]);
+
   const loadConnectorStatus = async () => {
     if (!selectedCompanyId) {
       setStatus(null);
@@ -59,6 +67,7 @@ export default function ConnectorOnboarding() {
   };
 
   const getOnboardingSteps = (): OnboardingStep[] => {
+    const hasActiveLink = (status?.links?.length ?? 0) > 0;
     const isConnected = status?.connector?.isOnline || false;
     const hasSynced = Boolean(status?.sync?.lastRunId);
     
@@ -68,6 +77,14 @@ export default function ConnectorOnboarding() {
         title: 'Download Connector',
         description: 'Download and install the AI CFO Tally Connector on your Windows computer',
         completed: true, // User is already here, so they've downloaded it
+      },
+      {
+        id: 'link',
+        title: 'Link Company',
+        description: hasActiveLink
+          ? `Linked to Tally: ${status?.links?.[0]?.tallyCompanyName ?? '—'}`
+          : 'In the connector tray, link this web company to a Tally company',
+        completed: hasActiveLink,
       },
       {
         id: 'install',
@@ -167,11 +184,20 @@ export default function ConnectorOnboarding() {
         </div>
       )}
 
-      {!isConnected && (
+      {(status?.links?.length === 0 || !status?.links) && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="font-medium text-amber-900">Not linked</p>
+          <p className="text-sm text-amber-700">
+            Link this company in the connector tray (Mapping tab). After unlinking in the tray, this page updates when you return to it.
+          </p>
+        </div>
+      )}
+
+      {!isConnected && (status?.links?.length ?? 0) > 0 && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="font-medium text-amber-900">Not connected</p>
           <p className="text-sm text-amber-700">
-            Start the connector tray app and verify mapping is linked for this company.
+            Connector is linked but not online. Start the connector tray app.
           </p>
         </div>
       )}

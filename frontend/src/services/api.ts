@@ -269,8 +269,19 @@ export const connectorApi = {
     }),
 };
 
+export interface ConnectorLinkV1 {
+  id: string;
+  linkId: string;
+  companyId: string;
+  tallyCompanyId: string;
+  tallyCompanyName: string;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+}
+
 export interface ConnectorStatusV1Data {
   companyId: string;
+  links: ConnectorLinkV1[];
   connector: {
     deviceId: string | null;
     deviceName: string | null;

@@ -188,8 +188,22 @@ const buildStableStatusResponse = async (companyId) => {
   const latestMonthKey = dataSyncStatus?.last_snapshot_month || latestSnapshot?.month || null;
   const readinessStatus = dataSyncStatus?.status || 'never';
 
+  const activeLinks = await ConnectorCompanyLink.findAll({
+    where: { companyId, isActive: true },
+    attributes: ['id', 'companyId', 'tallyCompanyId', 'tallyCompanyName', 'lastSyncAt', 'lastSyncStatus']
+  });
+
   return {
     companyId,
+    links: activeLinks.map((l) => ({
+      id: l.id,
+      linkId: l.id,
+      companyId: l.companyId,
+      tallyCompanyId: l.tallyCompanyId,
+      tallyCompanyName: l.tallyCompanyName,
+      lastSyncAt: l.lastSyncAt,
+      lastSyncStatus: l.lastSyncStatus
+    })),
     connector: {
       deviceId: latestActiveDevice?.deviceId || latestConnectorClient?.deviceId || null,
       deviceName: latestActiveDevice?.deviceName || latestConnectorClient?.deviceName || null,
@@ -657,7 +671,10 @@ router.post('/device/links/:id/unlink', authenticateConnectorOrLegacy, async (re
       });
     }
 
+    const linkId = link.id;
+    const companyId = link.companyId;
     await link.update({ isActive: false });
+    console.info('[connector] Unlink: linkId=%s companyId=%s userId=%s', linkId, companyId, req.userId);
     return res.json({ success: true, data: { id: link.id, isActive: false } });
   } catch (error) {
     return res.status(500).json({

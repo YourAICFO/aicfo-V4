@@ -1772,16 +1772,18 @@ internal sealed class ConnectorControlPanel : Form
             if (!string.IsNullOrWhiteSpace(_deviceAuthToken) && !string.IsNullOrWhiteSpace(mapping.LinkId))
             {
                 await _apiClient.UnlinkDeviceLinkAsync(_config.ApiUrl, _deviceAuthToken, mapping.LinkId, CancellationToken.None);
+                Log.Information("[INF] Backend unlink succeeded linkId={LinkId} mappingId={MappingId}", mapping.LinkId, mapping.Id);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Keep local unlink available even if backend unlink call fails.
+            Log.Warning(ex, "Backend unlink failed linkId={LinkId}; removing mapping locally anyway", mapping.LinkId);
         }
 
         _config.Mappings.Remove(mapping);
         _credentialStore.DeleteMappingToken(mapping.Id);
         SafeSaveConfig();
+        Log.Information("[INF] Unlinked locally: mappingId={MappingId} removed from config", mapping.Id);
         AddRecentAction($"Unlinked: {mapping.WebCompanyName ?? "Web"} ↔ {mapping.TallyCompanyName}");
         await RefreshDeviceLinkDataAsync();
         LoadConfig();
