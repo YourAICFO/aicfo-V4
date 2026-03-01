@@ -1282,19 +1282,25 @@ internal sealed class ConnectorControlPanel : Form
             }
             SafeSaveConfig();
 
-            var linkedCompanyIds = new HashSet<string>(
-                links.Where(l => !string.IsNullOrWhiteSpace(l.CompanyId)).Select(l => l.CompanyId),
-                StringComparer.OrdinalIgnoreCase);
             var linkedTallyNames = new HashSet<string>(
                 links.Where(l => !string.IsNullOrWhiteSpace(l.TallyCompanyName)).Select(l => NormalizeCompanyName(l.TallyCompanyName)),
                 StringComparer.OrdinalIgnoreCase);
 
+            // Show ALL user companies so user can switch; linking uses selected web company + selected Tally company.
             _webCompanyCombo.Items.Clear();
-            foreach (var company in companies.Where(c => !linkedCompanyIds.Contains(c.Id)))
+            foreach (var company in companies)
             {
                 _webCompanyCombo.Items.Add(new WebCompanyComboItem(company));
             }
-            _webCompanyCombo.Enabled = _webCompanyCombo.Items.Count > 0;
+            _webCompanyCombo.Enabled = companies.Count > 0;
+            if (companies.Count > 0)
+            {
+                Log.Information("[INF] Web companies: backend returned {Count} company(ies): {Names}",
+                    companies.Count,
+                    string.Join(", ", companies.Select(c => c.Name ?? "(unnamed)")));
+                if (companies.Count == 1)
+                    Log.Information("[INF] Backend returned 1 company. Expected more? Check backend query scoping (user-scoped list).");
+            }
             if (_webCompanyCombo.Enabled)
             {
                 var selectedIndex = -1;
@@ -1428,7 +1434,10 @@ internal sealed class ConnectorControlPanel : Form
                 try
                 {
                     var names = await _tallyClient.GetCompanyNamesAsync(host, port, CancellationToken.None);
-                    _tallyStatus.Text = $"Reachable ({names.Count} companies)";
+                    if (names.Count > 0)
+                        _tallyStatus.Text = $"Reachable ({names.Count} companies)";
+                    else
+                        _tallyStatus.Text = "No companies returned by Tally. Open a company in Tally and retry.";
                 }
                 catch (Exception ex)
                 {
@@ -1473,7 +1482,7 @@ internal sealed class ConnectorControlPanel : Form
                 _tallyCompanyCombo.Items.Clear();
                 foreach (var name in names) _tallyCompanyCombo.Items.Add(name);
                 if (_tallyCompanyCombo.Items.Count > 0) _tallyCompanyCombo.SelectedIndex = 0;
-                _tallyStatus.Text = names.Count > 0 ? $"Detected ({host}:{port}, {names.Count} companies)" : $"Reachable ({host}:{port}; no companies in list)";
+                _tallyStatus.Text = names.Count > 0 ? $"Detected ({host}:{port}, {names.Count} companies)" : "No companies returned by Tally. Open a company in Tally and retry.";
                 SafeSaveConfig();
                 await RefreshDeviceLinkDataAsync();
                 _tallyCompaniesEmptyState.Visible = _tallyCompanyCombo.Items.Count == 0;
