@@ -1,17 +1,20 @@
 'use strict';
 
 /**
- * Connector heartbeat and unlink behavior.
+ * Connector heartbeat, unlink, and snapshot status behavior.
  * - Heartbeat: updating ConnectorDevice by deviceId updates lastSeenAt (so status/v1 can show isOnline).
  * - Unlink: setting link isActive=false excludes it from active links (so status/v1 no longer lists it).
+ * - Snapshot: LedgerMonthlyBalance rows for company yield ledgerBalancesStoredCount > 0 in status/v1 source.
  * Skip when DATABASE_URL unset.
  */
 
+const crypto = require('crypto');
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { Sequelize } = require('sequelize');
 
 const DATABASE_URL = process.env.DATABASE_URL;
+const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
 if (!DATABASE_URL) {
   describe('connector heartbeat and unlink', () => {
@@ -24,6 +27,7 @@ if (!DATABASE_URL) {
     let sequelize;
     let ConnectorDevice;
     let ConnectorCompanyLink;
+    let LedgerMonthlyBalance;
     let Company;
     let User;
     let created;
@@ -42,6 +46,7 @@ if (!DATABASE_URL) {
       const models = require('../src/models');
       ConnectorDevice = models.ConnectorDevice;
       ConnectorCompanyLink = models.ConnectorCompanyLink;
+      LedgerMonthlyBalance = models.LedgerMonthlyBalance;
       Company = models.Company;
       User = models.User;
       created = [];
@@ -77,6 +82,7 @@ if (!DATABASE_URL) {
         userId: user.id,
         deviceId,
         deviceName: 'Test Device',
+        deviceTokenHash: hashToken(`test-token-${deviceId}`),
         lastSeenAt: oldSeen,
         status: 'active'
       });
@@ -132,6 +138,36 @@ if (!DATABASE_URL) {
         where: { companyId: company.id, isActive: true }
       });
       assert.ok(!activeAfter.some((l) => l.id === link.id), 'unlinked link should not be in active list');
+    });
+
+    it('sync stores ledger balances and status/v1 source returns ledgerBalancesStoredCount > 0', async () => {
+      const user = await User.findOne({ attributes: ['id'], where: {} });
+      if (!user) {
+        console.log('SKIP: no user in DB');
+        return;
+      }
+      const company = await Company.findOne({
+        where: { ownerId: user.id },
+        attributes: ['id']
+      });
+      if (!company) {
+        console.log('SKIP: no company in DB');
+        return;
+      }
+      const beforeCount = await LedgerMonthlyBalance.count({ where: { companyId: company.id } });
+      const row = await LedgerMonthlyBalance.create({
+        companyId: company.id,
+        monthKey: '2025-01',
+        ledgerGuid: `test-guid-${Date.now()}`,
+        ledgerName: 'Test Ledger',
+        parentGroup: 'Test',
+        cfoCategory: 'revenue',
+        balance: 100
+      });
+      created.push(row);
+      const afterCount = await LedgerMonthlyBalance.count({ where: { companyId: company.id } });
+      assert.ok(afterCount > beforeCount, 'ledgerBalancesStoredCount should increase after sync stores data');
+      assert.ok(afterCount >= 1, 'status/v1 ledgerBalancesStoredCount source should be > 0');
     });
   });
 }

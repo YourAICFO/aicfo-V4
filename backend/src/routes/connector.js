@@ -15,6 +15,7 @@ const {
   ConnectorCompanyLink,
   ConnectorClient,
   MonthlyTrialBalanceSummary,
+  LedgerMonthlyBalance,
   sequelize
 } = require('../models');
 const { authenticate } = require('../middleware/auth');
@@ -34,6 +35,7 @@ const deviceLoginSchema = z.object({
 
 const connectorLoginAttempts = new Map();
 let hasWarnedDataSyncStatusSchemaMissing = false;
+let hasWarnedHeartbeatNoAssociation = false;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -121,12 +123,12 @@ const buildStableStatusResponse = async (companyId) => {
   const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
     ConnectorDevice.findOne({
       where: deviceWhere,
-      order: [['last_seen_at', 'DESC'], ['updated_at', 'DESC']],
+      order: [[sequelize.col('last_seen_at'), 'DESC'], [sequelize.col('updated_at'), 'DESC']],
       raw: true
     }),
     ConnectorClient.findOne({
       where: { companyId },
-      order: [['last_seen_at', 'DESC'], ['updated_at', 'DESC']],
+      order: [[sequelize.col('last_seen_at'), 'DESC'], [sequelize.col('updated_at'), 'DESC']],
       raw: true
     }),
     IntegrationSyncRun.findOne({
@@ -162,8 +164,9 @@ const buildStableStatusResponse = async (companyId) => {
 
   let dataSyncStatus = null;
   try {
+    // Use updated_at (snake_case); migration 2026-03-01 adds it if missing. Avoids "column updatedAt does not exist".
     const rows = await sequelize.query(
-      `SELECT status, last_snapshot_month, "updatedAt"
+      `SELECT status, last_snapshot_month, updated_at
        FROM data_sync_status
        WHERE company_id = :companyId
        LIMIT 1`,
@@ -172,7 +175,10 @@ const buildStableStatusResponse = async (companyId) => {
         type: QueryTypes.SELECT
       }
     );
-    dataSyncStatus = rows?.[0] || null;
+    const row = rows?.[0] || null;
+    if (row) {
+      dataSyncStatus = { ...row, updatedAt: row.updated_at };
+    }
   } catch (error) {
     const pgCode = error?.original?.code || error?.parent?.code || null;
     // data_sync_status is additive; tolerate missing table/column and default readiness to "never".
@@ -196,14 +202,19 @@ const buildStableStatusResponse = async (companyId) => {
   const readinessStatus = dataSyncStatus?.status || 'never';
 
   let snapshotLedgersCount = null;
+  let ledgerBalancesStoredCount = null;
   try {
     snapshotLedgersCount = await MonthlyTrialBalanceSummary.count({ where: { companyId } });
+  } catch (_) {}
+  try {
+    ledgerBalancesStoredCount = await LedgerMonthlyBalance.count({ where: { companyId } });
   } catch (_) {}
 
   return {
     companyId,
     snapshotLatestMonthKey: latestMonthKey,
     snapshotLedgersCount,
+    ledgerBalancesStoredCount,
     links: activeLinksForCompany.map((l) => ({
       id: l.id,
       linkId: l.id,
@@ -891,7 +902,10 @@ router.post('/sync', authenticateConnectorOrLegacy, async (req, res) => {
     }
 
     const data = await integrationService.processConnectorPayload(req.companyId, req.body || {});
-    res.json({ success: true, data });
+    const ledgerCount = req.body?.chartOfAccounts?.ledgers?.length ?? 0;
+    const monthKey = req.body?.chartOfAccounts?.balances?.current?.monthKey || req.body?.chartOfAccounts?.current?.monthKey || null;
+    console.info('[connector] Sync persisted: companyId=%s linkId=%s ledgers=%s monthKey=%s', req.companyId, req.linkId ?? '—', ledgerCount, monthKey || '—');
+    res.json({ success: true, data: data || {} });
   } catch (error) {
     console.error('Connector sync payload error:', error);
     res.status(400).json({
@@ -1074,6 +1088,18 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
       );
     }
 
+    try {
+      const { updateSyncStatus } = require('../services/snapshotValidator');
+      await updateSyncStatus(req.companyId, {
+        status: runStatus === 'success' || runStatus === 'partial' ? 'processing' : 'failed',
+        lastSyncCompletedAt: completedRun.finishedAt || new Date(),
+        errorMessage: runStatus === 'failed' ? lastError : null
+      });
+      console.info('[connector] Sync complete: snapshot summary updated companyId=%s runId=%s status=%s', req.companyId, runId, runStatus);
+    } catch (err) {
+      console.warn('[connector] Sync complete: updateSyncStatus failed:', err.message);
+    }
+
     res.json({
       success: true,
       data: {
@@ -1107,19 +1133,26 @@ router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
     }
     const { connectorClientId, deviceId, deviceName } = req;
 
-    // Update connector last seen
+    let persisted = false;
     if (connectorClientId) {
       await syncStatusService.updateConnectorLastSeen(connectorClientId);
+      persisted = true;
     }
     if (deviceId) {
-      // Device-token path: update by deviceId so any company linked to this user's device shows online (device may be registered under one company, heartbeat can be for link of another).
       try {
         const updatePayload = { lastSeenAt: new Date() };
         if (deviceName) updatePayload.deviceName = deviceName;
         const [affected] = await ConnectorDevice.update(updatePayload, { where: { deviceId } });
+        persisted = persisted || affected > 0;
         console.info('[connector] Heartbeat: deviceId=%s companyId=%s linkId=%s affected=%s', deviceId, companyId, link?.id ?? '—', affected);
       } catch (err) {
-        console.warn('Device heartbeat update failed:', err.message);
+        console.warn('[connector] Heartbeat device update failed: %s', err.message);
+      }
+    }
+    if (!persisted) {
+      if (!hasWarnedHeartbeatNoAssociation) {
+        hasWarnedHeartbeatNoAssociation = true;
+        console.warn('[connector] Heartbeat could not be associated (no deviceId/connectorClientId); returning 200 for backward compat');
       }
     }
 

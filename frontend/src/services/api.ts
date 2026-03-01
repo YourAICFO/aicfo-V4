@@ -288,6 +288,7 @@ export interface ConnectorStatusV1Data {
   companyId: string;
   snapshotLatestMonthKey?: string | null;
   snapshotLedgersCount?: number | null;
+  ledgerBalancesStoredCount?: number | null;
   links: ConnectorLinkV1[];
   connector: {
     deviceId: string | null;

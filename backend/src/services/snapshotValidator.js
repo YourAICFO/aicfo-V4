@@ -63,7 +63,8 @@ const updateSyncStatus = async (companyId, payload) => {
        error_message = EXCLUDED.error_message,
        last_sync_started_at = COALESCE(EXCLUDED.last_sync_started_at, data_sync_status.last_sync_started_at),
        last_sync_completed_at = COALESCE(EXCLUDED.last_sync_completed_at, data_sync_status.last_sync_completed_at),
-       "updatedAt" = NOW()`,
+       "updatedAt" = NOW(),
+       updated_at = NOW()`,
     {
       replacements: {
         companyId,

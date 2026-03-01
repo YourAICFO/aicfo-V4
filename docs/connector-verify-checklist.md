@@ -2,6 +2,8 @@
 
 Use this checklist after deploying connector/backend/frontend changes.
 
+**Before deploy:** Run backend migrations so `data_sync_status` has `updated_at` (migration `2026-03-01-data-sync-status-timestamps.sql`). This fixes "column updated at does not exist" in status/v1.
+
 ## 1. Heartbeat and online status
 
 1. Start the connector (tray or service) and ensure it is linked to a company (mapping present).
@@ -19,7 +21,7 @@ Optional: call the API directly:
 1. With the connector running and linked, trigger a full sync (from tray or API).
 2. Wait for sync to complete (sync/complete returns 200).
 3. Refresh connector status in the web app (or call `GET /api/connector/status/v1?companyId=...`).
-4. **Verify:** "No snapshot data available" does **not** appear after a successful sync; Data Readiness shows a status (e.g. "ready" or latest month). Connector Diagnostics may show `snapshotLatestMonthKey` and `snapshotLedgersCount`.
+4. **Verify:** "No snapshot data available" does **not** appear after a successful sync; Data Readiness shows a status (e.g. "ready" or "processing"). Connector Diagnostics shows `snapshotLatestMonthKey`, `snapshotLedgersCount`, and `ledgerBalancesStoredCount` (non-zero after sync).
 
 ## 3. Unlink from web
 
@@ -47,3 +49,14 @@ DATABASE_URL=postgres://... node --test test/connectorHeartbeatUnlink.test.js
 
 - Heartbeat test: updating `ConnectorDevice` by `deviceId` updates `lastSeenAt`.
 - Unlink test: setting a link’s `isActive` to false excludes it from active links for status.
+- Snapshot test: after creating LedgerMonthlyBalance rows, count for company is > 0 (status/v1 ledgerBalancesStoredCount source).
+
+---
+
+## Production verification (5 steps)
+
+1. Run migrations: node src/db/migrate.js (or your deploy pipeline) so data_sync_status.updated_at exists.
+2. Heartbeat: Start connector, wait ~30s, call GET /api/connector/status/v1?companyId=id with user JWT; confirm data.connector.lastSeenAt is set and data.connector.isOnline is true.
+3. Sync: Trigger full sync; after completion call status/v1 again; confirm data.ledgerBalancesStoredCount > 0 and data.dataReadiness.status is processing or ready.
+4. No column error: Open connector status in the UI; confirm no "column updated at does not exist" in network/console.
+5. Unlink: Use Unlink in the web app for a link; confirm link is removed and status/v1 no longer lists it.
