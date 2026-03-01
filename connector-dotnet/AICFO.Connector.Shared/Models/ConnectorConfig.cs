@@ -48,6 +48,10 @@ public sealed class ConnectorConfig
     [JsonPropertyName("mappings")]
     public List<ConnectorMapping> Mappings { get; set; } = [];
 
+    /// <summary>Last selected web company id for the dropdown; restored on load/refresh so user can switch companies and persist.</summary>
+    [JsonPropertyName("selected_web_company_id")]
+    public string? SelectedWebCompanyId { get; set; }
+
     // Legacy single-mapping fields kept for backward compatibility.
     [JsonPropertyName("company_id")]
     public string CompanyId { get; set; } = string.Empty;
