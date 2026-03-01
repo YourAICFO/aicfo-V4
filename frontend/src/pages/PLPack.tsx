@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { financeApi, connectorApi } from '../services/api';
+import { financeApi, connectorApi, type ConnectorStatusV1Data } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useReportStore } from '../store/reportStore';
 import { formatCurrency } from '../lib/format';
 import VarianceDisplay from '../components/common/VarianceDisplay';
-import { MonthSelector, formatMonthLabel } from '../components/common/MonthSelector';
+import { MonthSelector } from '../components/common/MonthSelector';
 import { TrendingUp, TrendingDown, FileText, Sparkles, Loader2, Download } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { THEME } from '../lib/theme';
@@ -55,12 +55,7 @@ export default function PLPack() {
   const { selectedReportMonth, setSelectedReportMonth } = useReportStore();
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [monthsLoading, setMonthsLoading] = useState(true);
-  const [connectorStatus, setConnectorStatus] = useState<{
-    snapshotLatestMonthKey?: string | null;
-    snapshotLedgersCount?: number | null;
-    dataReadiness?: { status?: string };
-    sync?: { lastRunStatus?: string };
-  } | null>(null);
+  const [connectorStatus, setConnectorStatus] = useState<ConnectorStatusV1Data | null>(null);
   const [month, setMonth] = useState<string>('');
   const [pack, setPack] = useState<PlPackData | null>(null);
   const [remarks, setRemarks] = useState<RemarksData | null>(null);

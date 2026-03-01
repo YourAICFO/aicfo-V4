@@ -8,7 +8,6 @@ import { useReportStore } from '../store/reportStore';
 import { Link } from 'react-router-dom';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { getConnectorDownloadUrl } from '../lib/env';
-import { MonthSelector } from '../components/common/MonthSelector';
 
 interface OverviewData {
   cashPosition: {
@@ -42,10 +41,6 @@ export default function Dashboard() {
   const [lastSyncCompletedAt, setLastSyncCompletedAt] = useState<string | null>(null);
   const [lastSnapshotMonth, setLastSnapshotMonth] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
-  const [connectorReadiness, setConnectorReadiness] = useState<string>('never');
-  const [connectorSnapshotLedgers, setConnectorSnapshotLedgers] = useState<number | null>(null);
-  const [connectorLastSyncStatus, setConnectorLastSyncStatus] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const { selectedReportMonth, setSelectedReportMonth } = useReportStore();
   const { isTrial, trialEndsInDays } = useSubscriptionStore();
@@ -60,7 +55,6 @@ export default function Dashboard() {
     if (!selectedCompanyId) return;
     financeApi.getPlMonths().then((res) => {
       const list = res?.data?.data?.months ?? [];
-      setAvailableMonths(list);
       const latest = res?.data?.data?.latest ?? list[0] ?? null;
       const snapshotKey = lastSnapshotMonth;
       const defaultMonth =
@@ -70,7 +64,7 @@ export default function Dashboard() {
         list[0] ||
         '';
       if (defaultMonth) setSelectedReportMonth(defaultMonth);
-    }).catch(() => setAvailableMonths([]));
+    }).catch(() => {});
   }, [selectedCompanyId, lastSnapshotMonth]);
 
   const loadSyncStatus = async () => {
@@ -87,9 +81,6 @@ export default function Dashboard() {
       const conn = connRes?.data?.success ? connRes.data.data : null;
       const snapshotKey = conn?.snapshotLatestMonthKey ?? response?.data?.data?.last_snapshot_month ?? null;
       setLastSnapshotMonth(snapshotKey);
-      setConnectorReadiness(conn?.dataReadiness?.status ?? 'never');
-      setConnectorSnapshotLedgers(conn?.snapshotLedgersCount ?? null);
-      setConnectorLastSyncStatus(conn?.sync?.lastRunStatus ?? null);
       setSyncError(response?.data?.data?.error_message || null);
 
       if (status === 'ready') {
