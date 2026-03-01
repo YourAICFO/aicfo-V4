@@ -785,11 +785,19 @@ router.post('/register-device', authenticate, async (req, res) => {
 ================================ */
 router.post('/sync/start', authenticateConnectorOrLegacy, async (req, res) => {
   try {
+    const linkId = req.body?.linkId || req.query?.linkId || null;
+    const deviceId = req.deviceId || req.connectorDeviceId || null;
+    if (!linkId && req.connectorAuthMode === 'device_login') {
+      console.warn('[connector] sync/start: linkId required for device login but missing in body/query');
+      return res.status(400).json({ success: false, error: 'linkId is required for device login sync operations' });
+    }
     const { link, error, statusCode } = await resolveLinkContext(req);
     if (error) {
+      console.warn('[connector] sync/start: resolveLinkContext failed', { statusCode, error, linkId, deviceId });
       return res.status(statusCode || 400).json({ success: false, error });
     }
     const { companyId } = req;
+    console.info('[connector] sync/start: creating run', { companyId, linkId: link?.id, deviceId });
 
     if (link) {
       await ConnectorCompanyLink.update(
