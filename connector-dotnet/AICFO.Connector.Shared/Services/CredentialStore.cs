@@ -1,5 +1,3 @@
-using CredentialManagement;
-
 namespace AICFO.Connector.Shared.Services;
 
 public interface ICredentialStore
@@ -17,82 +15,51 @@ public interface ICredentialStore
 
 public sealed class CredentialStore : ICredentialStore
 {
-    private static string CompanyTarget(string companyId) => $"{ConnectorPaths.CredentialPrefix}{companyId}";
-    private static string MappingTarget(string mappingId) => $"{ConnectorPaths.CredentialPrefix}MAPPING_{mappingId}";
-    private static string DeviceAuthTarget() => $"{ConnectorPaths.CredentialPrefix}DEVICE_AUTH";
-
-    private static Credential BuildCredential(string target) => new()
-    {
-        Target = target,
-        Username = "connector_token",
-        Type = CredentialType.Generic,
-        PersistanceType = PersistanceType.LocalComputer
-    };
-
     public void SaveConnectorToken(string companyId, string token)
     {
-        var credential = BuildCredential(CompanyTarget(companyId));
-        credential.Password = token;
-
-        if (!credential.Save())
+        try
         {
-            throw new InvalidOperationException("Failed to store connector token in Windows Credential Manager.");
+            DpapiSecretStore.SaveCompanyToken(companyId, token);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to store connector token.", ex);
         }
     }
 
-    public string? LoadConnectorToken(string companyId)
-    {
-        var credential = BuildCredential(CompanyTarget(companyId));
-        return credential.Load() ? credential.Password : null;
-    }
+    public string? LoadConnectorToken(string companyId) => DpapiSecretStore.LoadCompanyToken(companyId);
 
-    public void DeleteConnectorToken(string companyId)
-    {
-        var credential = BuildCredential(CompanyTarget(companyId));
-        credential.Delete();
-    }
+    public void DeleteConnectorToken(string companyId) => DpapiSecretStore.DeleteCompanyToken(companyId);
 
     public void SaveMappingToken(string mappingId, string token)
     {
-        var credential = BuildCredential(MappingTarget(mappingId));
-        credential.Password = token;
-        if (!credential.Save())
+        try
         {
-            throw new InvalidOperationException("Failed to store mapping token in Windows Credential Manager.");
+            DpapiSecretStore.SaveMappingToken(mappingId, token);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to store mapping token.", ex);
         }
     }
 
-    public string? LoadMappingToken(string mappingId)
-    {
-        var credential = BuildCredential(MappingTarget(mappingId));
-        return credential.Load() ? credential.Password : null;
-    }
+    public string? LoadMappingToken(string mappingId) => DpapiSecretStore.LoadMappingToken(mappingId);
 
-    public void DeleteMappingToken(string mappingId)
-    {
-        var credential = BuildCredential(MappingTarget(mappingId));
-        credential.Delete();
-    }
+    public void DeleteMappingToken(string mappingId) => DpapiSecretStore.DeleteMappingToken(mappingId);
 
     public void SaveDeviceAuthToken(string token)
     {
-        var credential = BuildCredential(DeviceAuthTarget());
-        credential.Password = token;
-        if (!credential.Save())
+        try
         {
-            throw new InvalidOperationException("Failed to store device auth token in Windows Credential Manager.");
+            DpapiSecretStore.SaveDeviceAuthToken(token);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to store device auth token.", ex);
         }
     }
 
-    public string? LoadDeviceAuthToken()
-    {
-        var credential = BuildCredential(DeviceAuthTarget());
-        return credential.Load() ? credential.Password : null;
-    }
+    public string? LoadDeviceAuthToken() => DpapiSecretStore.LoadDeviceAuthToken();
 
-    public void DeleteDeviceAuthToken()
-    {
-        var credential = BuildCredential(DeviceAuthTarget());
-        credential.Delete();
-    }
+    public void DeleteDeviceAuthToken() => DpapiSecretStore.DeleteDeviceAuthToken();
 }

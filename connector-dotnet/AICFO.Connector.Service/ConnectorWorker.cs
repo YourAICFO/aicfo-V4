@@ -44,7 +44,8 @@ public sealed class ConnectorWorker(
                             var token = GetTokenForMapping(mapping);
                             if (string.IsNullOrWhiteSpace(token))
                             {
-                                throw new InvalidOperationException($"Connector token missing for mapping {mapping.Id}.");
+                                await PersistMappingState(mapping.Id, m => m.LastError = "Missing token. Re-link from Tray.");
+                                return;
                             }
 
                             await apiClient.SendHeartbeatAsync(config, mapping, token, cancellationToken);
@@ -137,7 +138,8 @@ public sealed class ConnectorWorker(
                 var token = GetTokenForMapping(mapping);
                 if (string.IsNullOrWhiteSpace(token))
                 {
-                    throw new InvalidOperationException($"Connector token missing for mapping {mapping.Id}.");
+                    await PersistMappingState(mapping.Id, m => m.LastError = "Missing token. Re-link from Tray.");
+                    throw new InvalidOperationException("Missing token. Re-link from Tray.");
                 }
 
                 logger.LogInformation(
@@ -287,7 +289,7 @@ public sealed class ConnectorWorker(
             return fileToken;
         }
 
-        logger.LogWarning("[SYNC] No token for mapping Id={MappingId} LinkId={LinkId}; Credential Manager and file store both empty. Ensure Tray has logged in and linked.", mapping.Id, mapping.LinkId ?? "(null)");
+        logger.LogWarning("[AUTH] Missing token for mappingId={MappingId}. Re-link from Tray.", mapping.Id);
         return null;
     }
 
