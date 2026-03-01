@@ -13,5 +13,17 @@ frontend/dist/
 connector-dotnet/out/
 connector-dotnet/publish/
 
+# connector-dotnet: never commit build outputs
+**/bin/
+**/obj/
+**/*.msi
+**/*.wixpdb
+**/#cab*.cab
+**/*.nuget.dgspec.json
+**/project.assets.json
+**/project.nuget.cache
+**/*.assets.cache
+*.log
+
 # backend: do not store MSI binaries in repo; production uses CONNECTOR_DOWNLOAD_URL redirect
 backend/downloads/*.msi

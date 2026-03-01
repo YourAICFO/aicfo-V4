@@ -1,3 +1,0 @@
-C:\Projects\aicfo-V4\connector-dotnet\publish\tray\AICFO.Connector.Tray.pdb
-C:\Projects\aicfo-V4\connector-dotnet\publish\tray\AICFO.Connector.Shared.pdb
-C:\Projects\aicfo-V4\connector-dotnet\publish\tray\AICFO.Connector.Tray.exe
