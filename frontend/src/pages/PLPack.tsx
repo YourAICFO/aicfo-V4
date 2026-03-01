@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { financeApi } from '../services/api';
+import { financeApi, connectorApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useReportStore } from '../store/reportStore';
 import { formatCurrency } from '../lib/format';
 import VarianceDisplay from '../components/common/VarianceDisplay';
+import { MonthSelector, formatMonthLabel } from '../components/common/MonthSelector';
 import { TrendingUp, TrendingDown, FileText, Sparkles, Loader2, Download } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { THEME } from '../lib/theme';
@@ -48,16 +50,17 @@ type RemarksData = {
   aiDraftUpdatedAt: string | null;
 };
 
-function formatMonthLabel(value: string): string {
-  const [y, m] = value.split('-').map(Number);
-  const d = new Date(y, m - 1, 1);
-  return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-}
-
 export default function PLPack() {
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const { selectedReportMonth, setSelectedReportMonth } = useReportStore();
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [monthsLoading, setMonthsLoading] = useState(true);
+  const [connectorStatus, setConnectorStatus] = useState<{
+    snapshotLatestMonthKey?: string | null;
+    snapshotLedgersCount?: number | null;
+    dataReadiness?: { status?: string };
+    sync?: { lastRunStatus?: string };
+  } | null>(null);
   const [month, setMonth] = useState<string>('');
   const [pack, setPack] = useState<PlPackData | null>(null);
   const [remarks, setRemarks] = useState<RemarksData | null>(null);
@@ -72,25 +75,39 @@ export default function PLPack() {
     if (!selectedCompanyId) return;
     let cancelled = false;
     setMonthsLoading(true);
-    financeApi
-      .getPlMonths()
-      .then((res) => {
-        if (cancelled) return;
-        const list = res?.data?.data?.months ?? [];
-        const latest = res?.data?.data?.latest ?? list[0] ?? null;
-        setAvailableMonths(list);
-        setMonth((prev) => (latest || prev || list[0] || ''));
-      })
-      .catch(() => {
-        if (!cancelled) setAvailableMonths([]);
-      })
-      .finally(() => {
-        if (!cancelled) setMonthsLoading(false);
-      });
+    Promise.all([
+      financeApi.getPlMonths(),
+      connectorApi.getStatusV1(selectedCompanyId).catch(() => null),
+    ]).then(([plRes, connRes]) => {
+      if (cancelled) return;
+      const list = plRes?.data?.data?.months ?? [];
+      const plLatest = plRes?.data?.data?.latest ?? list[0] ?? null;
+      const conn = connRes?.data?.success ? connRes.data.data : null;
+      if (conn) setConnectorStatus(conn);
+      setAvailableMonths(list);
+      const snapshotKey = (conn?.snapshotLatestMonthKey && String(conn.snapshotLatestMonthKey).trim()) || null;
+      const defaultMonth =
+        snapshotKey ||
+        (selectedReportMonth && list.includes(selectedReportMonth) ? selectedReportMonth : null) ||
+        plLatest ||
+        list[0] ||
+        '';
+      setMonth(defaultMonth);
+      if (defaultMonth) setSelectedReportMonth(defaultMonth);
+    }).catch(() => {
+      if (!cancelled) setAvailableMonths([]);
+    }).finally(() => {
+      if (!cancelled) setMonthsLoading(false);
+    });
     return () => {
       cancelled = true;
     };
   }, [selectedCompanyId]);
+
+  const handleMonthChange = (m: string) => {
+    setMonth(m);
+    setSelectedReportMonth(m || null);
+  };
 
   const loadPackAndRemarks = useCallback(async () => {
     if (!selectedCompanyId || !month) return;
@@ -174,8 +191,26 @@ export default function PLPack() {
     }
   };
 
-  const monthOptions = availableMonths.map((value) => ({ value, label: formatMonthLabel(value) }));
-  const monthSelectorDisabled = monthsLoading || availableMonths.length === 0;
+  const readinessStatus = connectorStatus?.dataReadiness?.status ?? 'never';
+  const lastSyncStatus = connectorStatus?.sync?.lastRunStatus ?? null;
+  const snapshotLedgersCount = connectorStatus?.snapshotLedgersCount ?? null;
+  const snapshotKey = (connectorStatus?.snapshotLatestMonthKey && String(connectorStatus.snapshotLatestMonthKey).trim()) || null;
+  const noSnapshotButSyncSuccess =
+    (snapshotLedgersCount === 0 || snapshotLedgersCount == null) &&
+    (lastSyncStatus === 'success' || lastSyncStatus === 'partial');
+  const syncFailed = lastSyncStatus === 'failed';
+  const displayMonths = availableMonths.length > 0 ? availableMonths : (snapshotKey ? [snapshotKey] : []);
+  const monthSelectorDisabled = monthsLoading && displayMonths.length === 0;
+  const monthSelectorMessage =
+    !snapshotKey && displayMonths.length === 0
+      ? 'Processing or no data yet. Sync accounting data and wait for processing to complete.'
+      : readinessStatus === 'processing'
+        ? 'Sync received. Processing in progress. Refresh in a minute.'
+        : noSnapshotButSyncSuccess
+          ? 'Sync succeeded, but no snapshot is available yet. This usually means the processing worker hasn\'t stored month data.'
+          : syncFailed
+            ? 'Last sync failed. Open connector logs and retry sync.'
+            : undefined;
 
   if (!selectedCompanyId) {
     return (
@@ -194,11 +229,22 @@ export default function PLPack() {
     );
   }
 
-  if (!month && availableMonths.length === 0) {
+  if (!month && displayMonths.length === 0) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">P&L Review Pack</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">No P&L data available for this company yet. Sync accounting data to see months.</p>
+        {readinessStatus === 'processing' && (
+          <p className="text-sm text-amber-700 dark:text-amber-400">Sync received. Processing in progress. Refresh in a minute.</p>
+        )}
+        {noSnapshotButSyncSuccess && (
+          <p className="text-sm text-amber-700 dark:text-amber-400">Sync succeeded, but no snapshot is available yet. This usually means the processing worker hasn&apos;t stored month data.</p>
+        )}
+        {syncFailed && (
+          <p className="text-sm text-red-600 dark:text-red-400">Last sync failed. Open connector logs and retry sync.</p>
+        )}
+        {readinessStatus !== 'processing' && !noSnapshotButSyncSuccess && !syncFailed && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No P&L data available for this company yet. Sync accounting data to see months.</p>
+        )}
       </div>
     );
   }
@@ -219,23 +265,14 @@ export default function PLPack() {
           <p className="text-sm text-slate-500 dark:text-slate-400">Deterministic P&L with drivers and optional AI narrative</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Month</label>
-            <select
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-60"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              disabled={monthSelectorDisabled}
-            >
-              {monthOptions.length === 0 ? (
-                <option value="">No months</option>
-              ) : (
-                monthOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))
-              )}
-            </select>
-          </div>
+          <MonthSelector
+            availableMonths={displayMonths}
+            value={month}
+            onChange={handleMonthChange}
+            disabled={monthSelectorDisabled}
+            disabledMessage={monthSelectorMessage}
+            label="Month"
+          />
           <button
             type="button"
             onClick={handleDownloadReport}

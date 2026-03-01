@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatCurrency } from '../lib/format';
-import { dashboardApi, syncApi } from '../services/api';
+import { dashboardApi, syncApi, connectorApi, financeApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useReportStore } from '../store/reportStore';
 import { Link } from 'react-router-dom';
 import { useSubscriptionStore } from '../store/subscriptionStore';
 import { getConnectorDownloadUrl } from '../lib/env';
+import { MonthSelector } from '../components/common/MonthSelector';
 
 interface OverviewData {
   cashPosition: {
@@ -40,7 +42,12 @@ export default function Dashboard() {
   const [lastSyncCompletedAt, setLastSyncCompletedAt] = useState<string | null>(null);
   const [lastSnapshotMonth, setLastSnapshotMonth] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [connectorReadiness, setConnectorReadiness] = useState<string>('never');
+  const [connectorSnapshotLedgers, setConnectorSnapshotLedgers] = useState<number | null>(null);
+  const [connectorLastSyncStatus, setConnectorLastSyncStatus] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
+  const { selectedReportMonth, setSelectedReportMonth } = useReportStore();
   const { isTrial, trialEndsInDays } = useSubscriptionStore();
   const connectorDownloadUrl = getConnectorDownloadUrl();
 
@@ -49,14 +56,40 @@ export default function Dashboard() {
     loadSyncStatus();
   }, [selectedCompanyId]);
 
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    financeApi.getPlMonths().then((res) => {
+      const list = res?.data?.data?.months ?? [];
+      setAvailableMonths(list);
+      const latest = res?.data?.data?.latest ?? list[0] ?? null;
+      const snapshotKey = lastSnapshotMonth;
+      const defaultMonth =
+        (snapshotKey && list.includes(snapshotKey) ? snapshotKey : null) ||
+        (selectedReportMonth && list.includes(selectedReportMonth) ? selectedReportMonth : null) ||
+        latest ||
+        list[0] ||
+        '';
+      if (defaultMonth) setSelectedReportMonth(defaultMonth);
+    }).catch(() => setAvailableMonths([]));
+  }, [selectedCompanyId, lastSnapshotMonth]);
+
   const loadSyncStatus = async () => {
     try {
       setLoading(true);
-      const response = await syncApi.getStatus();
+      const [syncRes, connRes] = await Promise.all([
+        syncApi.getStatus(),
+        selectedCompanyId ? connectorApi.getStatusV1(selectedCompanyId).catch(() => null) : null,
+      ]);
+      const response = syncRes;
       const status = response?.data?.data?.status || 'syncing';
       setSyncStatus(status);
       setLastSyncCompletedAt(response?.data?.data?.last_sync_completed_at || null);
-      setLastSnapshotMonth(response?.data?.data?.last_snapshot_month || null);
+      const conn = connRes?.data?.success ? connRes.data.data : null;
+      const snapshotKey = conn?.snapshotLatestMonthKey ?? response?.data?.data?.last_snapshot_month ?? null;
+      setLastSnapshotMonth(snapshotKey);
+      setConnectorReadiness(conn?.dataReadiness?.status ?? 'never');
+      setConnectorSnapshotLedgers(conn?.snapshotLedgersCount ?? null);
+      setConnectorLastSyncStatus(conn?.sync?.lastRunStatus ?? null);
       setSyncError(response?.data?.data?.error_message || null);
 
       if (status === 'ready') {

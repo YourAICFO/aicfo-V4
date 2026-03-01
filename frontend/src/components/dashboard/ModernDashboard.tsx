@@ -81,7 +81,10 @@ const ModernDashboard: React.FC = () => {
         try {
           const connectorResponse = await connectorApi.getStatusV1(selectedCompanyId);
           if (connectorResponse?.data?.success) {
-            setConnectorStatus(connectorResponse.data.data);
+            const conn = connectorResponse.data.data;
+            setConnectorStatus(conn);
+            const latestKey = conn?.snapshotLatestMonthKey ?? response?.data?.data?.last_snapshot_month ?? null;
+            setLastSnapshotMonth(latestKey || null);
           }
         } catch (error) {
           setConnectorStatus(null);
@@ -323,6 +326,23 @@ const ModernDashboard: React.FC = () => {
             </CardContent>
           </Card>
         )}
+
+        {connectorStatus && !data && (() => {
+          const readiness = connectorStatus?.dataReadiness?.status ?? 'never';
+          const lastSync = connectorStatus?.sync?.lastRunStatus ?? null;
+          const snapshotCount = connectorStatus?.snapshotLedgersCount ?? null;
+          const processing = readiness === 'processing';
+          const noSnapshotButSuccess = (snapshotCount === 0 || snapshotCount == null) && (lastSync === 'success' || lastSync === 'partial');
+          const syncFailed = lastSync === 'failed';
+          const emptyMsg = processing ? 'Sync received. Processing in progress. Refresh in a minute.' : noSnapshotButSuccess ? 'Sync succeeded, but no snapshot is available yet. This usually means the processing worker hasn\'t stored month data.' : syncFailed ? 'Last sync failed. Open connector logs and retry sync.' : null;
+          return emptyMsg ? (
+            <Card variant="warning" className="mt-2">
+              <CardContent className="p-4">
+                <p className="text-sm text-amber-800 dark:text-amber-200">{emptyMsg}</p>
+              </CardContent>
+            </Card>
+          ) : null;
+        })()}
 
         {/* Command Center: Cash & Bank, Runway, Collections Risk, Payables Pressure, Profit Signal */}
         {data && (
