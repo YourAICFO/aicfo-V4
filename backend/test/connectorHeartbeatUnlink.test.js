@@ -9,7 +9,7 @@
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { Sequelize, Op } = require('sequelize');
+const { Sequelize } = require('sequelize');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -58,12 +58,16 @@ if (!DATABASE_URL) {
 
     it('heartbeat: update by deviceId updates lastSeenAt', async () => {
       const user = await User.findOne({ attributes: ['id'], where: {} });
+      if (!user) {
+        console.log('SKIP: no user in DB');
+        return;
+      }
       const company = await Company.findOne({
-        where: { ownerId: user?.id },
+        where: { ownerId: user.id },
         attributes: ['id']
       });
-      if (!user || !company) {
-        console.log('SKIP: no user/company');
+      if (!company) {
+        console.log('SKIP: no company in DB');
         return;
       }
       const deviceId = `test-dev-${Date.now()}`;
@@ -96,12 +100,16 @@ if (!DATABASE_URL) {
 
     it('unlink: link with isActive false is excluded from active links', async () => {
       const user = await User.findOne({ attributes: ['id'], where: {} });
+      if (!user) {
+        console.log('SKIP: no user in DB');
+        return;
+      }
       const company = await Company.findOne({
-        where: { ownerId: user?.id },
+        where: { ownerId: user.id },
         attributes: ['id']
       });
-      if (!user || !company) {
-        console.log('SKIP: no user/company');
+      if (!company) {
+        console.log('SKIP: no company in DB');
         return;
       }
       const link = await ConnectorCompanyLink.create({
