@@ -49,6 +49,14 @@ const PORT = process.env.PORT || 5000;
 initSentry({ serviceName: 'ai-cfo-api' });
 
 /* ===============================
+   Trust proxy (production/staging)
+   Required for correct client IP and rate limiting behind Railway/load balancers.
+================================ */
+if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
+  app.set('trust proxy', 1);
+}
+
+/* ===============================
    Security middleware
 ================================ */
 app.use(

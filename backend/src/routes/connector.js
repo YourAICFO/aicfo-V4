@@ -458,7 +458,7 @@ router.get('/device/companies', authenticateConnectorOrLegacy, async (req, res) 
         deletedAt: null
       },
       attributes: ['id', 'name'],
-      order: [['createdAt', 'DESC']]
+      order: [[sequelize.col('created_at'), 'DESC']]
     });
 
     return res.json({
@@ -500,7 +500,7 @@ router.get('/device/links', authenticateConnectorOrLegacy, async (req, res) => {
           attributes: ['id', 'name']
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [[sequelize.col('created_at'), 'DESC']]
     });
 
     return res.json({
@@ -676,7 +676,7 @@ router.get('/companies', authenticate, async (req, res) => {
     const companies = await Company.findAll({
       where: { ownerId: req.userId },
       attributes: ['id', 'name', 'currency', 'createdAt'],
-      order: [['createdAt', 'DESC']]
+      order: [[sequelize.col('created_at'), 'DESC']]
     });
 
     return res.json({

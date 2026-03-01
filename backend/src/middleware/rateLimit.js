@@ -29,15 +29,30 @@ function warnRedisOnce(message, err) {
   }
 }
 
+/**
+ * Clamp totalHits to avoid express-rate-limit ValidationError (ERR_ERL_INVALID_HITS)
+ * when Redis/store returns 0 or invalid value.
+ */
+function normalizeIncrementResult(result, windowMs) {
+  if (!result || typeof result.totalHits !== 'number') {
+    return { totalHits: 1, resetTime: new Date(Date.now() + windowMs) };
+  }
+  if (result.totalHits < 1) {
+    return { ...result, totalHits: 1 };
+  }
+  return result;
+}
+
 /** Wraps a Redis store to fail-open on errors: allows the request and logs once. */
 function wrapStoreWithFailOpen(store, windowMs) {
   return {
     async increment(key) {
       try {
-        return await store.increment(key);
+        const result = await store.increment(key);
+        return normalizeIncrementResult(result, windowMs);
       } catch (err) {
         warnRedisOnce('Rate limit Redis store error; allowing request (fail-open).', err);
-        return { totalHits: 0, resetTime: new Date(Date.now() + windowMs) };
+        return { totalHits: 1, resetTime: new Date(Date.now() + windowMs) };
       }
     },
     async decrement(key) {
