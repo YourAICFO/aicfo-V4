@@ -143,6 +143,12 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
             return $"Tally returned LINEERROR: {errorText}";
         }
 
+        // HTML / wrong endpoint — license or gateway page, not XML API.
+        if (postResponse.Contains("<html", StringComparison.OrdinalIgnoreCase) ||
+            postResponse.Contains("License server is Running", StringComparison.OrdinalIgnoreCase) ||
+            postResponse.Contains("</html>", StringComparison.OrdinalIgnoreCase))
+            return "Wrong endpoint or not Tally XML API (HTML/license page). Use Tally XML port and enable XML in Gateway of Tally.";
+
         // Valid XML export — must contain at least one company entry OR an empty but well-formed envelope.
         if (postResponse.Contains("<COMPANYNAME>", StringComparison.OrdinalIgnoreCase) ||
             postResponse.Contains("<ENVELOPE>", StringComparison.OrdinalIgnoreCase))
@@ -151,19 +157,142 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
         return "Tally XML API returned an unexpected response format.";
     }
 
+    /// <summary>Tag names used by Tally for company name in List of Companies export (varies by version).</summary>
+    private static readonly string[] CompanyNameTagNames = ["COMPANYNAME", "NAME", "COMPANY", "CMPNAME"];
+
     public async Task<IReadOnlyList<string>> GetCompanyNamesAsync(string host, int port, CancellationToken cancellationToken)
     {
-        var response = await PostXmlAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
-        var doc = XDocument.Parse(response);
-        var names = doc
-            .Descendants()
-            .Where(e => string.Equals(e.Name.LocalName, "COMPANYNAME", StringComparison.OrdinalIgnoreCase))
-            .Select(e => e.Value?.Trim())
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var (decoded, statusCode, contentType, rawBytes) = await PostXmlWithDiagnosticsAsync(host, port, BuildCompanyInfoRequest(), cancellationToken);
+
+        // Detect HTML / wrong endpoint before parsing.
+        if (IsHtmlOrNonXmlResponse(decoded))
+        {
+            logger.LogWarning("Tally company list: response is HTML or non-XML (status={StatusCode} len={Len}). Wrong port or enable XML in Tally.",
+                (int)statusCode, rawBytes.Length);
+            return [];
+        }
+
+        var names = ExtractCompanyNamesFromXml(decoded);
+        if (names.Count == 0)
+        {
+            var snippet = decoded.Length > 300 ? decoded.Substring(0, 300) + "..." : decoded;
+            logger.LogWarning("Tally company list: 0 companies extracted. StatusCode={StatusCode} ContentType={ContentType} Len={Len} Snippet={Snippet}",
+                (int)statusCode, contentType ?? "(null)", rawBytes.Length, LogRedaction.RedactSecrets(snippet));
+        }
+        else
+        {
+            logger.LogInformation("[INF] Tally company list: {Count} companies", names.Count);
+        }
+
         return names;
+    }
+
+    private static bool IsHtmlOrNonXmlResponse(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return true;
+        var b = body.TrimStart();
+        if (b.StartsWith("<html", StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Contains("License server is Running", StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Contains("</html>", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>Extract company names from Tally XML; supports COMPANYNAME, NAME, COMPANY, CMPNAME.</summary>
+    public static List<string> ExtractCompanyNamesFromXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return [];
+        try
+        {
+            var doc = XDocument.Parse(xml);
+            var names = new List<string>();
+            foreach (var element in doc.Descendants())
+            {
+                if (CompanyNameTagNames.Any(tag => string.Equals(element.Name.LocalName, tag, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var v = element.Value?.Trim();
+                    if (!string.IsNullOrWhiteSpace(v)) names.Add(v);
+                }
+            }
+            return names.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>POST and return decoded body + raw bytes and response metadata for diagnostics.</summary>
+    private async Task<(string decoded, int statusCode, string? contentType, byte[] rawBytes)> PostXmlWithDiagnosticsAsync(string host, int port, string body, CancellationToken cancellationToken)
+    {
+        var url = $"http://{host}:{port}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "text/xml")
+        };
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var rawBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var contentType = response.Content.Headers.ContentType?.ToString();
+        var decoded = DecodeTallyResponse(rawBytes, contentType);
+        logger.LogInformation("[INF] Tally POST List of Companies => StatusCode={Code} ContentType={Ct} Len={Len}",
+            (int)response.StatusCode, contentType ?? "-", rawBytes.Length);
+        return (decoded, (int)response.StatusCode, contentType, rawBytes);
+    }
+
+    private static string DecodeTallyResponse(byte[] bytes, string? contentType)
+    {
+        if (bytes.Length == 0) return string.Empty;
+        // UTF-16 LE BOM
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        // UTF-16 BE BOM
+        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        // UTF-8 BOM
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        // Default UTF-8
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private async Task<string> PostXmlAsync(string host, int port, string body, CancellationToken cancellationToken, ConnectorConfig? config = null)
+    {
+        var timeoutSeconds = config?.TallyRequestTimeoutSeconds is > 0 ? config.TallyRequestTimeoutSeconds : 30;
+        var maxRetries = config?.TallyRequestMaxRetries is >= 0 ? config.TallyRequestMaxRetries : 3;
+        var url = $"http://{host}:{port}";
+        var attempt = 0;
+
+        while (true)
+        {
+            attempt++;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(body, Encoding.UTF8, "text/xml")
+                };
+
+                using var response = await httpClient.SendAsync(request, timeoutCts.Token);
+                response.EnsureSuccessStatusCode();
+                var rawBytes = await response.Content.ReadAsByteArrayAsync(timeoutCts.Token);
+                var contentType = response.Content.Headers.ContentType?.ToString();
+                return DecodeTallyResponse(rawBytes, contentType);
+            }
+            catch (Exception ex) when (attempt <= maxRetries && !cancellationToken.IsCancellationRequested)
+            {
+                var delay = TimeSpan.FromMilliseconds(Math.Min(2000 * attempt, 10000));
+                logger.LogWarning(
+                    ex,
+                    "Tally XML request retry host={Host} port={Port} attempt={Attempt} maxRetries={MaxRetries} delayMs={DelayMs}",
+                    host,
+                    port,
+                    attempt,
+                    maxRetries,
+                    delay.TotalMilliseconds);
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
     }
 
     public async Task<TallySnapshot> FetchSnapshotAsync(ConnectorConfig config, string? tallyCompanyName, CancellationToken cancellationToken)
@@ -245,45 +374,6 @@ public sealed class TallyXmlClient(HttpClient httpClient, ILogger<TallyXmlClient
             Loans = loans,
             InterestSummary = interestSummary
         };
-    }
-
-    private async Task<string> PostXmlAsync(string host, int port, string body, CancellationToken cancellationToken, ConnectorConfig? config = null)
-    {
-        var timeoutSeconds = config?.TallyRequestTimeoutSeconds is > 0 ? config.TallyRequestTimeoutSeconds : 30;
-        var maxRetries = config?.TallyRequestMaxRetries is >= 0 ? config.TallyRequestMaxRetries : 3;
-        var url = $"http://{host}:{port}";
-        var attempt = 0;
-
-        while (true)
-        {
-            attempt++;
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, url)
-                {
-                    Content = new StringContent(body, Encoding.UTF8, "text/xml")
-                };
-
-                using var response = await httpClient.SendAsync(request, timeoutCts.Token);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync(timeoutCts.Token);
-            }
-            catch (Exception ex) when (attempt <= maxRetries && !cancellationToken.IsCancellationRequested)
-            {
-                var delay = TimeSpan.FromMilliseconds(Math.Min(2000 * attempt, 10000));
-                logger.LogWarning(
-                    ex,
-                    "Tally XML request retry host={Host} port={Port} attempt={Attempt} maxRetries={MaxRetries} delayMs={DelayMs}",
-                    host,
-                    port,
-                    attempt,
-                    maxRetries,
-                    delay.TotalMilliseconds);
-                await Task.Delay(delay, cancellationToken);
-            }
-        }
     }
 
     private static string BuildCompanyInfoRequest() =>
