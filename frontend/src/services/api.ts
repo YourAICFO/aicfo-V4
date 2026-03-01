@@ -267,6 +267,11 @@ export const connectorApi = {
         'X-Company-Id': companyId,
       },
     }),
+  unlink: (companyId: string, linkId: string) =>
+    api.post<{ success: boolean; data: { id: string; isActive: false } }>('/connector/unlink', {
+      companyId,
+      linkId,
+    }),
 };
 
 export interface ConnectorLinkV1 {
@@ -281,6 +286,8 @@ export interface ConnectorLinkV1 {
 
 export interface ConnectorStatusV1Data {
   companyId: string;
+  snapshotLatestMonthKey?: string | null;
+  snapshotLedgersCount?: number | null;
   links: ConnectorLinkV1[];
   connector: {
     deviceId: string | null;

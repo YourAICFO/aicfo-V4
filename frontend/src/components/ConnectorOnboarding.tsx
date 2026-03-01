@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, RefreshCw, Settings, Download, Plug } from 'lucide-react';
-import { connectorApi, type ConnectorStatusV1Data } from '../services/api';
+import { CheckCircle, AlertCircle, RefreshCw, Settings, Download, Plug, Unlink } from 'lucide-react';
+import { connectorApi, type ConnectorStatusV1Data, type ConnectorLinkV1 } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { getConnectorDownloadUrl } from '../lib/env';
 
@@ -17,6 +17,7 @@ export default function ConnectorOnboarding() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [unlinkingLinkId, setUnlinkingLinkId] = useState<string | null>(null);
   const selectedCompanyId = useAuthStore((state) => state.selectedCompanyId);
   const connectorDownloadUrl = getConnectorDownloadUrl();
 
@@ -131,10 +132,29 @@ export default function ConnectorOnboarding() {
       const payload = {
         selectedCompanyId,
         connectorStatusV1: status,
+        at: new Date().toISOString(),
       };
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-    } catch (error) {
-      console.error('Failed to copy diagnostics:', error);
+    } catch (err) {
+      console.error('Failed to copy diagnostics:', err);
+    }
+  };
+
+  const handleUnlink = async (link: ConnectorLinkV1) => {
+    if (!selectedCompanyId) return;
+    const confirmed = window.confirm(
+      `Unlink "${link.tallyCompanyName || link.tallyCompanyId || 'Tally company'}" from this AI CFO company? This cannot be undone. You can link again from the connector tray.`
+    );
+    if (!confirmed) return;
+    try {
+      setUnlinkingLinkId(link.id);
+      setError(null);
+      await connectorApi.unlink(selectedCompanyId, link.id);
+      await loadConnectorStatus();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Unlink failed');
+    } finally {
+      setUnlinkingLinkId(null);
     }
   };
 
@@ -199,6 +219,34 @@ export default function ConnectorOnboarding() {
           <p className="text-sm text-amber-700">
             Connector is linked but not online. Start the connector tray app.
           </p>
+        </div>
+      )}
+
+      {/* Linked Tally companies with Unlink */}
+      {(status?.links?.length ?? 0) > 0 && (
+        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <p className="font-medium text-gray-900 mb-2">Linked Tally companies</p>
+          <ul className="space-y-2">
+            {status!.links!.map((link) => (
+              <li
+                key={link.id}
+                className="flex items-center justify-between gap-3 py-2 border-b border-gray-200 last:border-0"
+              >
+                <span className="text-sm text-gray-700">
+                  {link.tallyCompanyName || link.tallyCompanyId || link.id}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleUnlink(link)}
+                  disabled={unlinkingLinkId === link.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-700 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Unlink className="w-4 h-4" />
+                  {unlinkingLinkId === link.id ? 'Unlinking...' : 'Unlink'}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -282,19 +330,25 @@ export default function ConnectorOnboarding() {
         </div>
       </div>
 
-      {/* Status Summary */}
+      {/* Connector Diagnostics */}
       {status && (
         <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Plug className="w-5 h-5 text-gray-600" />
               <div>
-                <p className="font-medium text-gray-900">Connector Status</p>
+                <p className="font-medium text-gray-900">Connector Diagnostics</p>
                 <p className="text-sm text-gray-600">
-                  Sync: {status.sync?.lastRunStatus || 'never'}{status.sync?.lastRunCompletedAt ? ` • ${new Date(status.sync.lastRunCompletedAt).toLocaleString()}` : ''}
+                  lastSeenAt: {status.connector?.lastSeenAt ? new Date(status.connector.lastSeenAt).toLocaleString() : '—'} • isOnline: {status.connector?.isOnline ? 'Yes' : 'No'}
+                  {status.connector?.deviceName ? ` • device: ${status.connector.deviceName}` : ''}
+                </p>
+                <p className="text-sm text-gray-600">
+                  lastRunId: {status.sync?.lastRunId || '—'} • lastSyncAt: {status.sync?.lastRunCompletedAt ? new Date(status.sync.lastRunCompletedAt).toLocaleString() : '—'}
                 </p>
                 <p className="text-sm text-gray-600">
                   Readiness: {status.dataReadiness?.status || 'never'}{status.dataReadiness?.latestMonthKey ? ` • ${status.dataReadiness.latestMonthKey}` : ''}
+                  {status.snapshotLatestMonthKey != null ? ` • snapshotMonth: ${status.snapshotLatestMonthKey}` : ''}
+                  {status.snapshotLedgersCount != null ? ` • snapshotLedgers: ${status.snapshotLedgersCount}` : ''}
                 </p>
               </div>
             </div>
@@ -316,8 +370,12 @@ export default function ConnectorOnboarding() {
               </span>
             </div>
           </div>
-          {status.sync?.lastError && (
-            <p className="mt-2 text-sm text-red-600">Last error: {status.sync.lastError}</p>
+          {(status.sync?.lastError || status.dataReadiness?.status === 'never') && (
+            <p className="mt-2 text-sm text-red-600">
+              {status.sync?.lastError ? `Last error: ${status.sync.lastError}` : ''}
+              {status.sync?.lastError && status.dataReadiness?.status === 'never' ? ' • ' : ''}
+              {status.dataReadiness?.status === 'never' ? 'No snapshot data available yet.' : ''}
+            </p>
           )}
         </div>
       )}

@@ -15,6 +15,7 @@ public sealed class ConnectorWorker(
     SyncNowSignal syncNowSignal) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _mappingLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, bool> _heartbeatSummaryLogged = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -41,11 +42,21 @@ public sealed class ConnectorWorker(
                         "heartbeat",
                         async () =>
                         {
-                            var token = GetTokenForMapping(mapping);
+                            var (token, tokenType) = GetTokenAndTypeForMapping(mapping);
                             if (string.IsNullOrWhiteSpace(token))
                             {
                                 await PersistMappingState(mapping.Id, m => m.LastError = "Missing token. Re-link from Tray.");
                                 return;
+                            }
+
+                            if (_heartbeatSummaryLogged.TryAdd(mapping.Id, true))
+                            {
+                                logger.LogInformation(
+                                    "[HEARTBEAT] Payload summary (once per run): linkId={LinkId} companyId={CompanyId} mappingId={MappingId} tokenType={TokenType}",
+                                    mapping.LinkId ?? "(null)",
+                                    mapping.CompanyId ?? "(null)",
+                                    mapping.Id,
+                                    tokenType);
                             }
 
                             await apiClient.SendHeartbeatAsync(config, mapping, token, cancellationToken);
@@ -272,25 +283,32 @@ public sealed class ConnectorWorker(
 
     private string? GetTokenForMapping(ConnectorMapping mapping)
     {
+        var (token, _) = GetTokenAndTypeForMapping(mapping);
+        return token;
+    }
+
+    private (string? Token, string TokenType) GetTokenAndTypeForMapping(ConnectorMapping mapping)
+    {
         var mappingToken = credentialStore.LoadMappingToken(mapping.Id);
-        if (!string.IsNullOrWhiteSpace(mappingToken)) return mappingToken;
+        if (!string.IsNullOrWhiteSpace(mappingToken))
+            return (mappingToken, "device_token");
 
         var legacyToken = credentialStore.LoadConnectorToken(mapping.CompanyId);
         if (!string.IsNullOrWhiteSpace(legacyToken))
         {
             credentialStore.SaveMappingToken(mapping.Id, legacyToken);
-            return legacyToken;
+            return (legacyToken, "legacy_connector_token");
         }
 
         var fileToken = tokenFileStore.ReadMappingToken(mapping.Id);
         if (!string.IsNullOrWhiteSpace(fileToken))
         {
             logger.LogInformation("[SYNC] Token for mapping {MappingId} loaded from file store (Service can sync)", mapping.Id);
-            return fileToken;
+            return (fileToken, "device_token");
         }
 
         logger.LogWarning("[AUTH] Missing token for mappingId={MappingId}. Re-link from Tray.", mapping.Id);
-        return null;
+        return (null, "none");
     }
 
     private Task PersistMappingState(string mappingId, Action<ConnectorMapping> apply)

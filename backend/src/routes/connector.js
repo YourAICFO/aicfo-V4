@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { QueryTypes } = require('sequelize');
+const { QueryTypes, Op } = require('sequelize');
 const router = express.Router();
 
 const { integrationService, authService } = require('../services');
@@ -109,11 +109,18 @@ const resolveLinkContext = async (req) => {
 
 const buildStableStatusResponse = async (companyId) => {
   const onlineThresholdSeconds = Number(process.env.CONNECTOR_ONLINE_THRESHOLD_SECONDS || 120);
-  // Identity and health are ConnectorDevice-first; ConnectorClient is legacy fallback for old tokens.
+  // Resolve userIds that have active links for this company (so we show online when same device heartbeats for another company)
+  const activeLinksForCompany = await ConnectorCompanyLink.findAll({
+    where: { companyId, isActive: true },
+    attributes: ['id', 'companyId', 'userId', 'tallyCompanyId', 'tallyCompanyName', 'lastSyncAt', 'lastSyncStatus']
+  });
+  const linkUserIds = [...new Set(activeLinksForCompany.map((l) => l.userId).filter(Boolean))];
+  const deviceWhere = linkUserIds.length > 0
+    ? { [Op.or]: [{ companyId, status: 'active' }, { userId: { [Op.in]: linkUserIds }, status: 'active' }] }
+    : { companyId, status: 'active' };
   const [latestActiveDevice, latestConnectorClient, latestRun, latestSnapshot] = await Promise.all([
     ConnectorDevice.findOne({
-      where: { companyId, status: 'active' },
-      // Use physical column names to avoid timestamp attribute alias differences across Sequelize configs.
+      where: deviceWhere,
       order: [['last_seen_at', 'DESC'], ['updated_at', 'DESC']],
       raw: true
     }),
@@ -188,14 +195,16 @@ const buildStableStatusResponse = async (companyId) => {
   const latestMonthKey = dataSyncStatus?.last_snapshot_month || latestSnapshot?.month || null;
   const readinessStatus = dataSyncStatus?.status || 'never';
 
-  const activeLinks = await ConnectorCompanyLink.findAll({
-    where: { companyId, isActive: true },
-    attributes: ['id', 'companyId', 'tallyCompanyId', 'tallyCompanyName', 'lastSyncAt', 'lastSyncStatus']
-  });
+  let snapshotLedgersCount = null;
+  try {
+    snapshotLedgersCount = await MonthlyTrialBalanceSummary.count({ where: { companyId } });
+  } catch (_) {}
 
   return {
     companyId,
-    links: activeLinks.map((l) => ({
+    snapshotLatestMonthKey: latestMonthKey,
+    snapshotLedgersCount,
+    links: activeLinksForCompany.map((l) => ({
       id: l.id,
       linkId: l.id,
       companyId: l.companyId,
@@ -1089,39 +1098,44 @@ router.post('/sync/complete', authenticateConnectorOrLegacy, async (req, res) =>
 router.post('/heartbeat', authenticateConnectorOrLegacy, async (req, res) => {
   try {
     const { link, error, statusCode } = await resolveLinkContext(req);
-    if (error) {
+    const companyId = link ? link.companyId : req.companyId;
+    if (error && !(statusCode === 400 && error.includes('linkId'))) {
       return res.status(statusCode || 400).json({ success: false, error });
     }
-    const { companyId, connectorClientId, deviceId } = req;
+    if (error && statusCode === 400) {
+      console.warn('[connector] Heartbeat without linkId (legacy); companyId=%s deviceId=%s', req.companyId, req.deviceId);
+    }
+    const { connectorClientId, deviceId, deviceName } = req;
 
     // Update connector last seen
     if (connectorClientId) {
       await syncStatusService.updateConnectorLastSeen(connectorClientId);
     }
     if (deviceId) {
-      // Device-token path: keep connector_devices last_seen_at fresh without affecting legacy flow.
+      // Device-token path: update by deviceId so any company linked to this user's device shows online (device may be registered under one company, heartbeat can be for link of another).
       try {
-        await ConnectorDevice.update(
-          { lastSeenAt: new Date() },
-          { where: { companyId, deviceId } }
-        );
-      } catch (error) {
-        console.warn('Device heartbeat update failed:', error.message);
+        const updatePayload = { lastSeenAt: new Date() };
+        if (deviceName) updatePayload.deviceName = deviceName;
+        const [affected] = await ConnectorDevice.update(updatePayload, { where: { deviceId } });
+        console.info('[connector] Heartbeat: deviceId=%s companyId=%s linkId=%s affected=%s', deviceId, companyId, link?.id ?? '—', affected);
+      } catch (err) {
+        console.warn('Device heartbeat update failed:', err.message);
       }
     }
 
-    // Get latest run summary for company
-    const latestRun = await IntegrationSyncRun.findOne({
+    // Get latest run summary for company (use resolved companyId or auth companyId)
+    const latestRun = companyId ? await IntegrationSyncRun.findOne({
       where: { companyId },
       order: [['started_at', 'DESC']],
-      attributes: ['id', 'status', 'stage', 'progress', 'started_at', 'finished_at']
-    });
+      attributes: ['id', 'status', 'stage', 'progress', 'started_at', 'finished_at'],
+      raw: true
+    }) : null;
 
     res.json({
       success: true,
       data: {
         linkId: link?.id || null,
-        latestRun: latestRun || null,
+        latestRun: latestRun ?? null,
         serverTime: new Date().toISOString()
       }
     });
@@ -1227,6 +1241,46 @@ router.get('/status/v1', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Get stable connector status error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/* ===============================
+   POST /api/connector/unlink
+   Auth: user JWT. Unlink a connector link for a company the user owns.
+================================ */
+const unlinkSchema = z.object({
+  companyId: z.string().uuid('companyId must be a valid UUID'),
+  linkId: z.string().uuid('linkId must be a valid UUID')
+});
+router.post('/unlink', authenticate, validateBody(unlinkSchema), async (req, res) => {
+  try {
+    const { companyId, linkId } = req.validatedBody || req.body;
+    const company = await authorizeCompanyAccess(req.userId, companyId);
+    if (!company) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this company'
+      });
+    }
+
+    const link = await ConnectorCompanyLink.findOne({
+      where: { id: linkId, companyId, isActive: true }
+    });
+    if (!link) {
+      return res.status(404).json({
+        success: false,
+        error: 'Active link not found'
+      });
+    }
+
+    await link.update({ isActive: false });
+    console.info('[connector] Unlink (web): linkId=%s companyId=%s userId=%s', linkId, companyId, req.userId);
+    return res.json({ success: true, data: { id: link.id, isActive: false } });
+  } catch (error) {
     return res.status(500).json({
       success: false,
       error: error.message
