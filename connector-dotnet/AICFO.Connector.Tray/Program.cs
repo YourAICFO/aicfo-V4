@@ -105,7 +105,14 @@ internal static class Program
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _notifyIcon;
-    private readonly ConnectorControlPanel? _controlPanel;
+    private ConnectorControlPanel? _controlPanel;
+    private readonly IConfigStore _configStore;
+    private readonly ICredentialStore _credentialStore;
+    private readonly ITokenFileStore _tokenFileStore;
+    private readonly ISyncNowTriggerClient _syncNowTriggerClient;
+    private readonly IAicfoApiClient _apiClient;
+    private readonly ITallyXmlClient _tallyClient;
+    private readonly IDiscoveryService _discoveryService;
 
     public TrayApplicationContext(
         IConfigStore configStore,
@@ -116,10 +123,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
         ITallyXmlClient tallyClient,
         IDiscoveryService discoveryService)
     {
+        _configStore = configStore;
+        _credentialStore = credentialStore;
+        _tokenFileStore = tokenFileStore;
+        _syncNowTriggerClient = syncNowTriggerClient;
+        _apiClient = apiClient;
+        _tallyClient = tallyClient;
+        _discoveryService = discoveryService;
+
         ConnectorControlPanel? panel = null;
         try
         {
-            panel = new ConnectorControlPanel(configStore, credentialStore, tokenFileStore, syncNowTriggerClient, apiClient, tallyClient, discoveryService);
+            panel = CreateControlPanel();
+            if (panel is not null)
+            {
+                panel.FormClosed += (_, _) => _controlPanel = null;
+                _controlPanel = panel;
+            }
         }
         catch (Exception ex)
         {
@@ -128,7 +148,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
             try { Log.Error(ex, "ConnectorControlPanel construction failed"); }
             catch { /* ignore */ }
         }
-        _controlPanel = panel;
 
         _notifyIcon = new NotifyIcon
         {
@@ -154,6 +173,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private ConnectorControlPanel? CreateControlPanel()
+    {
+        return new ConnectorControlPanel(_configStore, _credentialStore, _tokenFileStore, _syncNowTriggerClient, _apiClient, _tallyClient, _discoveryService);
+    }
+
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
@@ -167,28 +191,55 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenControlPanel()
     {
-        if (_controlPanel is null)
+        var panel = GetOrCreateControlPanel();
+        if (panel is null)
         {
             _notifyIcon.ShowBalloonTip(5000, "AI CFO Connector", "Control panel unavailable. Check logs: %LOCALAPPDATA%\\AICFO\\Logs\\connector.log", ToolTipIcon.Warning);
             return;
         }
-        _controlPanel.Show();
-        _controlPanel.WindowState = FormWindowState.Normal;
-        _controlPanel.BringToFront();
-        _controlPanel.Activate();
+        panel.WindowState = FormWindowState.Normal;
+        panel.Show();
+        panel.BringToFront();
+        panel.Activate();
+    }
+
+    private ConnectorControlPanel? GetOrCreateControlPanel()
+    {
+        if (_controlPanel is null || _controlPanel.IsDisposed)
+        {
+            try
+            {
+                var panel = CreateControlPanel();
+                if (panel is not null)
+                {
+                    panel.FormClosed += (_, _) => _controlPanel = null;
+                    _controlPanel = panel;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to create Control Panel");
+                return null;
+            }
+        }
+        return _controlPanel;
     }
 
     private async Task SyncAllAsync()
     {
-        if (_controlPanel is null)
+        var panel = GetOrCreateControlPanel();
+        if (panel is null)
         {
             _notifyIcon.ShowBalloonTip(3000, "AI CFO Connector", "Control panel unavailable. Check logs.", ToolTipIcon.Warning);
             return;
         }
         try
         {
-            await _controlPanel.TriggerSyncAllAsync();
-            _notifyIcon.ShowBalloonTip(1200, "AI CFO Connector", "Sync all triggered.", ToolTipIcon.Info);
+            var result = await panel.TryTriggerSyncAllAsync();
+            if (result.Success)
+                _notifyIcon.ShowBalloonTip(1200, "AI CFO Connector", "Sync all triggered.", ToolTipIcon.Info);
+            else
+                _notifyIcon.ShowBalloonTip(5000, "AI CFO Connector", result.ErrorMessage ?? "Sync trigger failed.", ToolTipIcon.Error);
         }
         catch (Exception ex)
         {
@@ -227,7 +278,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
-        _controlPanel?.Close();
+        try { _controlPanel?.Dispose(); } catch { /* ignore */ }
+        _controlPanel = null;
         base.ExitThreadCore();
     }
 }
@@ -439,6 +491,14 @@ internal sealed class ConnectorControlPanel : Form
             if (!_statusPollTimer.Enabled) _statusPollTimer.Start();
             await RefreshStatusGridAsync();
         };
+        FormClosing += (_, e) =>
+        {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                Hide();
+            }
+        };
         FormClosed += (_, _) => _statusPollTimer.Stop();
         VisibleChanged += (_, _) =>
         {
@@ -548,7 +608,19 @@ internal sealed class ConnectorControlPanel : Form
         var syncNow = new Button { Text = "Sync Now", Width = 120 };
         syncNow.Click += async (_, _) => { Log.Information("[INF] Action: Sync Now"); await TriggerSelectedSyncAsync(); };
         var syncAll = new Button { Text = "Sync All", Width = 120 };
-        syncAll.Click += async (_, _) => { Log.Information("[INF] Action: Sync All"); await TriggerSyncAllAsync(); };
+        syncAll.Click += async (_, _) =>
+        {
+            Log.Information("[INF] Action: Sync All");
+            var result = await TryTriggerSyncAllAsync();
+            if (!result.Success)
+            {
+                SetActionBanner(result.ErrorMessage ?? "Sync trigger failed.", Color.Firebrick);
+                AddRecentAction("Sync trigger failed");
+                return;
+            }
+            SetActionBanner("Sync All triggered. Check status in a moment.", Color.DarkGreen);
+            AddRecentAction("Sync All triggered");
+        };
         _checkForUpdatesButton = new Button { Text = "Check for updates", Width = 130 };
         _checkForUpdatesButton.Click += async (_, _) => { Log.Information("[INF] Action: Check for updates"); await RunDiscoveryAndApplyAsync(manualUpdateCheck: true); };
         var openLogs = new Button { Text = "Open Logs", Width = 120 };
@@ -942,7 +1014,14 @@ internal sealed class ConnectorControlPanel : Form
 
     public async Task TriggerSyncAllAsync()
     {
-        await _syncNowTriggerClient.TriggerAllAsync(CancellationToken.None);
+        var result = await TryTriggerSyncAllAsync();
+        if (!result.Success)
+            throw new InvalidOperationException(result.ErrorMessage ?? "Sync trigger failed.");
+    }
+
+    public async Task<SyncTriggerResult> TryTriggerSyncAllAsync()
+    {
+        return await _syncNowTriggerClient.TryTriggerAllAsync(CancellationToken.None);
     }
 
     private async Task TriggerSelectedSyncAsync()
@@ -988,12 +1067,12 @@ internal sealed class ConnectorControlPanel : Form
                 var lastErr = m?.LastError;
                 if (!string.IsNullOrWhiteSpace(lastErr))
                 {
-                    SetActionBanner($"Sync did not complete. Last error: {Truncate(lastErr, 120)}", Color.Firebrick);
+                    SetActionBanner($"Sync failed: {Truncate(lastErr, 120)}", Color.Firebrick);
                     AddRecentAction("Sync pending but service reported error");
                 }
                 else
                 {
-                    SetActionBanner($"Sync started for {webName}. Refresh status in a moment.", Color.DarkGreen);
+                    SetActionBanner("Sync didn't start. Check Windows Service is running. (Pipe trigger may not be received.)", Color.Firebrick);
                     AddRecentAction("Sync triggered (pending)");
                 }
             }

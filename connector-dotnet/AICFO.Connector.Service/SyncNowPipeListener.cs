@@ -20,6 +20,7 @@ public sealed class SyncNowPipeListener(ILogger<SyncNowPipeListener> logger, Syn
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        logger.LogInformation("[SYNC] Pipe listener started. PipeName={PipeName}", ConnectorPaths.SyncNowPipeName);
         var pipeSecurity = CreatePipeSecurityForTrayAccess();
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -38,6 +39,7 @@ public sealed class SyncNowPipeListener(ILogger<SyncNowPipeListener> logger, Syn
                 var buffer = new byte[64];
                 var bytesRead = await server.ReadAsync(buffer, stoppingToken);
                 var message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                logger.LogInformation("[SYNC] Pipe message received: {Message}", string.IsNullOrEmpty(message) ? "(empty)" : message);
 
                 if (string.Equals(message, "sync-now", StringComparison.OrdinalIgnoreCase))
                 {

@@ -111,6 +111,9 @@ public sealed class ConnectorWorker(
                 ? mappings
                 : mappings.Where(m => string.Equals(m.Id, mappingId, StringComparison.OrdinalIgnoreCase)).ToList();
 
+            var targetIds = targetMappings.Count == 0 ? "(none)" : string.Join(",", targetMappings.Select(m => m.Id));
+            logger.LogInformation("[SYNC] Manual sync targeting mappingIds=[{TargetIds}] count={Count}", targetIds, targetMappings.Count);
+
             if (targetMappings.Count == 0)
             {
                 logger.LogWarning("[SYNC] No target mappings for mappingId={MappingId}; available count={Count}", mappingId ?? "(all)", mappings.Count);
